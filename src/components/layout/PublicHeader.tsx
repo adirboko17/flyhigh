@@ -97,6 +97,22 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
     );
   };
 
+  const menuButtonClass = cn(
+    "rounded-lg p-2 md:hidden",
+    glass ? "text-ink-600 hover:bg-ink-100" : "text-white hover:bg-white/10"
+  );
+
+  const mobileAuth = user ? (
+    <Link
+      href={user.home}
+      className="ah-btn ah-btn--sm ah-btn--primary whitespace-nowrap text-xs sm:text-sm"
+    >
+      האזור האישי
+    </Link>
+  ) : (
+    <AuthEntryLinks className="!text-xs sm:!text-sm" linkClassName="px-2 sm:px-3.5" />
+  );
+
   return (
     <header
       className={cn(
@@ -106,8 +122,22 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           : "border-b border-transparent bg-transparent pt-4 shadow-none backdrop-blur-none"
       )}
     >
-      <div className="container-page flex h-16 items-center justify-between gap-4">
-        <BrandLogo height={48} light={overlayHeader && !glass} />
+      <div className="container-page grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-2 md:flex md:justify-between md:gap-4">
+        <div className="flex justify-start md:hidden">
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className={menuButtonClass}
+            aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+          >
+            <Icon name={open ? "x" : "menu"} size={22} />
+          </button>
+        </div>
+
+        <div className="flex justify-center md:justify-start">
+          <BrandLogo height={48} light={overlayHeader && !glass} />
+        </div>
+
+        <div className="flex justify-end md:hidden">{mobileAuth}</div>
 
         <nav className="hidden items-center gap-0.5 md:flex lg:gap-1">
           {PUBLIC_NAV.map((item) => (
@@ -136,19 +166,6 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
             <AuthEntryLinks />
           )}
         </div>
-
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className={cn(
-            "rounded-lg p-2 md:hidden",
-            glass
-              ? "text-ink-600 hover:bg-ink-100"
-              : "text-white hover:bg-white/10"
-          )}
-          aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
-        >
-          <Icon name={open ? "x" : "menu"} size={22} />
-        </button>
       </div>
 
       {open && (
@@ -171,23 +188,14 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
                 {item.label}
               </Link>
             ))}
-            <div className="mt-2 flex flex-col gap-2 border-t border-ink-100 pt-3">
-              {user ? (
-                <Link
-                  href={user.home}
-                  onClick={() => setOpen(false)}
-                  className="ah-btn ah-btn--md ah-btn--primary ah-btn--block"
-                >
-                  האזור האישי
-                </Link>
-              ) : (
-                <AuthEntryLinks
-                  className="ah-btn--md ah-btn--block !h-auto w-full"
-                  linkClassName="flex flex-1 justify-center py-3"
-                  onNavigate={() => setOpen(false)}
+            {user && (
+              <div className="mt-2 border-t border-ink-100 pt-3">
+                <LogoutButton
+                  overlay={overlayHeader && !glass}
+                  className="w-full"
                 />
-              )}
-            </div>
+              </div>
+            )}
           </nav>
         </div>
       )}
