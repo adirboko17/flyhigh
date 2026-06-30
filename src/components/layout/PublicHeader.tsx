@@ -97,6 +97,31 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
     );
   };
 
+  const menuButtonClass = cn(
+    "rounded-lg p-2 md:hidden",
+    glass ? "text-ink-600 hover:bg-ink-100" : "text-white hover:bg-white/10"
+  );
+
+  const authControls = user ? (
+    <>
+      <Link
+        href={user.home}
+        className="ah-btn ah-btn--sm ah-btn--primary whitespace-nowrap text-xs sm:text-sm"
+      >
+        האזור האישי
+      </Link>
+      <LogoutButton
+        overlay={overlayHeader && !glass}
+        className="hidden md:inline-flex"
+      />
+    </>
+  ) : (
+    <AuthEntryLinks
+      className="!text-xs sm:!text-sm"
+      linkClassName="px-2 sm:px-3.5"
+    />
+  );
+
   return (
     <header
       className={cn(
@@ -106,10 +131,29 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           : "border-b border-transparent bg-transparent pt-4 shadow-none backdrop-blur-none"
       )}
     >
-      <div className="container-page flex h-16 items-center justify-between gap-4">
-        <BrandLogo height={48} light={overlayHeader && !glass} />
+      <div className="container-page relative flex h-16 items-center justify-between gap-2 md:gap-4">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={cn(menuButtonClass, "relative z-10 shrink-0")}
+          aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+          aria-expanded={open}
+        >
+          <Icon name={open ? "x" : "menu"} size={22} />
+        </button>
 
-        <nav className="hidden items-center gap-0.5 md:flex lg:gap-1">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-16 items-center justify-center md:static md:h-auto md:w-auto md:justify-start">
+          <BrandLogo
+            height={48}
+            light={overlayHeader && !glass}
+            className="pointer-events-auto"
+          />
+        </div>
+
+        <nav
+          className="relative z-10 hidden flex-1 items-center justify-center gap-0.5 md:flex lg:gap-1"
+          aria-label="ניווט ראשי"
+        >
           {PUBLIC_NAV.map((item) => (
             <Link
               key={item.href}
@@ -121,34 +165,9 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
-          {user ? (
-            <>
-              <Link
-                href={user.home}
-                className="ah-btn ah-btn--sm ah-btn--primary"
-              >
-                האזור האישי
-              </Link>
-              <LogoutButton overlay={overlayHeader && !glass} />
-            </>
-          ) : (
-            <AuthEntryLinks />
-          )}
+        <div className="relative z-10 flex shrink-0 items-center gap-2">
+          {authControls}
         </div>
-
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className={cn(
-            "rounded-lg p-2 md:hidden",
-            glass
-              ? "text-ink-600 hover:bg-ink-100"
-              : "text-white hover:bg-white/10"
-          )}
-          aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
-        >
-          <Icon name={open ? "x" : "menu"} size={22} />
-        </button>
       </div>
 
       {open && (
@@ -160,7 +179,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
               : "border-white/15 bg-white/90 backdrop-blur-md"
           )}
         >
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1" aria-label="ניווט נייד">
             {PUBLIC_NAV.map((item) => (
               <Link
                 key={item.href}
@@ -171,23 +190,14 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
                 {item.label}
               </Link>
             ))}
-            <div className="mt-2 flex flex-col gap-2 border-t border-ink-100 pt-3">
-              {user ? (
-                <Link
-                  href={user.home}
-                  onClick={() => setOpen(false)}
-                  className="ah-btn ah-btn--md ah-btn--primary ah-btn--block"
-                >
-                  האזור האישי
-                </Link>
-              ) : (
-                <AuthEntryLinks
-                  className="ah-btn--md ah-btn--block !h-auto w-full"
-                  linkClassName="flex flex-1 justify-center py-3"
-                  onNavigate={() => setOpen(false)}
+            {user && (
+              <div className="mt-2 border-t border-ink-100 pt-3">
+                <LogoutButton
+                  overlay={overlayHeader && !glass}
+                  className="w-full"
                 />
-              )}
-            </div>
+              </div>
+            )}
           </nav>
         </div>
       )}
