@@ -1,0 +1,38 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Status — Semantic" subtitle="Success · Warning · Danger · Info" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--white); font-family: var(--font-body); padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cell { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--ink-100); }
+  .bar { height: 48px; }
+  .lab { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .name { font-size: 12px; font-weight: 600; color: var(--ink-800); }
+  .hex { font-size: 10px; color: var(--ink-400); margin-inline-start: auto; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell">
+      <div class="bar" style="background:var(--aqua-500)"></div>
+      <div class="lab"><span class="pill" style="background:var(--aqua-100);color:var(--aqua-700)">שולם</span><span class="name">Success</span></div>
+    </div>
+    <div class="cell">
+      <div class="bar" style="background:var(--amber-500)"></div>
+      <div class="lab"><span class="pill" style="background:var(--amber-100);color:var(--amber-700)">ממתין</span><span class="name">Warning</span></div>
+    </div>
+    <div class="cell">
+      <div class="bar" style="background:var(--red-500)"></div>
+      <div class="lab"><span class="pill" style="background:var(--red-100);color:var(--red-700)">בוטל</span><span class="name">Danger</span></div>
+    </div>
+    <div class="cell">
+      <div class="bar" style="background:var(--sky-500)"></div>
+      <div class="lab"><span class="pill" style="background:var(--sky-100);color:var(--sky-700)">הוצע</span><span class="name">Info</span></div>
+    </div>
+  </div>
+</body>
+</html>

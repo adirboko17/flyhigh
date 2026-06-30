@@ -1,0 +1,29 @@
+<!-- @dsCard group="Brand" viewport="700x240" name="Logo" subtitle="על הגובה wordmark — transparent PNG" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--white); font-family: var(--font-body); padding: 24px; }
+  .lockups { display: flex; gap: 20px; align-items: stretch; }
+  .pane { flex: 1; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; min-height: 130px; }
+  .on-white { background: var(--white); border: 1px solid var(--ink-100); }
+  .on-soft { background: var(--brand-gradient-soft); }
+  .pane img { height: 78px; width: auto; }
+  .cap { font-size: 11px; color: var(--ink-400); text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="lockups">
+    <div>
+      <div class="pane on-white"><img src="../assets/alagova-logo.png" alt="על הגובה" /></div>
+      <div class="cap">On white surface</div>
+    </div>
+    <div>
+      <div class="pane on-soft"><img src="../assets/alagova-logo.png" alt="על הגובה" /></div>
+      <div class="cap">On soft brand tint</div>
+    </div>
+  </div>
+</body>
+</html>

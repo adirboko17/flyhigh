@@ -1,0 +1,109 @@
+/* ===========================================================================
+   על הגובה — Color tokens
+   Source of truth: flyhigh/tailwind.config.ts (the production app).
+   Primary brand is WATER BLUE (#0082cd). Aqua/teal is secondary.
+   The logo's magenta / cyan / orange are reserved as expressive accents only.
+   =========================================================================== */
+:root {
+  /* --- Brand: water blue (primary) --- */
+  --brand-50:  #eff9ff;
+  --brand-100: #def1ff;
+  --brand-200: #b6e5ff;
+  --brand-300: #75d2ff;
+  --brand-400: #2cbcff;
+  --brand-500: #02a3f0;
+  --brand-600: #0082cd; /* primary action */
+  --brand-700: #0067a6;
+  --brand-800: #055889;
+  --brand-900: #0a4a71;
+  --brand-950: #072e4b;
+
+  /* --- Aqua: turquoise (secondary / success) --- */
+  --aqua-50:  #edfcf6;
+  --aqua-100: #d3f8e9;
+  --aqua-200: #aaf0d6;
+  --aqua-300: #72e1bf;
+  --aqua-400: #39c9a3;
+  --aqua-500: #16b08b; /* secondary action */
+  --aqua-600: #0a8d72;
+  --aqua-700: #09715e;
+  --aqua-800: #0a5a4c;
+  --aqua-900: #0a4a40;
+  --aqua-950: #032a25;
+
+  /* --- Ink: cool neutral greys --- */
+  --ink-50:  #f6f7f9; /* page background */
+  --ink-100: #eceef2; /* hairline borders */
+  --ink-200: #d4d9e3;
+  --ink-300: #aeb8cb;
+  --ink-400: #8292ad;
+  --ink-500: #627393; /* secondary text */
+  --ink-600: #4d5c7a;
+  --ink-700: #404a63;
+  --ink-800: #384053;
+  --ink-900: #1f2433; /* primary text */
+  --ink-950: #141826;
+
+  --white: #ffffff;
+
+  /* --- Semantic status scales (Tailwind palette used in app) --- */
+  --amber-50:  #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+
+  --red-50:  #fef2f2;
+  --red-100: #fee2e2;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+  --red-700: #b91c1c;
+
+  --sky-50:  #f0f9ff;
+  --sky-100: #e0f2fe;
+  --sky-500: #0ea5e9;
+  --sky-700: #0369a1;
+
+  /* --- Logo accents (expressive use only — never primary UI chrome) --- */
+  --logo-magenta: #ec008c;
+  --logo-cyan:    #00aeef;
+  --logo-orange:  #fbb03b;
+
+  /* =========================================================================
+     Semantic aliases — prefer these in product code.
+     ========================================================================= */
+  --bg-page:        var(--ink-50);
+  --surface-card:   var(--white);
+  --surface-muted:  var(--ink-50);
+  --border-hairline: var(--ink-100);
+  --border-default:  var(--ink-200);
+
+  --text-strong:    var(--ink-900);
+  --text-body:      var(--ink-800);
+  --text-muted:     var(--ink-500);
+  --text-faint:     var(--ink-400);
+  --text-on-brand:  var(--white);
+
+  --action-primary:        var(--brand-600);
+  --action-primary-hover:  var(--brand-700);
+  --action-secondary:      var(--aqua-500);
+  --action-secondary-hover: var(--aqua-600);
+  --action-danger:         var(--red-600);
+
+  --focus-ring: var(--brand-400);
+
+  /* status tone foregrounds / backgrounds (badges, pills) */
+  --tone-success-bg: var(--aqua-100);   --tone-success-fg: var(--aqua-700);
+  --tone-warning-bg: var(--amber-100);  --tone-warning-fg: var(--amber-700);
+  --tone-danger-bg:  var(--red-100);    --tone-danger-fg:  var(--red-700);
+  --tone-info-bg:    var(--sky-100);    --tone-info-fg:    var(--sky-700);
+  --tone-brand-bg:   var(--brand-100);  --tone-brand-fg:   var(--brand-700);
+  --tone-neutral-bg: var(--ink-100);    --tone-neutral-fg: var(--ink-700);
+
+  /* =========================================================================
+     Brand gradients
+     ========================================================================= */
+  --brand-gradient: linear-gradient(135deg, #0a4a71 0%, #0082cd 55%, #16b08b 120%); /* @kind color */
+  --brand-gradient-soft: linear-gradient(135deg, var(--brand-50) 0%, var(--aqua-50) 100%);
+  --text-gradient: linear-gradient(to left, var(--brand-600), var(--aqua-500));
+}

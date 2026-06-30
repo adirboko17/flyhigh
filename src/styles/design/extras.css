@@ -1,0 +1,32 @@
+/* Expressive public-site styles from Cloud Design ui_kits/public */
+
+.hero-cta-primary {
+  background: linear-gradient(95deg, var(--logo-magenta) 0%, var(--brand-500) 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 14px 34px -10px rgba(236, 0, 140, 0.5);
+  transition: filter 0.2s, transform 0.2s;
+}
+.hero-cta-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.hero-cta-glass {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(6px);
+  transition: background 0.2s;
+}
+.hero-cta-glass:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.feat-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.feat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-soft), var(--shadow-card);
+}

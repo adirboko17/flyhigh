@@ -1,0 +1,32 @@
+<!-- @dsCard group="Brand" viewport="700x210" name="Logo Usage" subtitle="Do: transparent. Don't: black box" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--white); font-family: var(--font-body); padding: 24px; }
+  .row { display: flex; gap: 20px; }
+  .pane { flex: 1; border-radius: var(--radius-lg); min-height: 120px; display: flex; align-items: center; justify-content: center; position: relative; box-sizing: border-box; }
+  .ok { background: var(--white); border: 1px solid var(--ink-100); }
+  .bad { background: #000; }
+  .pane img { height: 64px; }
+  .badge { position: absolute; top: 10px; inset-inline-start: 10px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .ok .badge { background: var(--aqua-100); color: var(--aqua-700); }
+  .bad .badge { background: var(--red-100); color: var(--red-700); }
+  .cap { font-size: 12px; color: var(--ink-500); text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div style="flex:1">
+      <div class="pane ok"><span class="badge">✓ נכון</span><img src="../assets/alagova-logo.png" alt="לוגו על רקע שקוף" /></div>
+      <div class="cap">תמיד על רקע בהיר / שקוף</div>
+    </div>
+    <div style="flex:1">
+      <div class="pane bad"><span class="badge">✕ לא</span><img src="../assets/alagova-logo.png" alt="לוגו על רקע שחור" /></div>
+      <div class="cap">לעולם לא מלבן רקע שחור</div>
+    </div>
+  </div>
+</body>
+</html>

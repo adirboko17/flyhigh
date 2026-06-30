@@ -1,0 +1,61 @@
+<!-- @dsCard group="Public Site" viewport="1280x760" name="אתר ציבורי — Public Site" subtitle="Home · classes · detail · register · login" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>על הגובה — אתר ציבורי</title>
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="../icons.js"></script>
+<script src="./data.js"></script>
+<script src="../image-slot.js"></script>
+<style>
+  html, body { margin: 0; }
+  body { background: var(--ink-50); font-family: var(--font-body); color: var(--ink-900); }
+  .hero-cta-primary { background: linear-gradient(95deg, #ec008c 0%, #02a3f0 100%); color: #fff; border: none; box-shadow: 0 14px 34px -10px rgba(236,0,140,0.5); transition: filter .2s, transform .2s; }
+  .hero-cta-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .hero-cta-glass { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(6px); transition: background .2s; }
+  .hero-cta-glass:hover { background: rgba(255,255,255,0.22); }
+  .feat-card { transition: transform .25s ease, box-shadow .25s ease; }
+  .feat-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-soft); }
+  image-slot { border-radius: 24px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="./PublicChrome.jsx"></script>
+<script type="text/babel" src="./screens.jsx"></script>
+<script type="text/babel">
+const LOGO = "../../assets/alagova-logo.png";
+const { HomeScreen, ClassesScreen, DetailScreen, RegisterScreen, LoginScreen, ProgramsScreen } = window.PublicScreens;
+
+function App() {
+  const [route, setRoute] = React.useState({ name: "home", id: null });
+  const nav = (name) => { setRoute({ name, id: null }); window.scrollTo(0, 0); };
+  const openClass = (id) => { setRoute({ name: "detail", id }); window.scrollTo(0, 0); };
+
+  const bare = route.name === "login" || route.name === "register";
+  let screen;
+  if (route.name === "home") screen = <HomeScreen onNav={nav} onOpenClass={openClass} />;
+  else if (route.name === "programs") screen = <ProgramsScreen onNav={nav} />;
+  else if (route.name === "classes") screen = <ClassesScreen onOpenClass={openClass} />;
+  else if (route.name === "detail") screen = <DetailScreen id={route.id} onNav={nav} />;
+  else if (route.name === "register") screen = <RegisterScreen onNav={nav} logoSrc={LOGO} />;
+  else if (route.name === "login") screen = <LoginScreen onNav={nav} logoSrc={LOGO} />;
+
+  return (
+    <React.Fragment>
+      {!bare && <window.PublicHeader active={route.name} onNav={nav} logoSrc={LOGO} />}
+      <main>{screen}</main>
+      {!bare && <window.PublicFooter logoSrc={LOGO} onNav={nav} />}
+    </React.Fragment>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

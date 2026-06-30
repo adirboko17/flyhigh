@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Brand — Water Blue" subtitle="Primary. Action = brand-600 (#0082cd)" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--white); font-family: var(--font-body); padding: 20px; }
+  .scale { display: flex; gap: 0; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-card); }
+  .sw { flex: 1; height: 84px; display: flex; align-items: flex-end; padding: 8px; box-sizing: border-box; }
+  .sw span { font-size: 10px; font-weight: 600; font-family: var(--font-body); }
+  .meta { margin-top: 10px; font-size: 12px; color: var(--ink-500); display: flex; justify-content: space-between; }
+  .meta b { color: var(--ink-800); }
+</style>
+</head>
+<body>
+  <div class="scale" id="s"></div>
+  <div class="meta"><span>50 → 950</span><span><b>brand-600 #0082cd</b> · primary action · links · focus</span></div>
+  <script>
+    const steps = [50,100,200,300,400,500,600,700,800,900,950];
+    document.getElementById('s').innerHTML = steps.map(n => {
+      const light = n <= 400;
+      return `<div class="sw" style="background:var(--brand-${n})"><span style="color:${light ? '#0a4a71' : '#fff'}">${n}</span></div>`;
+    }).join('');
+  </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!-- @dsCard group="Instructor" viewport="1280x800" name="אזור מדריכה — Instructor" subtitle="Dashboard · classes · attendance · payroll" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>על הגובה — אזור מדריכה</title>
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="../icons.js"></script>
+<style>
+  html, body { margin: 0; }
+  body { background: var(--ink-50); font-family: var(--font-body); color: var(--ink-900); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="../AreaShell.jsx"></script>
+<script type="text/babel" src="./screens.jsx"></script>
+<script type="text/babel">
+const LOGO = "../../assets/alagova-logo.png";
+const S = window.InstructorScreens;
+const NAV = [
+  { key: "dashboard", label: "דשבורד", icon: "dashboard" },
+  { key: "classes", label: "החוגים שלי", icon: "waves" },
+  { key: "attendance", label: "סימון נוכחות", icon: "check" },
+  { key: "payroll", label: "שכר ופעילות", icon: "money" },
+];
+function App() {
+  const [active, setActive] = React.useState("dashboard");
+  const nav = (k) => { setActive(k); window.scrollTo(0, 0); };
+  let content;
+  if (active === "dashboard") content = <S.IDashboard onNav={nav} />;
+  else if (active === "classes") content = <S.IClasses onNav={nav} />;
+  else if (active === "attendance") content = <S.IAttendance />;
+  else content = <S.IPayroll />;
+  return (
+    <window.AreaShell nav={NAV} active={active} onNav={nav} logoSrc={LOGO} area="אזור מדריכה" user={{ name: "דנה כהן", role: "מדריכה" }}>
+      {content}
+    </window.AreaShell>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

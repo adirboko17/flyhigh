@@ -1,0 +1,24 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Elevation" subtitle="Soft cool shadows + brand glow" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--ink-50); font-family: var(--font-body); padding: 28px; }
+  .row { display: flex; gap: 28px; align-items: center; }
+  .col { text-align: center; }
+  .box { width: 130px; height: 80px; background: var(--white); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink-500); }
+  .glow { background: var(--brand-600); color: #fff; font-weight: 600; }
+  .k { font-size: 11px; color: var(--ink-500); margin-top: 10px; }
+  .k b { color: var(--ink-800); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-soft)">surface</div><div class="k"><b>soft</b> · subtle lift</div></div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-card)">card</div><div class="k"><b>card</b> · default card</div></div>
+    <div class="col"><div class="box glow" style="box-shadow:var(--shadow-glow)">CTA</div><div class="k"><b>glow</b> · primary buttons</div></div>
+  </div>
+</body>
+</html>

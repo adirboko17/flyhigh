@@ -1,0 +1,46 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Input & Field" subtitle="Text, select, textarea + validation" -->
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--ink-50); font-family: var(--font-body); padding: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 620px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Field, Input, Select, Textarea } = window.DesignSystem_820aee;
+function Demo() {
+  return (
+    <div className="grid">
+      <Field label="שם מלא" htmlFor="a" required>
+        <Input id="a" placeholder="לדוגמה: מיכל לוי" />
+      </Field>
+      <Field label="מין" htmlFor="b">
+        <Select id="b"><option>בחרו...</option><option>זכר</option><option>נקבה</option></Select>
+      </Field>
+      <Field label="אימייל" htmlFor="c" error="כתובת אימייל לא תקינה">
+        <Input id="c" type="email" dir="ltr" defaultValue="michal@" error />
+      </Field>
+      <Field label="טלפון" htmlFor="d" hint="כולל קידומת">
+        <Input id="d" type="tel" dir="ltr" placeholder="050-0000000" />
+      </Field>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <Field label="הערות" htmlFor="e">
+          <Textarea id="e" placeholder="מידע נוסף על הילד/ה..." />
+        </Field>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

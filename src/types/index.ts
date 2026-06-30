@@ -1,0 +1,25 @@
+import type { Tables, Database } from "./database.types";
+
+export type Profile = Tables<"profiles">;
+export type Child = Tables<"children">;
+export type Instructor = Tables<"instructors">;
+export type Class = Tables<"classes">;
+export type Program = Tables<"programs">;
+export type PoolPass = Tables<"pool_passes">;
+export type Enrollment = Tables<"enrollments">;
+export type Waitlist = Tables<"waitlist">;
+export type Attendance = Tables<"attendance">;
+export type Payment = Tables<"payments">;
+export type Receipt = Tables<"receipts">;
+export type SystemSetting = Tables<"system_settings">;
+
+/** חוג עם פרטי מדריכה (לתצוגה). */
+export type ClassWithInstructor = Class & {
+  instructor?: Pick<Instructor, "id" | "full_name"> | null;
+};
+
+/** חוג ציבורי כפי שמוחזר מ-list_public_classes (כולל זמינות ושם מדריכה). */
+export type PublicClass =
+  Database["public"]["Functions"]["list_public_classes"]["Returns"][number];
+
+export type { Tables, TablesInsert, TablesUpdate, Enums } from "./database.types";
