@@ -102,15 +102,24 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
     glass ? "text-ink-600 hover:bg-ink-100" : "text-white hover:bg-white/10"
   );
 
-  const mobileAuth = user ? (
-    <Link
-      href={user.home}
-      className="ah-btn ah-btn--sm ah-btn--primary whitespace-nowrap text-xs sm:text-sm"
-    >
-      האזור האישי
-    </Link>
+  const authControls = user ? (
+    <>
+      <Link
+        href={user.home}
+        className="ah-btn ah-btn--sm ah-btn--primary whitespace-nowrap text-xs sm:text-sm"
+      >
+        האזור האישי
+      </Link>
+      <LogoutButton
+        overlay={overlayHeader && !glass}
+        className="hidden md:inline-flex"
+      />
+    </>
   ) : (
-    <AuthEntryLinks className="!text-xs sm:!text-sm" linkClassName="px-2 sm:px-3.5" />
+    <AuthEntryLinks
+      className="!text-xs sm:!text-sm"
+      linkClassName="px-2 sm:px-3.5"
+    />
   );
 
   return (
@@ -124,14 +133,16 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
     >
       <div className="container-page relative flex h-16 items-center justify-between gap-2 md:gap-4">
         <button
+          type="button"
           onClick={() => setOpen((v) => !v)}
           className={cn(menuButtonClass, "relative z-10 shrink-0")}
           aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+          aria-expanded={open}
         >
           <Icon name={open ? "x" : "menu"} size={22} />
         </button>
 
-        <div className="pointer-events-none absolute inset-x-0 flex justify-center md:static md:inset-auto md:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-16 items-center justify-center md:static md:h-auto md:w-auto md:justify-start">
           <BrandLogo
             height={48}
             light={overlayHeader && !glass}
@@ -139,9 +150,10 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           />
         </div>
 
-        <div className="relative z-10 shrink-0 md:hidden">{mobileAuth}</div>
-
-        <nav className="hidden items-center gap-0.5 md:flex lg:gap-1">
+        <nav
+          className="relative z-10 hidden flex-1 items-center justify-center gap-0.5 md:flex lg:gap-1"
+          aria-label="ניווט ראשי"
+        >
           {PUBLIC_NAV.map((item) => (
             <Link
               key={item.href}
@@ -153,20 +165,8 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
-          {user ? (
-            <>
-              <Link
-                href={user.home}
-                className="ah-btn ah-btn--sm ah-btn--primary"
-              >
-                האזור האישי
-              </Link>
-              <LogoutButton overlay={overlayHeader && !glass} />
-            </>
-          ) : (
-            <AuthEntryLinks />
-          )}
+        <div className="relative z-10 flex shrink-0 items-center gap-2">
+          {authControls}
         </div>
       </div>
 
@@ -179,7 +179,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
               : "border-white/15 bg-white/90 backdrop-blur-md"
           )}
         >
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1" aria-label="ניווט נייד">
             {PUBLIC_NAV.map((item) => (
               <Link
                 key={item.href}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { PARENT_NAV } from "@/lib/navigation";
@@ -13,9 +14,11 @@ export default async function ParentLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-ink-50">
-      <PublicHeader
-        user={{ full_name: profile.full_name, home: homeForRole(profile.role) }}
-      />
+      <Suspense fallback={<div className="h-16" aria-hidden />}>
+        <PublicHeader
+          user={{ full_name: profile.full_name, home: homeForRole(profile.role) }}
+        />
+      </Suspense>
       <div className="container-page w-full py-6">
         <nav className="mb-6 flex flex-wrap gap-1.5 rounded-2xl border border-ink-100 bg-white p-1.5 shadow-card">
           {PARENT_NAV.map((item) => (
