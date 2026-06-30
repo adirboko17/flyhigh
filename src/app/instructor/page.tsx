@@ -50,7 +50,7 @@ export default async function InstructorDashboard() {
         <StatCard label="תלמידים פעילים" value={studentCount} icon="🧒" tone="aqua" />
         <StatCard
           label="תעריף שעתי"
-          value={instructor?.hourly_rate ? `₪${instructor.hourly_rate}` : "—"}
+          value={instructor?.hourly_rate ? `₪${instructor.hourly_rate}` : "-"}
           icon="💰"
           tone="violet"
         />
@@ -60,7 +60,7 @@ export default async function InstructorDashboard() {
         <CardHeader>
           <CardTitle>החוגים שלי</CardTitle>
           <Link href="/instructor/classes" className="text-sm font-semibold text-brand-600 hover:underline">
-            הכל ←
+            הכל
           </Link>
         </CardHeader>
         <CardContent>

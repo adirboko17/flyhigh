@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardContent } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AddChildForm } from "@/components/parent/AddChildForm";
@@ -41,7 +41,7 @@ export default async function ParentChildrenPage() {
                       {c.full_name}
                     </p>
                     <p className="mt-0.5 text-sm text-ink-500">
-                      {c.gender ? GENDER[c.gender] : "—"}
+                      {c.gender ? GENDER[c.gender] : "-"}
                       {age !== null && ` · גיל ${age}`}
                     </p>
                     <p className="mt-1 text-xs text-ink-400">

@@ -40,10 +40,15 @@ export function SectionHead({
       {link && linkHref && (
         <Link
           href={linkHref}
-          className="text-sm font-bold hover:underline"
-          style={{ color: accent }}
+          className="inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-sm font-bold underline decoration-2 underline-offset-[5px] transition-colors hover:opacity-90"
+          style={{
+            color: accent,
+            borderColor: `color-mix(in srgb, ${accent} 28%, white)`,
+            backgroundColor: `color-mix(in srgb, ${accent} 10%, white)`,
+            textDecorationColor: `color-mix(in srgb, ${accent} 45%, white)`,
+          }}
         >
-          {link} ←
+          {link}
         </Link>
       )}
     </div>

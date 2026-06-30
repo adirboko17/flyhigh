@@ -1,0 +1,148 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+
+export type ProgramFormData = {
+  id: string;
+  title: string;
+  description: string | null;
+  price: number;
+  status: "draft" | "active" | "inactive";
+};
+
+const emptyForm = {
+  title: "",
+  description: "",
+  price: "",
+  status: "active",
+};
+
+function toFormState(existing?: ProgramFormData) {
+  if (!existing) return emptyForm;
+  return {
+    title: existing.title,
+    description: existing.description ?? "",
+    price: existing.price.toString(),
+    status: existing.status,
+  };
+}
+
+export function ProgramForm({ existing }: { existing?: ProgramFormData }) {
+  const router = useRouter();
+  const isEdit = Boolean(existing);
+  const [form, setForm] = useState(() => toFormState(existing));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set =
+    (k: keyof typeof form) =>
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >
+    ) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const supabase = createClient();
+
+    const payload = {
+      title: form.title,
+      description: form.description || null,
+      price: Number(form.price) || 0,
+      status: form.status as "draft" | "active" | "inactive",
+    };
+
+    const dbError = isEdit
+      ? (
+          await supabase
+            .from("programs")
+            .update(payload)
+            .eq("id", existing!.id)
+        ).error
+      : (await supabase.from("programs").insert(payload)).error;
+
+    if (dbError) {
+      setError("אירעה שגיאה בשמירת המסלול. בדקו את הפרטים ונסו שוב.");
+      setLoading(false);
+      return;
+    }
+
+    router.push("/admin/programs");
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-6">
+      <Card>
+        <CardContent className="space-y-5">
+          <Field label="שם המסלול" required>
+            <Input
+              value={form.title}
+              onChange={set("title")}
+              placeholder="לדוגמה: מנוי חודשי — שחייה חופשית"
+              required
+            />
+          </Field>
+          <Field label="תיאור">
+            <Textarea
+              value={form.description}
+              onChange={set("description")}
+              placeholder="תיאור קצר של המסלול..."
+            />
+          </Field>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field label="מחיר (₪)" required>
+              <Input
+                type="number"
+                min={0}
+                step="1"
+                value={form.price}
+                onChange={set("price")}
+                required
+              />
+            </Field>
+            <Field label="סטטוס">
+              <Select value={form.status} onChange={set("status")}>
+                <option value="draft">טיוטה</option>
+                <option value="active">פעיל</option>
+                <option value="inactive">לא פעיל</option>
+              </Select>
+            </Field>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error && (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-3">
+        <Button type="submit" size="lg" disabled={loading}>
+          {loading ? "שומר..." : isEdit ? "עדכון המסלול" : "שמירת המסלול"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={() => router.push("/admin/programs")}
+        >
+          ביטול
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** @deprecated use ProgramForm */
+export const NewProgramForm = ProgramForm;

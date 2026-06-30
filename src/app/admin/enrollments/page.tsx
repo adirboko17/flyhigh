@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -48,8 +48,8 @@ export default async function AdminEnrollmentsPage() {
                 return (
                   <TR key={e.id}>
                     <TD className="font-semibold text-ink-900">{title}</TD>
-                    <TD>{e.profiles?.full_name ?? "—"}</TD>
-                    <TD>{e.children?.full_name ?? "—"}</TD>
+                    <TD>{e.profiles?.full_name ?? "-"}</TD>
+                    <TD>{e.children?.full_name ?? "-"}</TD>
                     <TD>{ENROLLMENT_TYPE[e.type]}</TD>
                     <TD>
                       <Badge tone={ENROLLMENT_STATUS[e.status].tone}>

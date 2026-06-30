@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+﻿import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database.types";
 
@@ -23,7 +23,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // נקרא מתוך Server Component — ניתן להתעלם כאשר יש middleware שמרענן session.
+            // נקרא מתוך Server Component - ניתן להתעלם כאשר יש middleware שמרענן session.
           }
         },
       },

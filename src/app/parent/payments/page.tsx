@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -41,13 +41,13 @@ export default async function ParentPaymentsPage() {
               {payments.map((p) => (
                 <TR key={p.id}>
                   <TD className="font-semibold text-ink-900">{formatCurrency(p.amount)}</TD>
-                  <TD>{p.payment_method ? PAYMENT_METHOD[p.payment_method] : "—"}</TD>
+                  <TD>{p.payment_method ? PAYMENT_METHOD[p.payment_method] : "-"}</TD>
                   <TD>
                     <Badge tone={PAYMENT_STATUS[p.status].tone}>
                       {PAYMENT_STATUS[p.status].label}
                     </Badge>
                   </TD>
-                  <TD className="text-ink-500">{p.paid_at ? formatDate(p.paid_at) : "—"}</TD>
+                  <TD className="text-ink-500">{p.paid_at ? formatDate(p.paid_at) : "-"}</TD>
                 </TR>
               ))}
             </TBody>
@@ -76,8 +76,8 @@ export default async function ParentPaymentsPage() {
             <TBody>
               {receipts.map((r) => (
                 <TR key={r.id}>
-                  <TD className="font-semibold text-ink-900">{r.receipt_number ?? "—"}</TD>
-                  <TD dir="ltr" className="text-right">{r.sent_to_email ?? "—"}</TD>
+                  <TD className="font-semibold text-ink-900">{r.receipt_number ?? "-"}</TD>
+                  <TD dir="ltr" className="text-right">{r.sent_to_email ?? "-"}</TD>
                   <TD className="text-ink-500">{formatDate(r.created_at)}</TD>
                   <TD>
                     {r.receipt_url ? (
@@ -85,7 +85,7 @@ export default async function ParentPaymentsPage() {
                         צפייה
                       </a>
                     ) : (
-                      <span className="text-ink-400">—</span>
+                      <span className="text-ink-400">-</span>
                     )}
                   </TD>
                 </TR>

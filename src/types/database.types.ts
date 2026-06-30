@@ -105,6 +105,82 @@ export type Database = {
           },
         ]
       }
+      class_sessions: {
+        Row: {
+          class_id: string
+          created_at: string
+          end_time: string
+          id: string
+          notes: string | null
+          session_date: string
+          start_time: string
+          status: Database["public"]["Enums"]["class_session_status"]
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          end_time: string
+          id?: string
+          notes?: string | null
+          session_date: string
+          start_time: string
+          status?: Database["public"]["Enums"]["class_session_status"]
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          end_time?: string
+          id?: string
+          notes?: string | null
+          session_date?: string
+          start_time?: string
+          status?: Database["public"]["Enums"]["class_session_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_weekly_slots: {
+        Row: {
+          class_id: string
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_weekly_slots_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       classes: {
         Row: {
           age_max: number | null
@@ -121,6 +197,7 @@ export type Database = {
           instructor_id: string | null
           level: string | null
           price: number
+          schedule_type: Database["public"]["Enums"]["schedule_type"]
           start_date: string | null
           start_time: string | null
           status: Database["public"]["Enums"]["class_status"]
@@ -141,6 +218,7 @@ export type Database = {
           instructor_id?: string | null
           level?: string | null
           price?: number
+          schedule_type?: Database["public"]["Enums"]["schedule_type"]
           start_date?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
@@ -161,6 +239,7 @@ export type Database = {
           instructor_id?: string | null
           level?: string | null
           price?: number
+          schedule_type?: Database["public"]["Enums"]["schedule_type"]
           start_date?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
@@ -575,6 +654,7 @@ export type Database = {
           age_max: number | null
           capacity: number
           price: number
+          schedule_type: Database["public"]["Enums"]["schedule_type"]
           start_date: string | null
           end_date: string | null
           day_of_week: number | null
@@ -585,12 +665,15 @@ export type Database = {
           instructor_name: string | null
           taken_count: number
           available: number
+          schedule_days: string | null
+          session_count: number
         }[]
       }
     }
     Enums: {
       attendance_status: "present" | "absent" | "late"
-      class_status: "draft" | "active" | "full" | "closed"
+      class_session_status: "scheduled" | "cancelled" | "completed"
+      class_status: "active" | "inactive" | "full"
       enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded"
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
       enrollment_type: "class" | "program" | "pool_pass"
@@ -605,6 +688,7 @@ export type Database = {
         | "cash"
         | "external"
       payment_status: "pending" | "paid" | "failed" | "refunded"
+      schedule_type: "weekly" | "custom"
       user_role: "admin" | "instructor" | "parent"
       waitlist_status:
         | "waiting"

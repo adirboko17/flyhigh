@@ -1,4 +1,4 @@
-/**
+﻿/**
  * שכבת הפשטה לשליחת מיילים והתראות.
  * בעתיד: חיבור ל-Resend / SendGrid / SMS / Push.
  */
@@ -18,7 +18,7 @@ class MockEmailProvider implements EmailProvider {
   readonly name = "mock";
 
   async send(message: EmailMessage): Promise<{ success: boolean }> {
-    // בסביבת פיתוח — רק מתעדים. בעתיד נחבר ספק אמיתי.
+    // בסביבת פיתוח - רק מתעדים. בעתיד נחבר ספק אמיתי.
     if (process.env.NODE_ENV !== "production") {
       console.info(`[email:mock] → ${message.to} | ${message.subject}`);
     }

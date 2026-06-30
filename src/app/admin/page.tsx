@@ -77,7 +77,7 @@ export default async function AdminDashboard() {
           <CardHeader>
             <CardTitle>הרשמות אחרונות</CardTitle>
             <Link href="/admin/enrollments" className="text-sm font-semibold text-brand-600 hover:underline">
-              הכל ←
+              הכל
             </Link>
           </CardHeader>
           <CardContent>
@@ -90,7 +90,7 @@ export default async function AdminDashboard() {
                       <div>
                         <p className="font-semibold text-ink-900">{title}</p>
                         <p className="text-sm text-ink-500">
-                          {e.profiles?.full_name ?? "—"}
+                          {e.profiles?.full_name ?? "-"}
                           {e.children?.full_name ? ` · ${e.children.full_name}` : ""}
                         </p>
                       </div>
@@ -131,7 +131,7 @@ export default async function AdminDashboard() {
               href="/admin/reports"
               className="block rounded-xl border border-ink-200 px-4 py-3 text-center text-sm font-semibold text-ink-700 hover:bg-ink-50"
             >
-              לצפייה בדוחות המלאים ←
+              לצפייה בדוחות המלאים
             </Link>
           </CardContent>
         </Card>

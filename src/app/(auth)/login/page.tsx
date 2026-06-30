@@ -15,7 +15,7 @@ export default function LoginPage() {
             href="/"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-700"
           >
-            → חזרה לדף הבית
+            חזרה לדף הבית
           </Link>
 
           <div className="mt-4">

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * עיצוב מטבע בשקלים.
  */
 export function formatCurrency(amount: number | null | undefined): string {
@@ -14,9 +14,9 @@ export function formatCurrency(amount: number | null | undefined): string {
  * עיצוב תאריך בעברית.
  */
 export function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return "—";
+  if (!date) return "-";
   const d = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return new Intl.DateTimeFormat("he-IL", {
     year: "numeric",
     month: "long",
@@ -28,9 +28,9 @@ export function formatDate(date: string | Date | null | undefined): string {
  * עיצוב תאריך קצר (יום/חודש/שנה).
  */
 export function formatDateShort(date: string | Date | null | undefined): string {
-  if (!date) return "—";
+  if (!date) return "-";
   const d = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return new Intl.DateTimeFormat("he-IL", {
     year: "2-digit",
     month: "2-digit",
@@ -42,7 +42,7 @@ export function formatDateShort(date: string | Date | null | undefined): string 
  * עיצוב שעה מתוך ערך time של Postgres (HH:MM:SS).
  */
 export function formatTime(time: string | null | undefined): string {
-  if (!time) return "—";
+  if (!time) return "-";
   return time.slice(0, 5);
 }
 

@@ -56,7 +56,7 @@ export default async function ParentDashboard() {
         <CardHeader>
           <CardTitle>ההרשמות שלי</CardTitle>
           <Link href="/parent/enrollments" className="text-sm font-semibold text-brand-600 hover:underline">
-            הכל ←
+            הכל
           </Link>
         </CardHeader>
         <CardContent>
@@ -70,7 +70,7 @@ export default async function ParentDashboard() {
                     <div>
                       <p className="font-semibold text-ink-900">{title}</p>
                       <p className="text-sm text-ink-500">
-                        {e.children?.full_name ?? "—"} · {ENROLLMENT_TYPE[e.type]}
+                        {e.children?.full_name ?? "-"} · {ENROLLMENT_TYPE[e.type]}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export default async function ParentDashboard() {
           <CardHeader>
             <CardTitle>הילדים שלי</CardTitle>
             <Link href="/parent/children" className="text-sm font-semibold text-brand-600 hover:underline">
-              ניהול ←
+              ניהול
             </Link>
           </CardHeader>
           <CardContent>
@@ -124,7 +124,7 @@ export default async function ParentDashboard() {
           <CardHeader>
             <CardTitle>תשלומים אחרונים</CardTitle>
             <Link href="/parent/payments" className="text-sm font-semibold text-brand-600 hover:underline">
-              הכל ←
+              הכל
             </Link>
           </CardHeader>
           <CardContent>

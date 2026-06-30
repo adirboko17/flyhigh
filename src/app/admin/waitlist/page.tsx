@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -34,9 +34,9 @@ export default async function AdminWaitlistPage() {
             <TBody>
               {items.map((w) => (
                 <TR key={w.id}>
-                  <TD className="font-semibold text-ink-900">{w.classes?.title ?? "—"}</TD>
-                  <TD>{w.profiles?.full_name ?? "—"}</TD>
-                  <TD>{w.children?.full_name ?? "—"}</TD>
+                  <TD className="font-semibold text-ink-900">{w.classes?.title ?? "-"}</TD>
+                  <TD>{w.profiles?.full_name ?? "-"}</TD>
+                  <TD>{w.children?.full_name ?? "-"}</TD>
                   <TD>
                     <Badge tone={WAITLIST_STATUS[w.status].tone}>
                       {WAITLIST_STATUS[w.status].label}

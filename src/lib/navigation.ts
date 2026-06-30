@@ -10,7 +10,6 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/programs", label: "מסלולים", icon: "🎫" },
   { href: "/admin/pool-passes", label: "כניסות לבריכה", icon: "🪪" },
   { href: "/admin/customers", label: "לקוחות", icon: "👨‍👩‍👧" },
-  { href: "/admin/children", label: "ילדים", icon: "🧒" },
   { href: "/admin/instructors", label: "מדריכות", icon: "👩‍🏫" },
   { href: "/admin/enrollments", label: "הרשמות", icon: "📝" },
   { href: "/admin/waitlist", label: "רשימת המתנה", icon: "⏳" },
@@ -37,6 +36,6 @@ export const PARENT_NAV: NavItem[] = [
 export const PUBLIC_NAV: NavItem[] = [
   { href: "/", label: "בית", icon: "" },
   { href: "/classes", label: "חוגים", icon: "" },
-  { href: "/#programs", label: "מסלולים", icon: "" },
-  { href: "/#contact", label: "צור קשר", icon: "" },
+  { href: "/programs", label: "מסלולים", icon: "" },
+  { href: "/contact", label: "צור קשר", icon: "" },
 ];

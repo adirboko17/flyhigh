@@ -16,11 +16,11 @@ const assistant = Assistant({
 
 export const metadata: Metadata = {
   title: {
-    default: "על הגובה — חוגים, מסלולים וכניסות לבריכה",
+    default: "על הגובה - חוגים, מסלולים וכניסות לבריכה",
     template: "%s | על הגובה",
   },
   description:
-    "מערכת ההרשמה והניהול של 'על הגובה' — חוגי שחייה, מסלולים וכניסות לבריכה. הרשמה קלה, ניהול חכם וחוויה מושלמת להורים ולצוות.",
+    "מערכת ההרשמה והניהול של 'על הגובה' - חוגי שחייה, מסלולים וכניסות לבריכה. הרשמה קלה, ניהול חכם וחוויה מושלמת להורים ולצוות.",
 };
 
 export default function RootLayout({
@@ -29,8 +29,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} ${assistant.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="he"
+      dir="rtl"
+      className={`${heebo.variable} ${assistant.variable}`}
+      suppressHydrationWarning
+    >
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

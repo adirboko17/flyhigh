@@ -1,12 +1,12 @@
-/* ===========================================================================
-   על הגובה — Typography tokens
+﻿/* ===========================================================================
+   על הגובה - Typography tokens
    Heebo for body/UI, Assistant for display headings. Full RTL.
    =========================================================================== */
 :root {
   --font-body: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Assistant", "Heebo", system-ui, sans-serif;
 
-  /* Type scale (px) — matches the app's Tailwind usage */
+  /* Type scale (px) - matches the app's Tailwind usage */
   --text-xs:   12px;
   --text-sm:   14px;  /* default body in tables, cards, forms */
   --text-base: 16px;

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { NewClassForm } from "@/components/admin/NewClassForm";
+import { ClassForm } from "@/components/admin/ClassForm";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "חוג חדש" };
@@ -13,12 +13,12 @@ export default async function NewClassPage() {
     .order("full_name");
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-6xl">
       <PageHeader
         title="יצירת חוג חדש"
         description="מלאו את פרטי החוג. ניתן לשמור כטיוטה ולפרסם בהמשך."
       />
-      <NewClassForm instructors={instructors ?? []} />
+      <ClassForm instructors={instructors ?? []} />
     </div>
   );
 }

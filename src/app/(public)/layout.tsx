@@ -14,7 +14,7 @@ export default async function PublicLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-ink-50">
-      <PublicHeader user={user} />
+      <PublicHeader user={user} overlayAtTop />
       <main className="flex-1">{children}</main>
       <PublicFooter />
     </div>

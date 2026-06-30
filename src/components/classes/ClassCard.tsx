@@ -5,24 +5,42 @@ import { CLASS_STATUS, dayLabel } from "@/lib/constants";
 import { formatCurrency, formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
 
-export function ClassCard({ cls }: { cls: PublicClass }) {
+export function ClassCard({
+  cls,
+  preview = false,
+}: {
+  cls: PublicClass;
+  preview?: boolean;
+}) {
   const status = CLASS_STATUS[cls.status];
   const soldOut = cls.available <= 0 || cls.status === "full";
+  const isBlob = cls.image_url?.startsWith("blob:") ?? false;
 
-  return (
-    <Link
-      href={`/classes/${cls.id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-soft"
-    >
+  const cardClass =
+    "group flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-card transition-all duration-300" +
+    (preview ? "" : " hover:-translate-y-1 hover:shadow-soft");
+
+  const inner = (
+    <>
       <div className="relative h-44 w-full overflow-hidden bg-ink-100">
         {cls.image_url ? (
-          <Image
-            src={cls.image_url}
-            alt={cls.title}
-            fill
-            sizes="(max-width: 768px) 100vw, 33vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          isBlob ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cls.image_url}
+              alt={cls.title}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <Image
+              src={cls.image_url}
+              alt={cls.title}
+              fill
+              sizes="(max-width: 768px) 100vw, 33vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              unoptimized={preview}
+            />
+          )
         ) : (
           <div className="flex h-full items-center justify-center bg-brand-gradient text-4xl text-white">
             🏊
@@ -57,7 +75,11 @@ export function ClassCard({ cls }: { cls: PublicClass }) {
           )}
           <div className="flex items-center gap-1.5 text-ink-600">
             <span>📅</span>
-            יום {dayLabel(cls.day_of_week)}
+            {cls.schedule_days
+              ? `ימים ${cls.schedule_days}`
+              : cls.schedule_type === "custom"
+                ? "תאריכים מותאמים"
+                : `יום ${dayLabel(cls.day_of_week)}`}
           </div>
           <div className="flex items-center gap-1.5 text-ink-600">
             <span>🕒</span>
@@ -84,10 +106,20 @@ export function ClassCard({ cls }: { cls: PublicClass }) {
             {formatCurrency(cls.price)}
           </span>
           <span className="text-sm font-semibold text-brand-600 group-hover:underline">
-            לפרטים והרשמה ←
+            לפרטים והרשמה
           </span>
         </div>
       </div>
+    </>
+  );
+
+  if (preview) {
+    return <div className={cardClass}>{inner}</div>;
+  }
+
+  return (
+    <Link href={`/classes/${cls.id}`} className={cardClass}>
+      {inner}
     </Link>
   );
 }

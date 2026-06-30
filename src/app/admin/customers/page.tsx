@@ -1,11 +1,5 @@
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
-import { Avatar } from "@/components/ui/Avatar";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+﻿import { CustomerList } from "@/components/admin/CustomerList";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate } from "@/utils/format";
-
 export const metadata = { title: "לקוחות" };
 
 export default async function AdminCustomersPage() {
@@ -13,53 +7,20 @@ export default async function AdminCustomersPage() {
 
   const { data: parents } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, full_name, email, phone, created_at, children(*)")
     .eq("role", "parent")
     .order("created_at", { ascending: false });
 
-  const { data: children } = await supabase.from("children").select("parent_id");
-  const childCount = new Map<string, number>();
-  (children ?? []).forEach((c) =>
-    childCount.set(c.parent_id, (childCount.get(c.parent_id) ?? 0) + 1)
-  );
+  const customers = (parents ?? []).map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
+    email: p.email,
+    phone: p.phone,
+    created_at: p.created_at,
+    children: (p.children ?? []).sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    ),
+  }));
 
-  return (
-    <div className="space-y-6">
-      <PageHeader title="לקוחות והורים" description="כל ההורים הרשומים במערכת" />
-
-      {parents && parents.length > 0 ? (
-        <Card>
-          <Table>
-            <THead>
-              <TR>
-                <TH>שם</TH>
-                <TH>טלפון</TH>
-                <TH>אימייל</TH>
-                <TH>ילדים</TH>
-                <TH>הצטרף</TH>
-              </TR>
-            </THead>
-            <TBody>
-              {parents.map((p) => (
-                <TR key={p.id}>
-                  <TD>
-                    <div className="flex items-center gap-2.5">
-                      <Avatar name={p.full_name} />
-                      <span className="font-semibold text-ink-900">{p.full_name}</span>
-                    </div>
-                  </TD>
-                  <TD dir="ltr" className="text-right text-ink-600">{p.phone ?? "—"}</TD>
-                  <TD dir="ltr" className="text-right text-ink-600">{p.email ?? "—"}</TD>
-                  <TD>{childCount.get(p.id) ?? 0}</TD>
-                  <TD className="text-ink-500">{formatDate(p.created_at)}</TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </Card>
-      ) : (
-        <EmptyState title="אין לקוחות עדיין" icon="👨‍👩‍👧" />
-      )}
-    </div>
-  );
-}
+  return <CustomerList customers={customers} />;}

@@ -26,7 +26,7 @@ export function CtaSection() {
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <Link href="/register" className="hero-cta-primary ah-btn ah-btn--lg">
-              הרשמה עכשיו →
+              הרשמה עכשיו
             </Link>
             <Link href="/classes" className="hero-cta-glass ah-btn ah-btn--lg">
               עיון בחוגים

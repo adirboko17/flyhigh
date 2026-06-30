@@ -1,3 +1,5 @@
+import { cn } from "@/utils/cn";
+
 interface OrbProps {
   color: string;
   size: number;
@@ -7,7 +9,14 @@ interface OrbProps {
   bottom?: number | string;
   blur?: number;
   opacity?: number;
+  motion?: "drift-a" | "drift-b" | "drift-c";
 }
+
+const motionClass: Record<NonNullable<OrbProps["motion"]>, string> = {
+  "drift-a": "hero-orb hero-orb--a",
+  "drift-b": "hero-orb hero-orb--b",
+  "drift-c": "hero-orb hero-orb--c",
+};
 
 export function Orb({
   color,
@@ -18,10 +27,11 @@ export function Orb({
   bottom,
   blur = 60,
   opacity = 0.5,
+  motion,
 }: OrbProps) {
   return (
     <div
-      className="pointer-events-none absolute rounded-full"
+      className="pointer-events-none absolute"
       style={{
         top,
         left,
@@ -29,10 +39,17 @@ export function Orb({
         bottom,
         width: size,
         height: size,
-        background: color,
-        filter: `blur(${blur}px)`,
-        opacity,
       }}
-    />
+    >
+      <div
+        className={cn("h-full w-full rounded-full", motion && motionClass[motion])}
+        style={{
+          background: color,
+          filter: `blur(${blur}px)`,
+          opacity: motion ? undefined : opacity,
+          ["--orb-opacity" as string]: opacity,
+        }}
+      />
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * שכבת הפשטה להפקת חשבוניות/קבלות.
  * בעתיד: חיבור ל"חשבונית ירוקה" / iCount וכד'.
  */
@@ -39,7 +39,7 @@ let provider: InvoiceProvider | null = null;
 
 export function getInvoiceProvider(): InvoiceProvider {
   if (!provider) {
-    // TODO: בעתיד — חיבור לחשבונית ירוקה
+    // TODO: בעתיד - חיבור לחשבונית ירוקה
     provider = new MockInvoiceProvider();
   }
   return provider;

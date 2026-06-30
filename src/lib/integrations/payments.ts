@@ -1,4 +1,4 @@
-/**
+﻿/**
  * שכבת הפשטה לסליקה.
  * כרגע יש מימוש דמה בלבד. בעתיד ניתן לחבר PayPlus / Tranzila / Stripe
  * על ידי הוספת Provider שמממש את הממשק הזה והחלפת getPaymentProvider().
@@ -27,7 +27,7 @@ export interface PaymentProvider {
   refund(reference: string, amount?: number): Promise<ChargeResult>;
 }
 
-/** מימוש דמה — לא מבצע חיוב אמיתי. */
+/** מימוש דמה - לא מבצע חיוב אמיתי. */
 class MockPaymentProvider implements PaymentProvider {
   readonly name = "mock";
 
@@ -48,7 +48,7 @@ let provider: PaymentProvider | null = null;
 
 export function getPaymentProvider(): PaymentProvider {
   if (!provider) {
-    // TODO: בעתיד — לבחור Provider לפי משתנה סביבה (PAYMENT_PROVIDER)
+    // TODO: בעתיד - לבחור Provider לפי משתנה סביבה (PAYMENT_PROVIDER)
     provider = new MockPaymentProvider();
   }
   return provider;

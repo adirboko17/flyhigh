@@ -53,6 +53,8 @@ export default async function HomePage() {
               eyebrow="מנויים"
               title="מסלולים חודשיים"
               accent="var(--logo-magenta)"
+              link="לכל המסלולים"
+              linkHref="/programs"
             />
             <div className="space-y-3">
               {(programs ?? []).map((p) => (

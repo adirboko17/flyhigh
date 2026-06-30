@@ -2,25 +2,34 @@ import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/utils/cn";
 
-const LOGO_SRC = "/images/alagova-logo.png";
+const DEFAULT_LOGO_SRC = "/images/alagova-logo.png";
 
 interface BrandLogoProps {
+  /** מקור הלוגו */
+  src?: string;
   /** גובה הלוגו בפיקסלים */
   height?: number;
+  /** רוחב הלוגו בפיקסלים (ברירת מחדל לפי יחס גובה) */
+  width?: number;
   /** הצגת כותרת משנה (למשל באזור ניהול) */
   subtitle?: string;
   /** האם לעטוף בקישור לדף הבית */
   href?: string;
   className?: string;
+  /** לוגו לבן - לשימוש על רקע כהה/שקוף */
+  light?: boolean;
 }
 
 export function BrandLogo({
+  src = DEFAULT_LOGO_SRC,
   height = 44,
+  width: widthProp,
   subtitle,
   href = "/",
   className,
+  light = false,
 }: BrandLogoProps) {
-  const width = Math.round(height * 2.05);
+  const width = widthProp ?? Math.round(height * 2.05);
 
   const logo = (
     <div className={cn("flex items-center gap-3", className)}>
@@ -29,11 +38,14 @@ export function BrandLogo({
         style={{ height, width }}
       >
         <Image
-          src={LOGO_SRC}
+          src={src}
           alt="על הגובה"
           fill
           sizes={`${width}px`}
-          className="object-contain object-center"
+          className={cn(
+            "object-contain object-center transition-[filter] duration-300",
+            light && "brightness-0 invert"
+          )}
           priority
         />
       </div>

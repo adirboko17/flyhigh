@@ -9,13 +9,13 @@ export const metadata = { title: "הרשמה" };
 export default function RegisterPage() {
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="flex items-center justify-center px-6 py-14">
+      <div className="flex items-start justify-center px-6 py-14">
         <div className="w-full max-w-[440px]">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-700"
           >
-            → חזרה לדף הבית
+            חזרה לדף הבית
           </Link>
 
           <div className="mt-4">

@@ -1,8 +1,8 @@
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { createClient } from "@/lib/supabase/server";
 import { CLASS_STATUS, dayLabel } from "@/lib/constants";
 import { formatCurrency, formatTime, formatDate } from "@/utils/format";
@@ -15,26 +15,48 @@ export default async function ClassDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data } = await supabase.rpc("list_public_classes");
+
+  const [{ data }, { data: sessions }] = await Promise.all([
+    supabase.rpc("list_public_classes"),
+    supabase
+      .from("class_sessions")
+      .select("session_date, start_time, end_time, status, notes")
+      .eq("class_id", id)
+      .eq("status", "scheduled")
+      .order("session_date")
+      .order("start_time"),
+  ]);
+
   const cls = ((data as PublicClass[]) ?? []).find((c) => c.id === id);
 
   if (!cls) notFound();
 
   const status = CLASS_STATUS[cls.status];
   const soldOut = cls.available <= 0 || cls.status === "full";
+  const scheduleLabel = cls.schedule_days
+    ? `ימים ${cls.schedule_days}`
+    : cls.schedule_type === "custom"
+      ? "תאריכים מותאמים"
+      : `יום ${dayLabel(cls.day_of_week)}`;
+
+  const heroDescription =
+    cls.description?.trim() ||
+    `${scheduleLabel} · ${formatTime(cls.start_time)}–${formatTime(cls.end_time)}${cls.instructor_name ? ` · ${cls.instructor_name}` : ""}`;
 
   return (
     <div className="bg-ink-50">
-      <div className="container-page py-8">
-        <Link
-          href="/classes"
-          className="text-sm font-medium text-ink-500 hover:text-brand-600"
-        >
-          → חזרה לכל החוגים
-        </Link>
-      </div>
+      <PublicPageHero
+        badgeIcon="waves"
+        badgeIconColor="var(--logo-cyan)"
+        badgeText={cls.category ? `חוג · ${cls.category}` : "חוג שחייה"}
+        title={cls.title}
+        description={heroDescription}
+        backLink={{ href: "/classes", label: "חזרה לכל החוגים" }}
+        backLinkPlacement="below-description"
+        size="compact"
+      />
 
-      <div className="container-page grid gap-8 pb-16 lg:grid-cols-[1.4fr_1fr]">
+      <div className="container-page relative z-[3] grid gap-8 pb-16 pt-8 lg:grid-cols-[1.4fr_1fr]">
         <div>
           <div className="relative h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
             {cls.image_url ? (
@@ -57,20 +79,14 @@ export default async function ClassDetailPage({
             <Badge tone={status.tone}>{status.label}</Badge>
             {cls.category && <Badge tone="brand">{cls.category}</Badge>}
             {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
+            {cls.session_count != null && cls.session_count > 0 && (
+              <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
+            )}
           </div>
 
-          <h1 className="mt-4 font-display text-3xl font-extrabold text-ink-900">
-            {cls.title}
-          </h1>
-          {cls.description && (
-            <p className="mt-3 leading-relaxed text-ink-600">
-              {cls.description}
-            </p>
-          )}
-
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "—"} />
-            <DetailRow icon="📅" label="יום בשבוע" value={`יום ${dayLabel(cls.day_of_week)}`} />
+            <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "-"} />
+            <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
             <DetailRow
               icon="🕒"
               label="שעות"
@@ -84,9 +100,39 @@ export default async function ClassDetailPage({
             <DetailRow icon="🗓️" label="תאריך התחלה" value={formatDate(cls.start_date)} />
             <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />
           </div>
+
+          {(sessions?.length ?? 0) > 0 && (
+            <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
+              <h2 className="font-display text-lg font-bold text-ink-900">
+                מפגשים מתוכננים
+              </h2>
+              <p className="mt-1 text-sm text-ink-500">
+                {cls.schedule_type === "custom"
+                  ? "תאריכים מותאמים לחוג זה"
+                  : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
+              </p>
+              <ul className="mt-4 divide-y divide-ink-100">
+                {sessions!.map((session) => (
+                  <li
+                    key={`${session.session_date}-${session.start_time}`}
+                    className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
+                  >
+                    <span className="font-semibold text-ink-900">
+                      {formatDate(session.session_date)}
+                    </span>
+                    <span className="text-ink-600">
+                      {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                    </span>
+                    {session.notes && (
+                      <span className="w-full text-xs text-ink-400">{session.notes}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
-        {/* כרטיס הרשמה */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-card">
             <p className="text-sm text-ink-500">מחיר החוג</p>

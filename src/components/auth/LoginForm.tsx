@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -93,7 +93,7 @@ export function LoginForm() {
         </label>
         <span
           className="cursor-default text-[13.5px] font-semibold text-brand-600 opacity-70"
-          title="איפוס סיסמה — בקרוב"
+          title="איפוס סיסמה - בקרוב"
         >
           שכחתם סיסמה?
         </span>

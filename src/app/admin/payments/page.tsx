@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
@@ -46,15 +46,15 @@ export default async function AdminPaymentsPage() {
             <TBody>
               {list.map((p) => (
                 <TR key={p.id}>
-                  <TD className="font-semibold text-ink-900">{p.profiles?.full_name ?? "—"}</TD>
+                  <TD className="font-semibold text-ink-900">{p.profiles?.full_name ?? "-"}</TD>
                   <TD className="font-medium">{formatCurrency(p.amount)}</TD>
-                  <TD>{p.payment_method ? PAYMENT_METHOD[p.payment_method] : "—"}</TD>
+                  <TD>{p.payment_method ? PAYMENT_METHOD[p.payment_method] : "-"}</TD>
                   <TD>
                     <Badge tone={PAYMENT_STATUS[p.status].tone}>
                       {PAYMENT_STATUS[p.status].label}
                     </Badge>
                   </TD>
-                  <TD className="text-ink-500">{p.paid_at ? formatDate(p.paid_at) : "—"}</TD>
+                  <TD className="text-ink-500">{p.paid_at ? formatDate(p.paid_at) : "-"}</TD>
                 </TR>
               ))}
             </TBody>

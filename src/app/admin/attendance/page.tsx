@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/ui/PageHeader";
+﻿import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -36,9 +36,9 @@ export default async function AdminAttendancePage() {
               {rows.map((a) => (
                 <TR key={a.id}>
                   <TD className="text-ink-600">{formatDate(a.date)}</TD>
-                  <TD className="font-semibold text-ink-900">{a.classes?.title ?? "—"}</TD>
-                  <TD>{a.children?.full_name ?? "—"}</TD>
-                  <TD>{a.instructors?.full_name ?? "—"}</TD>
+                  <TD className="font-semibold text-ink-900">{a.classes?.title ?? "-"}</TD>
+                  <TD>{a.children?.full_name ?? "-"}</TD>
+                  <TD>{a.instructors?.full_name ?? "-"}</TD>
                   <TD>
                     <Badge tone={ATTENDANCE_STATUS[a.status].tone}>
                       {ATTENDANCE_STATUS[a.status].label}

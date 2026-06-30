@@ -1,20 +1,23 @@
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/constants";
 
+const FOOTER_LOGO = "/images/alagova-logo-01.png";
+
 export function PublicFooter() {
   return (
-    <footer id="contact" className="mt-20 border-t border-ink-100 bg-white">
+    <footer className="mt-20 border-t border-ink-100 bg-white">
       <div className="container-page grid gap-8 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-gradient text-lg font-extrabold text-white">
-              ע
-            </span>
-            <span className="font-display text-lg font-extrabold text-ink-900">
-              {BRAND.name}
-            </span>
-          </div>
-          <p className="mt-3 text-sm text-ink-500">{BRAND.tagline}</p>
+          <Link href="/" className="inline-block transition-opacity hover:opacity-90">
+            <Image
+              src={FOOTER_LOGO}
+              alt={BRAND.name}
+              width={180}
+              height={72}
+              className="h-auto w-[170px] max-w-full object-contain"
+            />
+          </Link>
         </div>
 
         <div>
@@ -22,6 +25,8 @@ export function PublicFooter() {
           <ul className="mt-3 space-y-2 text-sm text-ink-500">
             <li><Link href="/" className="hover:text-brand-600">בית</Link></li>
             <li><Link href="/classes" className="hover:text-brand-600">חוגים</Link></li>
+            <li><Link href="/programs" className="hover:text-brand-600">מסלולים</Link></li>
+            <li><Link href="/contact" className="hover:text-brand-600">צור קשר</Link></li>
             <li><Link href="/register" className="hover:text-brand-600">הרשמה</Link></li>
             <li><Link href="/login" className="hover:text-brand-600">התחברות</Link></li>
           </ul>

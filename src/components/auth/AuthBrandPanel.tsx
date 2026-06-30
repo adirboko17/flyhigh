@@ -11,11 +11,11 @@ interface AuthBrandPanelProps {
 }
 
 export function AuthBrandPanel({
-  heading = "שחייה, ביטחון והנאה — בגובה העיניים",
+  heading = "שחייה, ביטחון והנאה - בגובה העיניים",
   points,
 }: AuthBrandPanelProps) {
   return (
-    <div className="relative hidden min-h-full flex-col justify-center overflow-hidden bg-[linear-gradient(160deg,#06314f_0%,#0a4a71_50%,#0072b8_100%)] px-14 py-16 text-white lg:flex">
+    <div className="relative hidden min-h-screen flex-col justify-center self-start overflow-hidden bg-[linear-gradient(160deg,#06314f_0%,#0a4a71_50%,#0072b8_100%)] px-14 py-16 text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:max-h-screen">
       <Orb color={MAG} size={360} top={-110} left={-70} blur={90} opacity={0.32} />
       <Orb color={CYN} size={320} bottom={-60} right={-60} blur={90} opacity={0.36} />
       <Orb color={ORG} size={140} top={120} right={90} blur={50} opacity={0.4} />

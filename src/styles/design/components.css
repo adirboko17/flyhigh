@@ -1,5 +1,5 @@
 /* ===========================================================================
-   על הגובה — Component styles
+   על הגובה - Component styles
    Real CSS classes for the brand's UI primitives. React wrappers apply these.
    All values mirror the production app (flyhigh). RTL-first.
    =========================================================================== */
@@ -15,6 +15,7 @@
   cursor: pointer;
   border: none;
   text-decoration: none;
+  border-radius: var(--radius-full);
   transition: all var(--transition-base) ease;
   outline: none;
 }
@@ -27,9 +28,9 @@
   pointer-events: none;
 }
 /* sizes */
-.ah-btn--sm { height: 36px; padding: 0 14px; font-size: var(--text-sm); gap: 6px; border-radius: var(--radius-sm); }
-.ah-btn--md { height: 44px; padding: 0 20px; font-size: var(--text-sm); gap: 8px; border-radius: var(--radius-md); }
-.ah-btn--lg { height: 48px; padding: 0 28px; font-size: var(--text-base); gap: 8px; border-radius: var(--radius-md); }
+.ah-btn--sm { height: 36px; padding: 0 14px; font-size: var(--text-sm); gap: 6px; }
+.ah-btn--md { height: 44px; padding: 0 20px; font-size: var(--text-sm); gap: 8px; }
+.ah-btn--lg { height: 48px; padding: 0 28px; font-size: var(--text-base); gap: 8px; }
 /* variants */
 .ah-btn--primary { background: var(--brand-600); color: var(--white); box-shadow: var(--shadow-glow); }
 .ah-btn--primary:hover { background: var(--brand-700); }

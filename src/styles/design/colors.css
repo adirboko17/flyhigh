@@ -1,5 +1,5 @@
-/* ===========================================================================
-   על הגובה — Color tokens
+﻿/* ===========================================================================
+   על הגובה - Color tokens
    Source of truth: flyhigh/tailwind.config.ts (the production app).
    Primary brand is WATER BLUE (#0082cd). Aqua/teal is secondary.
    The logo's magenta / cyan / orange are reserved as expressive accents only.
@@ -64,13 +64,13 @@
   --sky-500: #0ea5e9;
   --sky-700: #0369a1;
 
-  /* --- Logo accents (expressive use only — never primary UI chrome) --- */
+  /* --- Logo accents (expressive use only - never primary UI chrome) --- */
   --logo-magenta: #ec008c;
   --logo-cyan:    #00aeef;
   --logo-orange:  #fbb03b;
 
   /* =========================================================================
-     Semantic aliases — prefer these in product code.
+     Semantic aliases - prefer these in product code.
      ========================================================================= */
   --bg-page:        var(--ink-50);
   --surface-card:   var(--white);

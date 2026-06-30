@@ -7,6 +7,20 @@ export const BRAND = {
   email: "info@al-hagova.co.il",
 };
 
+/** Demo contact details — replace with real values when ready. */
+export const CONTACT = {
+  phone: BRAND.phone,
+  email: BRAND.email,
+  address: "רחוב הבריכה 12, רמת גן",
+  hours: [
+    { days: "א׳–ה׳", time: "08:00–21:00" },
+    { days: "ו׳", time: "08:00–14:00" },
+  ],
+};
+
+export const HERO_POOL_IMAGE =
+  "https://images.unsplash.com/photo-1600965962361-9035dbfd1c50?auto=format&fit=crop&w=1200&q=80";
+
 export const DAYS_OF_WEEK = [
   "ראשון",
   "שני",
@@ -17,9 +31,11 @@ export const DAYS_OF_WEEK = [
   "שבת",
 ];
 
+export const DAY_ABBR = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+
 export function dayLabel(day: number | null | undefined): string {
-  if (day === null || day === undefined) return "—";
-  return DAYS_OF_WEEK[day] ?? "—";
+  if (day === null || day === undefined) return "-";
+  return DAYS_OF_WEEK[day] ?? "-";
 }
 
 type BadgeTone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
@@ -28,10 +44,9 @@ export const CLASS_STATUS: Record<
   Enums<"class_status">,
   { label: string; tone: BadgeTone }
 > = {
-  draft: { label: "טיוטה", tone: "neutral" },
   active: { label: "פעיל", tone: "success" },
+  inactive: { label: "לא פעיל", tone: "neutral" },
   full: { label: "מלא", tone: "warning" },
-  closed: { label: "סגור", tone: "danger" },
 };
 
 export const LISTING_STATUS: Record<

@@ -1,4 +1,5 @@
-import { ClassCard } from "@/components/classes/ClassCard";
+﻿import { ClassCard } from "@/components/classes/ClassCard";
+import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { createClient } from "@/lib/supabase/server";
 import type { PublicClass } from "@/types";
 
@@ -14,17 +15,15 @@ export default async function ClassesPage() {
 
   return (
     <div className="bg-ink-50">
-      <div className="bg-brand-gradient">
-        <div className="container-page py-14 text-white">
-          <h1 className="font-display text-4xl font-extrabold">החוגים שלנו</h1>
-          <p className="mt-2 max-w-xl text-brand-50/90">
-            בחרו את החוג המתאים לילד שלכם והירשמו בקלות. כל החוגים מועברים
-            על ידי מדריכות מוסמכות.
-          </p>
-        </div>
-      </div>
+      <PublicPageHero
+        badgeIcon="waves"
+        badgeIconColor="var(--logo-cyan)"
+        badgeText="חוגים · שחייה לכל הגילאים"
+        title="החוגים שלנו"
+        description="בחרו את החוג המתאים לילד שלכם והירשמו בקלות. כל החוגים מועברים על ידי מדריכות מוסמכות."
+      />
 
-      <div className="container-page py-12">
+      <div className="container-page relative z-[3] py-12">
         {classes.length > 0 ? (
           <>
             <p className="mb-6 text-sm text-ink-500">
@@ -43,7 +42,7 @@ export default async function ClassesPage() {
               אין חוגים פעילים כרגע
             </p>
             <p className="mt-1 text-sm text-ink-500">
-              חזרו אלינו בקרוב — אנחנו כל הזמן פותחים חוגים חדשים.
+              חזרו אלינו בקרוב - אנחנו כל הזמן פותחים חוגים חדשים.
             </p>
           </div>
         )}
