@@ -122,22 +122,24 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           : "border-b border-transparent bg-transparent pt-4 shadow-none backdrop-blur-none"
       )}
     >
-      <div className="container-page grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-2 md:flex md:justify-between md:gap-4">
-        <div className="flex justify-start md:hidden">
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className={menuButtonClass}
-            aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
-          >
-            <Icon name={open ? "x" : "menu"} size={22} />
-          </button>
+      <div className="container-page relative flex h-16 items-center justify-between gap-2 md:gap-4">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={cn(menuButtonClass, "relative z-10 shrink-0")}
+          aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+        >
+          <Icon name={open ? "x" : "menu"} size={22} />
+        </button>
+
+        <div className="pointer-events-none absolute inset-x-0 flex justify-center md:static md:inset-auto md:pointer-events-auto">
+          <BrandLogo
+            height={48}
+            light={overlayHeader && !glass}
+            className="pointer-events-auto"
+          />
         </div>
 
-        <div className="flex justify-center md:justify-start">
-          <BrandLogo height={48} light={overlayHeader && !glass} />
-        </div>
-
-        <div className="flex justify-end md:hidden">{mobileAuth}</div>
+        <div className="relative z-10 shrink-0 md:hidden">{mobileAuth}</div>
 
         <nav className="hidden items-center gap-0.5 md:flex lg:gap-1">
           {PUBLIC_NAV.map((item) => (
