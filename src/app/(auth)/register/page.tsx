@@ -1,33 +1,29 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { AuthHomeLink } from "@/components/auth/AuthHomeLink";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 import { AuthBrandPanel } from "@/components/auth/AuthBrandPanel";
-import { BrandLogo } from "@/components/layout/BrandLogo";
+import { ScrollReveal } from "@/components/ui/ScrollReveal";
 
 export const metadata = { title: "הרשמה" };
 
 export default function RegisterPage() {
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="flex items-start justify-center px-6 py-14">
-        <div className="w-full max-w-[440px]">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-500 hover:text-ink-700"
-          >
-            חזרה לדף הבית
-          </Link>
-
-          <div className="mt-4">
-            <BrandLogo height={44} />
+      <div className="relative flex items-start justify-center overflow-hidden px-6 py-14">
+        <ScrollReveal className="relative z-10 w-full max-w-[440px]">
+          <div className="flex justify-start">
+            <AuthHomeLink />
           </div>
 
-          <h1 className="mt-5 font-display text-[32px] font-extrabold text-ink-900">
-            פתיחת חשבון
-          </h1>
-          <p className="mt-1.5 text-ink-500">
-            הרשמו בחינם ונהלו את כל הפעילות של הילדים במקום אחד.
-          </p>
+          <div className="mt-8 text-right">
+            <h1 className="font-display text-[32px] font-extrabold text-ink-900">
+              פתיחת חשבון
+            </h1>
+            <p className="mt-1.5 text-ink-500">
+              הרשמו בחינם ונהלו את כל הפעילות של הילדים במקום אחד.
+            </p>
+          </div>
 
           <div className="mt-7">
             <Suspense>
@@ -41,7 +37,7 @@ export default function RegisterPage() {
               התחברות
             </Link>
           </p>
-        </div>
+        </ScrollReveal>
       </div>
 
       <AuthBrandPanel

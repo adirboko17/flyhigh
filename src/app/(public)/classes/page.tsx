@@ -1,5 +1,6 @@
 ﻿import { ClassCard } from "@/components/classes/ClassCard";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
+import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { createClient } from "@/lib/supabase/server";
 import type { PublicClass } from "@/types";
 
@@ -26,12 +27,20 @@ export default async function ClassesPage() {
       <div className="container-page relative z-[3] py-12">
         {classes.length > 0 ? (
           <>
-            <p className="mb-6 text-sm text-ink-500">
-              נמצאו {classes.length} חוגים פעילים
-            </p>
+            <ScrollReveal>
+              <p className="mb-6 text-sm text-ink-500">
+                נמצאו {classes.length} חוגים פעילים
+              </p>
+            </ScrollReveal>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {classes.map((cls) => (
-                <ClassCard key={cls.id} cls={cls} />
+              {classes.map((cls, index) => (
+                <ScrollReveal
+                  key={cls.id}
+                  delay={Math.min((index % 3) * 80, 160)}
+                  className="h-full"
+                >
+                  <ClassCard cls={cls} />
+                </ScrollReveal>
               ))}
             </div>
           </>

@@ -1,6 +1,7 @@
 import { ContactForm } from "@/components/contact/ContactForm";
 import { ContactInfo } from "@/components/contact/ContactInfo";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
+import { ScrollReveal } from "@/components/ui/ScrollReveal";
 
 export const metadata = {
   title: "צור קשר",
@@ -20,37 +21,41 @@ export default function ContactPage() {
 
       <section className="container-page relative z-[3] py-12 pb-16">
         <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
-          <div>
-            <span className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-brand-600">
-              <span className="h-0.5 w-[22px] rounded-sm bg-brand-600" />
-              פרטי התקשרות
-            </span>
-            <h2 className="mt-2.5 font-display text-[34px] font-extrabold leading-tight text-ink-900">
-              איך מגיעים אלינו
-            </h2>
-            <p className="mt-1.5 text-ink-500">
-              אפשר לפנות אלינו בכל דרך שנוחה לכם. נשמח לענות בשעות הפעילות.
-            </p>
-            <div className="mt-8">
-              <ContactInfo />
+          <ScrollReveal>
+            <div>
+              <span className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-brand-600">
+                <span className="h-0.5 w-[22px] rounded-sm bg-brand-600" />
+                פרטי התקשרות
+              </span>
+              <h2 className="mt-2.5 font-display text-[34px] font-extrabold leading-tight text-ink-900">
+                איך מגיעים אלינו
+              </h2>
+              <p className="mt-1.5 text-ink-500">
+                אפשר לפנות אלינו בכל דרך שנוחה לכם. נשמח לענות בשעות הפעילות.
+              </p>
+              <div className="mt-8">
+                <ContactInfo />
+              </div>
             </div>
-          </div>
+          </ScrollReveal>
 
-          <div className="feat-card rounded-[26px] border border-ink-100 bg-white p-6 shadow-card sm:p-8">
-            <span className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-[var(--logo-magenta)]">
-              <span className="h-0.5 w-[22px] rounded-sm bg-[var(--logo-magenta)]" />
-              טופס פנייה
-            </span>
-            <h2 className="mt-2.5 font-display text-[28px] font-extrabold leading-tight text-ink-900">
-              השאירו פרטים
-            </h2>
-            <p className="mt-1.5 text-sm text-ink-500">
-              מלאו את הטופס ונחזור אליכם בהקדם האפשרי.
-            </p>
-            <div className="mt-8">
-              <ContactForm />
+          <ScrollReveal delay={100}>
+            <div className="feat-card rounded-[26px] border border-ink-100 bg-white p-6 shadow-card sm:p-8">
+              <span className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-[var(--logo-magenta)]">
+                <span className="h-0.5 w-[22px] rounded-sm bg-[var(--logo-magenta)]" />
+                טופס פנייה
+              </span>
+              <h2 className="mt-2.5 font-display text-[28px] font-extrabold leading-tight text-ink-900">
+                השאירו פרטים
+              </h2>
+              <p className="mt-1.5 text-sm text-ink-500">
+                מלאו את הטופס ונחזור אליכם בהקדם האפשרי.
+              </p>
+              <div className="mt-8">
+                <ContactForm />
+              </div>
             </div>
-          </div>
+          </ScrollReveal>
         </div>
       </section>
     </div>

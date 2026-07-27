@@ -55,19 +55,6 @@ export function AuthBrandPanel({
             </li>
           ))}
         </ul>
-
-        <div className="mt-8 inline-flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
-          <span
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] text-[#3a2400]"
-            style={{ background: ORG }}
-          >
-            <Icon name="shield" size={18} />
-          </span>
-          <div>
-            <p className="font-display text-[15px] font-extrabold">98% הורים ממליצים</p>
-            <p className="text-[12.5px] text-white/70">מדריכות מוסמכות · יחס אישי</p>
-          </div>
-        </div>
       </div>
     </div>
   );

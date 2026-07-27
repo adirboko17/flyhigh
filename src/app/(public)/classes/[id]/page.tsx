@@ -1,11 +1,11 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { createClient } from "@/lib/supabase/server";
 import { CLASS_STATUS, dayLabel } from "@/lib/constants";
-import { formatCurrency, formatTime, formatDate } from "@/utils/format";
+import { formatTime, formatDate } from "@/utils/format";
 import type { PublicClass } from "@/types";
 
 export default async function ClassDetailPage({
@@ -133,57 +133,7 @@ export default async function ClassDetailPage({
           )}
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
-          <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-card">
-            <p className="text-sm text-ink-500">מחיר החוג</p>
-            <p className="mt-1 font-display text-4xl font-extrabold text-brand-700">
-              {formatCurrency(cls.price)}
-            </p>
-
-            <div className="mt-5 rounded-2xl bg-ink-50 p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-ink-500">מקומות פנויים</span>
-                <span className="font-bold text-ink-900">
-                  {soldOut ? "מלא" : `${cls.available} מתוך ${cls.capacity}`}
-                </span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-200">
-                <div
-                  className="h-full rounded-full bg-brand-gradient"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      (Number(cls.taken_count) / Math.max(cls.capacity, 1)) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-5">
-              {soldOut ? (
-                <ButtonLink
-                  href={`/register?class=${cls.id}&waitlist=1`}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  הצטרפות לרשימת המתנה
-                </ButtonLink>
-              ) : (
-                <ButtonLink
-                  href={`/register?class=${cls.id}`}
-                  size="lg"
-                  className="w-full"
-                >
-                  הרשמה לחוג
-                </ButtonLink>
-              )}
-              <p className="mt-3 text-center text-xs text-ink-400">
-                ההרשמה מתבצעת לאחר פתיחת חשבון אישי
-              </p>
-            </div>
-          </div>
-        </aside>
+        <ClassEnrollmentPanel cls={cls} soldOut={soldOut} />
       </div>
     </div>
   );
