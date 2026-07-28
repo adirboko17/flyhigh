@@ -3,7 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 
 /**
- * מרענן את ה־session בכל בקשה ומגן על אזורים מאובטחים לפי תפקיד.
+ * מרענן את ה־session בכל בקשה וחוסם גישה לאזורים מוגנים ללא התחברות.
+ *
+ * בדיקת התפקיד עצמה נעשית ב־layout של כל אזור (requireRole) ובמדיניות ה־RLS,
+ * כדי שה־middleware לא יבצע שאילתה למסד הנתונים בכל ניווט.
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -29,48 +32,23 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims מאמת את חתימת הטוקן מקומית מול ה־JWKS של הפרויקט,
+  // ולכן אינו עולה בקריאת רשת כמו getUser.
+  const { data } = await supabase.auth.getClaims();
+  const signedIn = Boolean(data?.claims?.sub);
 
   const path = request.nextUrl.pathname;
-  const isAdminArea = path.startsWith("/admin");
-  const isInstructorArea = path.startsWith("/instructor");
-  const isParentArea = path.startsWith("/parent");
-  const isProtected = isAdminArea || isInstructorArea || isParentArea;
+  const isProtected =
+    path.startsWith("/admin") ||
+    path.startsWith("/instructor") ||
+    path.startsWith("/parent");
 
-  // לא מחובר ומנסה להיכנס לאזור מוגן → התחברות
-  if (!user && isProtected) {
+  if (!signedIn && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", path);
     return NextResponse.redirect(url);
   }
 
-  // בדיקת תפקיד עבור אזורים מוגנים
-  if (user && isProtected) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const role = profile?.role;
-
-    if (isAdminArea && role !== "admin") {
-      return NextResponse.redirect(new URL(homeForRole(role), request.url));
-    }
-    if (isInstructorArea && role !== "instructor" && role !== "admin") {
-      return NextResponse.redirect(new URL(homeForRole(role), request.url));
-    }
-  }
-
   return supabaseResponse;
-}
-
-function homeForRole(role?: string | null) {
-  if (role === "admin") return "/admin";
-  if (role === "instructor") return "/instructor";
-  if (role === "parent") return "/parent/dashboard";
-  return "/login";
 }

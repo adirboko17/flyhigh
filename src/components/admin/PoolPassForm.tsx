@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { cn } from "@/utils/cn";
 
 export type PoolPassFormData = {
   id: string;
@@ -35,9 +36,16 @@ function toFormState(existing?: PoolPassFormData) {
   };
 }
 
-export function PoolPassForm({ existing }: { existing?: PoolPassFormData }) {
+interface PoolPassFormProps {
+  existing?: PoolPassFormData;
+  /** מסופק כשהטופס רץ בתוך מודאל — סוגר במקום לנווט, ובלי כרטיס עוטף. */
+  onClose?: () => void;
+}
+
+export function PoolPassForm({ existing, onClose }: PoolPassFormProps) {
   const router = useRouter();
   const isEdit = Boolean(existing);
+  const inModal = Boolean(onClose);
   const [form, setForm] = useState(() => toFormState(existing));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +70,10 @@ export function PoolPassForm({ existing }: { existing?: PoolPassFormData }) {
       description: form.description || null,
       entries_count: Number(form.entries_count) || 1,
       price: Number(form.price) || 0,
-      status: form.status as "draft" | "active" | "inactive",
+      // כניסה חדשה נוצרת תמיד כפעילה; שינוי סטטוס נעשה במסך העריכה.
+      status: isEdit
+        ? (form.status as "draft" | "active" | "inactive")
+        : "active",
     };
 
     const dbError = isEdit
@@ -80,59 +91,73 @@ export function PoolPassForm({ existing }: { existing?: PoolPassFormData }) {
       return;
     }
 
-    router.push("/admin/pool-passes");
+    setLoading(false);
     router.refresh();
+
+    if (onClose) onClose();
+    else router.push("/admin/tracks#pool-passes");
   }
 
+  const fields = (
+    <>
+      <Field label="שם" required>
+        <Input
+          value={form.title}
+          onChange={set("title")}
+          placeholder="לדוגמה: כרטיסייה — 10 כניסות"
+          required
+          autoFocus={inModal}
+        />
+      </Field>
+      <Field label="תיאור">
+        <Textarea
+          value={form.description}
+          onChange={set("description")}
+          placeholder="תיאור קצר..."
+        />
+      </Field>
+      <div className={cn("grid gap-5 sm:grid-cols-2", isEdit && "sm:grid-cols-3")}>
+        <Field label="מספר כניסות" required>
+          <Input
+            type="number"
+            min={1}
+            value={form.entries_count}
+            onChange={set("entries_count")}
+            required
+          />
+        </Field>
+        <Field label="מחיר (₪)" required>
+          <Input
+            type="number"
+            min={0}
+            step="1"
+            value={form.price}
+            onChange={set("price")}
+            required
+          />
+        </Field>
+        {isEdit && (
+          <Field label="סטטוס">
+            <Select value={form.status} onChange={set("status")}>
+              <option value="draft">טיוטה</option>
+              <option value="active">פעיל</option>
+              <option value="inactive">לא פעיל</option>
+            </Select>
+          </Field>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <form onSubmit={submit} className="space-y-6">
-      <Card>
-        <CardContent className="space-y-5">
-          <Field label="שם" required>
-            <Input
-              value={form.title}
-              onChange={set("title")}
-              placeholder="לדוגמה: כרטיסייה — 10 כניסות"
-              required
-            />
-          </Field>
-          <Field label="תיאור">
-            <Textarea
-              value={form.description}
-              onChange={set("description")}
-              placeholder="תיאור קצר..."
-            />
-          </Field>
-          <div className="grid gap-5 sm:grid-cols-3">
-            <Field label="מספר כניסות" required>
-              <Input
-                type="number"
-                min={1}
-                value={form.entries_count}
-                onChange={set("entries_count")}
-                required
-              />
-            </Field>
-            <Field label="מחיר (₪)" required>
-              <Input
-                type="number"
-                min={0}
-                step="1"
-                value={form.price}
-                onChange={set("price")}
-                required
-              />
-            </Field>
-            <Field label="סטטוס">
-              <Select value={form.status} onChange={set("status")}>
-                <option value="draft">טיוטה</option>
-                <option value="active">פעיל</option>
-                <option value="inactive">לא פעיל</option>
-              </Select>
-            </Field>
-          </div>
-        </CardContent>
-      </Card>
+    <form onSubmit={submit} className={inModal ? "space-y-5" : "space-y-6"}>
+      {inModal ? (
+        <div className="space-y-5">{fields}</div>
+      ) : (
+        <Card>
+          <CardContent className="space-y-5">{fields}</CardContent>
+        </Card>
+      )}
 
       {error && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
@@ -141,14 +166,17 @@ export function PoolPassForm({ existing }: { existing?: PoolPassFormData }) {
       )}
 
       <div className="flex gap-3">
-        <Button type="submit" size="lg" disabled={loading}>
+        <Button type="submit" size={inModal ? "md" : "lg"} disabled={loading}>
           {loading ? "שומר..." : isEdit ? "עדכון הכניסה" : "שמירת הכניסה"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          size="lg"
-          onClick={() => router.push("/admin/pool-passes")}
+          size={inModal ? "md" : "lg"}
+          disabled={loading}
+          onClick={() =>
+            onClose ? onClose() : router.push("/admin/tracks#pool-passes")
+          }
         >
           ביטול
         </Button>

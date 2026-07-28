@@ -11,6 +11,7 @@ import {
   WAITLIST_STATUS,
 } from "@/lib/constants";
 import { joinClassWaitlist } from "@/lib/enrollment/actions";
+import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
 import type { Enums } from "@/types/database.types";
 
@@ -36,9 +37,10 @@ interface ClassEnrollmentActionsProps {
   classTitle: string;
   classPrice: number;
   soldOut: boolean;
-  children: Child[];
+  kids: Child[];
   enrollments: ExistingEnrollment[];
   waitlist: WaitlistEntry[];
+  siblingTiers: SiblingDiscountTier[];
 }
 
 export function ClassEnrollmentActions({
@@ -46,9 +48,10 @@ export function ClassEnrollmentActions({
   classTitle,
   classPrice,
   soldOut,
-  children,
+  kids,
   enrollments,
   waitlist,
+  siblingTiers,
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
   const enrolledChildIds = useMemo(
@@ -67,10 +70,10 @@ export function ClassEnrollmentActions({
   );
   const availableChildren = useMemo(
     () =>
-      children.filter(
+      kids.filter(
         (c) => !enrolledChildIds.has(c.id) && !waitlistedChildIds.has(c.id)
       ),
-    [children, enrolledChildIds, waitlistedChildIds]
+    [kids, enrolledChildIds, waitlistedChildIds]
   );
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -139,7 +142,7 @@ export function ClassEnrollmentActions({
     setCheckoutOpen(true);
   }
 
-  if (children.length === 0) {
+  if (kids.length === 0) {
     return (
       <div className="mt-5 space-y-3">
         <p className="text-sm text-ink-600">
@@ -307,6 +310,8 @@ export function ClassEnrollmentActions({
           classTitle={classTitle}
           unitPrice={classPrice}
           selectedChildren={selectedChildren}
+          siblingTiers={siblingTiers}
+          enrolledSiblings={enrollments.length}
         />
       )}
     </>

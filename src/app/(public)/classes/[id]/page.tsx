@@ -16,16 +16,15 @@ export default async function ClassDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data }, { data: sessions }] = await Promise.all([
+  const [{ data }, { data: allSessions }] = await Promise.all([
     supabase.rpc("list_public_classes"),
-    supabase
-      .from("class_sessions")
-      .select("session_date, start_time, end_time, status, notes")
-      .eq("class_id", id)
-      .eq("status", "scheduled")
-      .order("session_date")
-      .order("start_time"),
+    // דרך RPC כדי שגם הורים יראו את שם המדריכה המחליפה, בלי לחשוף את טבלת המדריכות.
+    supabase.rpc("list_public_class_sessions", { p_class_id: id }),
   ]);
+
+  const sessions = (allSessions ?? []).filter(
+    (session) => session.status === "scheduled"
+  );
 
   const cls = ((data as PublicClass[]) ?? []).find((c) => c.id === id);
 
@@ -101,7 +100,7 @@ export default async function ClassDetailPage({
             <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />
           </div>
 
-          {(sessions?.length ?? 0) > 0 && (
+          {sessions.length > 0 && (
             <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
               <h2 className="font-display text-lg font-bold text-ink-900">
                 מפגשים מתוכננים
@@ -112,9 +111,9 @@ export default async function ClassDetailPage({
                   : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
               </p>
               <ul className="mt-4 divide-y divide-ink-100">
-                {sessions!.map((session) => (
+                {sessions.map((session) => (
                   <li
-                    key={`${session.session_date}-${session.start_time}`}
+                    key={session.id}
                     className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
                   >
                     <span className="font-semibold text-ink-900">
@@ -123,6 +122,11 @@ export default async function ClassDetailPage({
                     <span className="text-ink-600">
                       {formatTime(session.start_time)}–{formatTime(session.end_time)}
                     </span>
+                    {session.substitute_instructor_name && (
+                      <Badge tone="warning" className="w-full justify-center sm:w-auto">
+                        מדריכה מחליפה: {session.substitute_instructor_name}
+                      </Badge>
+                    )}
                     {session.notes && (
                       <span className="w-full text-xs text-ink-400">{session.notes}</span>
                     )}

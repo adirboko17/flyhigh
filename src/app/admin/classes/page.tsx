@@ -1,14 +1,72 @@
-﻿import { ClassList } from "@/components/admin/ClassList";
+﻿import {
+  ClassList,
+  type AdminClassAttendance,
+  type AdminClassEnrollment,
+  type AdminClassRow,
+  type AdminClassWaitlistEntry,
+} from "@/components/admin/ClassList";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "ניהול חוגים" };
 
+/** קיבוץ רשומות לפי החוג שאליו הן משויכות. */
+function groupByClass<T extends { class_id: string | null }>(rows: T[] | null) {
+  const map = new Map<string, T[]>();
+  for (const row of rows ?? []) {
+    if (!row.class_id) continue;
+    const list = map.get(row.class_id);
+    if (list) list.push(row);
+    else map.set(row.class_id, [row]);
+  }
+  return map;
+}
+
 export default async function AdminClassesPage() {
   const supabase = await createClient();
-  const { data: classes } = await supabase
-    .from("classes")
-    .select("id, title, category, day_of_week, start_time, price, capacity, status, instructors(full_name)")
-    .order("created_at", { ascending: false });
 
-  return <ClassList classes={classes ?? []} />;
+  const [
+    { data: classes },
+    { data: enrollments },
+    { data: waitlist },
+    { data: attendance },
+  ] = await Promise.all([
+    supabase
+      .from("classes")
+      .select(
+        "id, title, category, level, description, image_url, day_of_week, start_time, end_time, age_min, age_max, price, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructors(full_name)"
+      )
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("enrollments")
+      .select(
+        "id, class_id, parent_id, child_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)"
+      )
+      .eq("type", "class")
+      .not("class_id", "is", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("waitlist")
+      .select(
+        "id, class_id, parent_id, child_id, status, created_at, children(full_name), profiles(full_name, phone)"
+      )
+      .order("created_at"),
+    supabase
+      .from("attendance")
+      .select("id, class_id, date, status, children(full_name), instructors(full_name)")
+      .order("date", { ascending: false })
+      .limit(1000),
+  ]);
+
+  const enrollmentsByClass = groupByClass<AdminClassEnrollment>(enrollments);
+  const waitlistByClass = groupByClass<AdminClassWaitlistEntry>(waitlist);
+  const attendanceByClass = groupByClass<AdminClassAttendance>(attendance);
+
+  const rows: AdminClassRow[] = (classes ?? []).map((cls) => ({
+    ...cls,
+    enrollments: enrollmentsByClass.get(cls.id) ?? [],
+    waitlist: waitlistByClass.get(cls.id) ?? [],
+    attendance: attendanceByClass.get(cls.id) ?? [],
+  }));
+
+  return <ClassList classes={rows} />;
 }

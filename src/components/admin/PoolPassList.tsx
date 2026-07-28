@@ -3,14 +3,15 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
+import { AdminSection } from "@/components/admin/AdminSection";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
-import { Badge } from "@/components/ui/Badge";import { ButtonLink } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { Input } from "@/components/ui/Input";
+import { PoolPassForm } from "@/components/admin/PoolPassForm";
+import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/client";
-import { LISTING_STATUS } from "@/lib/constants";import { formatCurrency } from "@/utils/format";
+import { LISTING_STATUS } from "@/lib/constants";
+import { formatCurrency } from "@/utils/format";
 
 export type AdminPoolPassRow = {
   id: string;
@@ -23,6 +24,7 @@ export type AdminPoolPassRow = {
 
 interface PoolPassListProps {
   passes: AdminPoolPassRow[];
+  query?: string;
 }
 
 function normalizeSearch(value: string) {
@@ -38,43 +40,33 @@ function matchesPass(item: AdminPoolPassRow, query: string) {
   );
 }
 
-export function PoolPassList({ passes }: PoolPassListProps) {
+export function PoolPassList({ passes, query = "" }: PoolPassListProps) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<AdminPoolPassRow | "new" | null>(null);
 
   const filtered = useMemo(
     () => passes.filter((p) => matchesPass(p, query)),
     [passes, query]
   );
 
-  if (passes.length === 0) {
-    return (
-      <EmptyState
-        title="אין כניסות מוגדרות"
-        description="הוסיפו כרטיס כניסה או כרטיסייה ראשונה."
-        action={
-          <ButtonLink href="/admin/pool-passes/new">+ כניסה לבריכה</ButtonLink>
-        }
-      />
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <PoolPassSearchBar
-        query={query}
-        onQueryChange={setQuery}
-        resultCount={filtered.length}
+    <>
+      <AdminSection
+        id="pool-passes"
+        icon="🪪"
+        title="כניסות לבריכה"
+        count={filtered.length}
         totalCount={passes.length}
-      />
-
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="לא נמצאו כניסות"
-          description="נסו מונח חיפוש אחר או נקו את השדה"
-        />
-      ) : (
-        <Card className="overflow-hidden p-0">
+        onNew={() => setEditing("new")}
+        newLabel="+ כניסה לבריכה"
+      >
+        {passes.length === 0 ? (
+          <SectionMessage>
+            אין כניסות מוגדרות — הוסיפו כרטיס כניסה או כרטיסייה ראשונה.
+          </SectionMessage>
+        ) : filtered.length === 0 ? (
+          <SectionMessage>לא נמצאו כניסות התואמות לחיפוש.</SectionMessage>
+        ) : (
           <Table>
             <THead>
               <TR>
@@ -105,7 +97,7 @@ export function PoolPassList({ passes }: PoolPassListProps) {
                   </TD>
                   <TD>
                     <AdminRowActions
-                      editHref={`/admin/pool-passes/${p.id}/edit`}
+                      onEdit={() => setEditing(p)}
                       itemLabel={p.title}
                       onDelete={async () => {
                         const result = await deleteAdminRow(
@@ -122,109 +114,28 @@ export function PoolPassList({ passes }: PoolPassListProps) {
               ))}
             </TBody>
           </Table>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function PoolPassSearchBar({
-  query,
-  onQueryChange,
-  resultCount,
-  totalCount,
-}: {
-  query: string;
-  onQueryChange: (value: string) => void;
-  resultCount: number;
-  totalCount: number;
-}) {
-  const isSearching = query.trim().length > 0;
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
-        <p className="text-sm font-medium text-ink-600">חיפוש כניסות לבריכה</p>
-        <p className="mt-0.5 text-xs text-ink-400">לפי שם או תיאור</p>
-      </div>
-      <div className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <SearchIcon className="pointer-events-none absolute inset-y-0 start-4 my-auto h-[18px] w-[18px] text-ink-400" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="הקלידו שם או תיאור..."
-              className="h-12 border-ink-100 bg-ink-50/50 ps-11 pe-11 shadow-soft focus:bg-white"
-              aria-label="חיפוש כניסות לבריכה"
-            />
-            {isSearching && (
-              <button
-                type="button"
-                onClick={() => onQueryChange("")}
-                className="absolute inset-y-0 end-3 my-auto flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
-                aria-label="ניקוי חיפוש"
-              >
-                <ClearIcon className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <ButtonLink
-            href="/admin/pool-passes/new"
-            className="h-12 shrink-0 px-6 sm:w-auto"
-          >
-            + כניסה לבריכה
-          </ButtonLink>
-        </div>
-        {isSearching && (
-          <p className="mt-3 text-sm text-ink-500">
-            {resultCount === totalCount ? (
-              <>מוצגות כל {totalCount} הכניסות</>
-            ) : (
-              <>
-                נמצאו{" "}
-                <span className="font-semibold text-brand-700">{resultCount}</span>{" "}
-                כניסות מתוך {totalCount}
-              </>
-            )}
-          </p>
         )}
-      </div>
-    </Card>
+      </AdminSection>
+
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing === "new" ? "כניסה לבריכה" : "עריכת כניסה לבריכה"}
+        description={
+          editing === "new" ? "הכניסה תיווצר כפעילה ותוצג באתר." : undefined
+        }
+      >
+        {editing !== null && (
+          <PoolPassForm
+            existing={editing === "new" ? undefined : editing}
+            onClose={() => setEditing(null)}
+          />
+        )}
+      </Modal>
+    </>
   );
 }
 
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="M20 20l-3.5-3.5" />
-    </svg>
-  );
-}
-
-function ClearIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
-  );
+function SectionMessage({ children }: { children: React.ReactNode }) {
+  return <p className="px-5 py-10 text-center text-sm text-ink-400">{children}</p>;
 }

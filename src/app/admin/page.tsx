@@ -1,105 +1,429 @@
 import Link from "next/link";
-import { StatCard } from "@/components/ui/StatCard";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { createClient } from "@/lib/supabase/server";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { RankBars, type RankItem } from "@/components/ui/Chart";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import {
-  ENROLLMENT_STATUS,
   ENROLLMENT_PAYMENT_STATUS,
+  ENROLLMENT_STATUS,
   ENROLLMENT_TYPE,
 } from "@/lib/constants";
-import { formatCurrency, formatDate } from "@/utils/format";
+import {
+  addDays,
+  dayLabelLong,
+  israelDateOf,
+  monthLabel,
+  monthOf,
+  monthRange,
+  shiftMonth,
+  todayInIsrael,
+} from "@/lib/scheduling/monthGrid";
+import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/utils/cn";
+import { formatCurrency } from "@/utils/format";
 
 export const metadata = { title: "דשבורד ניהול" };
 
-async function count(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "profiles" | "children" | "classes" | "enrollments" | "payments" | "waitlist",
-  filter?: (q: any) => any
-) {
-  let q = supabase.from(table).select("*", { count: "exact", head: true });
-  if (filter) q = filter(q);
-  const { count: c } = await q;
-  return c ?? 0;
-}
+/** כמה חוגים להציג בדירוג התפוסה. */
+const OCCUPANCY_LIMIT = 6;
 
 export default async function AdminDashboard() {
+  const today = todayInIsrael();
+  const currentMonth = monthOf(today);
+  const previousMonth = shiftMonth(currentMonth, -1);
+  const { start: previousMonthStart } = monthRange(previousMonth);
+  const weekEnd = addDays(today, 6);
+
   const supabase = await createClient();
 
   const [
-    customers,
-    children,
-    activeClasses,
-    activeEnrollments,
-    openPayments,
-    waitlistCount,
+    { data: payments },
+    { data: enrollments },
+    { data: sessions },
+    { data: classes },
+    { data: instructors },
+    { count: waitlistCount },
+    { data: recentEnrollments },
   ] = await Promise.all([
-    count(supabase, "profiles", (q) => q.eq("role", "parent")),
-    count(supabase, "children"),
-    count(supabase, "classes", (q) => q.eq("status", "active")),
-    count(supabase, "enrollments", (q) => q.eq("status", "active")),
-    count(supabase, "payments", (q) => q.eq("status", "pending")),
-    count(supabase, "waitlist", (q) => q.eq("status", "waiting")),
+    // חלון של חודשיים לחישוב המגמה, ובנוסף כל חוב פתוח בלי תלות בתאריך.
+    supabase
+      .from("payments")
+      .select("amount, status, paid_at")
+      .or(`paid_at.gte.${previousMonthStart},status.eq.pending`),
+    supabase.from("enrollments").select("class_id, status, created_at"),
+    supabase
+      .from("class_sessions")
+      .select(
+        "id, session_date, start_time, end_time, status, substitute:instructors!class_sessions_substitute_instructor_id_fkey(full_name), classes(title, instructors(full_name))"
+      )
+      .gte("session_date", today)
+      .lte("session_date", weekEnd)
+      .order("session_date")
+      .order("start_time"),
+    supabase.from("classes").select("id, title, capacity, status"),
+    supabase.from("instructors").select("id, hourly_rate, status"),
+    supabase
+      .from("waitlist")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "waiting"),
+    supabase
+      .from("enrollments")
+      .select(
+        "*, classes(title), programs(title), children(full_name), profiles(full_name)"
+      )
+      .order("created_at", { ascending: false })
+      .limit(6),
   ]);
 
-  const { data: recentEnrollments } = await supabase
-    .from("enrollments")
-    .select("*, classes(title), programs(title), children(full_name), profiles(full_name)")
-    .order("created_at", { ascending: false })
-    .limit(6);
+  const allPayments = payments ?? [];
+  const allEnrollments = enrollments ?? [];
+  const allSessions = sessions ?? [];
 
-  const { data: paidPayments } = await supabase
-    .from("payments")
-    .select("amount")
-    .eq("status", "paid");
-  const totalRevenue = (paidPayments ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const revenueOfMonth = (month: string) =>
+    allPayments
+      .filter(
+        (payment) =>
+          payment.status === "paid" &&
+          payment.paid_at &&
+          israelDateOf(payment.paid_at).startsWith(month)
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+
+  const revenueThisMonth = revenueOfMonth(currentMonth);
+  const revenueLastMonth = revenueOfMonth(previousMonth);
+
+  const openCharges = allPayments.filter((payment) => payment.status === "pending");
+  const openAmount = openCharges.reduce(
+    (sum, payment) => sum + Number(payment.amount),
+    0
+  );
+
+  const enrollmentsOfMonth = (month: string) =>
+    allEnrollments.filter((enrollment) =>
+      israelDateOf(enrollment.created_at).startsWith(month)
+    ).length;
+
+  const enrollmentsThisMonth = enrollmentsOfMonth(currentMonth);
+  const enrollmentsLastMonth = enrollmentsOfMonth(previousMonth);
+  const pendingEnrollments = allEnrollments.filter(
+    (enrollment) => enrollment.status === "pending"
+  ).length;
+
+  const scheduledSessions = allSessions.filter(
+    (session) => session.status !== "cancelled"
+  );
+  const todaySessions = allSessions.filter(
+    (session) => session.session_date === today
+  );
+  // כשאין מפגשים היום מציגים את הקרובים, כדי שהכרטיס לא יישאר ריק.
+  const agendaIsToday = todaySessions.length > 0;
+  const agenda = agendaIsToday ? todaySessions : scheduledSessions.slice(0, 5);
+
+  const registeredByClass = new Map<string, number>();
+  for (const enrollment of allEnrollments) {
+    if (!enrollment.class_id || enrollment.status !== "active") continue;
+    registeredByClass.set(
+      enrollment.class_id,
+      (registeredByClass.get(enrollment.class_id) ?? 0) + 1
+    );
+  }
+
+  const occupancy = (classes ?? [])
+    .filter((cls) => cls.status !== "inactive")
+    .map((cls) => {
+      const registered = registeredByClass.get(cls.id) ?? 0;
+      return {
+        id: cls.id,
+        title: cls.title,
+        registered,
+        capacity: cls.capacity,
+        percent: cls.capacity > 0 ? Math.round((registered / cls.capacity) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.percent - a.percent || b.registered - a.registered);
+
+  const fullClasses = occupancy.filter((cls) => cls.percent >= 100).length;
+  const emptyClasses = occupancy.filter((cls) => cls.registered === 0).length;
+
+  const instructorsWithoutRate = (instructors ?? []).filter(
+    (instructor) =>
+      instructor.status === "active" &&
+      (instructor.hourly_rate === null || Number(instructor.hourly_rate) <= 0)
+  ).length;
+
+  const tasks: TaskItem[] = [
+    openCharges.length > 0 && {
+      icon: "🧾",
+      tone: "amber" as const,
+      title: `${openCharges.length} ${openCharges.length === 1 ? "חיוב ממתין" : "חיובים ממתינים"} לגבייה`,
+      detail: `סך ${formatCurrency(openAmount)} שטרם נגבו`,
+      href: "/admin/collections",
+    },
+    (waitlistCount ?? 0) > 0 && {
+      icon: "⏳",
+      tone: "violet" as const,
+      title: `${waitlistCount} ברשימת המתנה`,
+      detail: "אפשר לשבץ אותם לחוגים עם מקום פנוי",
+      href: "/admin/classes",
+    },
+    pendingEnrollments > 0 && {
+      icon: "📝",
+      tone: "brand" as const,
+      title: `${pendingEnrollments} ${pendingEnrollments === 1 ? "הרשמה ממתינה" : "הרשמות ממתינות"} לאישור`,
+      detail: "הרשמות שנפתחו ולא הושלמו",
+      href: "/admin/activity",
+    },
+    fullClasses > 0 && {
+      icon: "🚦",
+      tone: "rose" as const,
+      title: `${fullClasses} ${fullClasses === 1 ? "חוג מלא" : "חוגים מלאים"}`,
+      detail: "שקלו לפתוח קבוצה נוספת",
+      href: "/admin/classes",
+    },
+    emptyClasses > 0 && {
+      icon: "🪑",
+      tone: "slate" as const,
+      title: `${emptyClasses} ${emptyClasses === 1 ? "חוג ללא נרשמים" : "חוגים ללא נרשמים"}`,
+      detail: "כדאי לקדם אותם או לעדכן את הסטטוס",
+      href: "/admin/classes",
+    },
+    instructorsWithoutRate > 0 && {
+      icon: "💰",
+      tone: "rose" as const,
+      title: `${instructorsWithoutRate} ${instructorsWithoutRate === 1 ? "מדריכה ללא תעריף" : "מדריכות ללא תעריף"} שעתי`,
+      detail: "השכר שלהן לא נכלל בדוח הכספים",
+      href: "/admin/instructors",
+    },
+  ].filter(Boolean) as TaskItem[];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-3xl">
-          דשבורד ניהול
-        </h1>
-        <p className="mt-1 text-sm text-ink-500">סקירה כללית של הפעילות בעסק</p>
+      <PageHeader
+        title="דשבורד ניהול"
+        description={`${dayLabelLong(today)} · סיכום ${monthLabel(currentMonth)}`}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="הכנסות החודש"
+          value={formatCurrency(revenueThisMonth)}
+          icon="💳"
+          tone="brand"
+          hint={compareHint(revenueThisMonth, revenueLastMonth)}
+        />
+        <StatCard
+          label="ממתין לגבייה"
+          value={formatCurrency(openAmount)}
+          icon="🧾"
+          tone={openCharges.length > 0 ? "amber" : "aqua"}
+          hint={
+            openCharges.length > 0
+              ? `${openCharges.length} חיובים פתוחים`
+              : "אין חובות פתוחים"
+          }
+        />
+        <StatCard
+          label="הרשמות החודש"
+          value={enrollmentsThisMonth}
+          icon="📝"
+          tone="violet"
+          hint={compareHint(enrollmentsThisMonth, enrollmentsLastMonth)}
+        />
+        <StatCard
+          label="מפגשים השבוע"
+          value={scheduledSessions.length}
+          icon="🏊"
+          tone="aqua"
+          hint={
+            todaySessions.length > 0
+              ? `${todaySessions.length} מהם היום`
+              : "אין מפגשים היום"
+          }
+        />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="לקוחות" value={customers} icon="👨‍👩‍👧" tone="brand" />
-        <StatCard label="ילדים" value={children} icon="🧒" tone="aqua" />
-        <StatCard label="חוגים פעילים" value={activeClasses} icon="🏊" tone="violet" />
-        <StatCard label="הרשמות פעילות" value={activeEnrollments} icon="📝" tone="amber" />
-        <StatCard label="תשלומים פתוחים" value={openPayments} icon="💳" tone="rose" />
-        <StatCard label="רשימת המתנה" value={waitlistCount} icon="⏳" tone="slate" />
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {agendaIsToday ? "המפגשים של היום" : "המפגשים הקרובים"}
+            </CardTitle>
+            <Link
+              href="/admin/calendar"
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              ללוח השנה
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {agenda.length === 0 ? (
+              <EmptyState
+                icon="🌤️"
+                title="אין מפגשים השבוע"
+                description="הלוח פנוי. אפשר לשבץ מפגשים חדשים מלוח השנה."
+                className="border-0 bg-transparent py-8"
+              />
+            ) : (
+              <ul className="divide-y divide-ink-100">
+                {agenda.map((session) => {
+                  const substitute = session.substitute?.full_name ?? null;
+                  const instructor = session.classes?.instructors?.full_name ?? null;
+
+                  return (
+                    <li
+                      key={session.id}
+                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="w-16 shrink-0 rounded-xl bg-brand-50 px-2 py-1.5 text-center">
+                          <span className="block font-display text-sm font-bold text-brand-700">
+                            {session.start_time.slice(0, 5)}
+                          </span>
+                          <span className="block text-[10px] text-brand-500">
+                            {session.end_time.slice(0, 5)}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-ink-900">
+                            {session.classes?.title ?? "חוג שנמחק"}
+                          </p>
+                          <p className="truncate text-sm text-ink-500">
+                            {!agendaIsToday &&
+                              `${shortDayLabel(session.session_date)} · `}
+                            {substitute ?? instructor ?? "ללא מדריכה"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {substitute && <Badge tone="warning">מחליפה</Badge>}
+                        {session.status === "cancelled" && (
+                          <Badge tone="danger">בוטל</Badge>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>דורש טיפול</CardTitle>
+            {tasks.length > 0 && <Badge tone="warning">{tasks.length}</Badge>}
+          </CardHeader>
+          <CardContent>
+            {tasks.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-aqua-100 text-2xl">
+                  ✓
+                </div>
+                <p className="font-display text-base font-bold text-ink-800">
+                  הכול מסודר
+                </p>
+                <p className="mt-1 text-sm text-ink-500">
+                  אין חובות פתוחים או משימות שדורשות תשומת לב.
+                </p>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {tasks.map((task) => (
+                  <li key={task.title}>
+                    <Link
+                      href={task.href}
+                      className="flex items-start gap-3 rounded-xl border border-ink-100 px-3.5 py-3 transition-colors hover:border-ink-200 hover:bg-ink-50"
+                    >
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base",
+                          TASK_TONES[task.tone]
+                        )}
+                      >
+                        {task.icon}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-ink-900">
+                          {task.title}
+                        </span>
+                        <span className="block text-xs text-ink-500">
+                          {task.detail}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>תפוסת החוגים</CardTitle>
+            <Link
+              href="/admin/classes"
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              לכל החוגים
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <RankBars
+              items={occupancy.slice(0, OCCUPANCY_LIMIT).map(toOccupancyItem)}
+              formatValue={(value) => `${value}%`}
+              emptyLabel="אין חוגים פעילים להצגה"
+            />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>הרשמות אחרונות</CardTitle>
-            <Link href="/admin/enrollments" className="text-sm font-semibold text-brand-600 hover:underline">
-              הכל
+            <Link
+              href="/admin/activity"
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              לכל הפעילות
             </Link>
           </CardHeader>
           <CardContent>
             {recentEnrollments && recentEnrollments.length > 0 ? (
               <ul className="divide-y divide-ink-100">
-                {recentEnrollments.map((e) => {
-                  const title = e.classes?.title ?? e.programs?.title ?? ENROLLMENT_TYPE[e.type];
+                {recentEnrollments.map((enrollment) => {
+                  const title =
+                    enrollment.classes?.title ??
+                    enrollment.programs?.title ??
+                    ENROLLMENT_TYPE[enrollment.type];
+
                   return (
-                    <li key={e.id} className="flex items-center justify-between gap-3 py-3">
-                      <div>
-                        <p className="font-semibold text-ink-900">{title}</p>
-                        <p className="text-sm text-ink-500">
-                          {e.profiles?.full_name ?? "-"}
-                          {e.children?.full_name ? ` · ${e.children.full_name}` : ""}
+                    <li
+                      key={enrollment.id}
+                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-ink-900">{title}</p>
+                        <p className="truncate text-sm text-ink-500">
+                          {enrollment.profiles?.full_name ?? "-"}
+                          {enrollment.children?.full_name
+                            ? ` · ${enrollment.children.full_name}`
+                            : ""}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge tone={ENROLLMENT_PAYMENT_STATUS[e.payment_status].tone}>
-                          {ENROLLMENT_PAYMENT_STATUS[e.payment_status].label}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge
+                          tone={
+                            ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status].tone
+                          }
+                        >
+                          {ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status].label}
                         </Badge>
-                        <Badge tone={ENROLLMENT_STATUS[e.status].tone}>
-                          {ENROLLMENT_STATUS[e.status].label}
+                        <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
+                          {ENROLLMENT_STATUS[enrollment.status].label}
                         </Badge>
                       </div>
                     </li>
@@ -107,35 +431,79 @@ export default async function AdminDashboard() {
                 })}
               </ul>
             ) : (
-              <p className="text-sm text-ink-500">אין הרשמות עדיין.</p>
+              <EmptyState
+                icon="📝"
+                title="אין הרשמות עדיין"
+                description="ההרשמות האחרונות יופיעו כאן ברגע שיתקבלו."
+                className="border-0 bg-transparent py-8"
+              />
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>סיכום הכנסות</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-2xl bg-brand-gradient p-5 text-white">
-              <p className="text-sm text-brand-50/80">סך הכנסות (שולמו)</p>
-              <p className="mt-1 font-display text-3xl font-extrabold">
-                {formatCurrency(totalRevenue)}
-              </p>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3">
-              <span className="text-sm font-medium text-amber-700">תשלומים ממתינים</span>
-              <span className="font-bold text-amber-700">{openPayments}</span>
-            </div>
-            <Link
-              href="/admin/reports"
-              className="block rounded-xl border border-ink-200 px-4 py-3 text-center text-sm font-semibold text-ink-700 hover:bg-ink-50"
-            >
-              לצפייה בדוחות המלאים
-            </Link>
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+type TaskTone = "brand" | "aqua" | "amber" | "rose" | "violet" | "slate";
+
+type TaskItem = {
+  icon: string;
+  tone: TaskTone;
+  title: string;
+  detail: string;
+  href: string;
+};
+
+const TASK_TONES: Record<TaskTone, string> = {
+  brand: "bg-brand-100 text-brand-700",
+  aqua: "bg-aqua-100 text-aqua-700",
+  amber: "bg-amber-100 text-amber-700",
+  rose: "bg-rose-100 text-rose-700",
+  violet: "bg-violet-100 text-violet-700",
+  slate: "bg-ink-100 text-ink-600",
+};
+
+function toOccupancyItem(cls: {
+  id: string;
+  title: string;
+  registered: number;
+  capacity: number;
+  percent: number;
+}): RankItem {
+  return {
+    key: cls.id,
+    label: cls.title,
+    sublabel: `${cls.registered}/${cls.capacity}`,
+    value: cls.percent,
+    barClassName:
+      cls.percent >= 100
+        ? "bg-rose-500"
+        : cls.percent >= 75
+          ? "bg-amber-500"
+          : cls.percent > 0
+            ? "bg-brand-500"
+            : "bg-ink-200",
+  };
+}
+
+/** "יום ה׳, 30.7" — לשורות של מפגשים שאינם היום. */
+function shortDayLabel(date: string): string {
+  return new Intl.DateTimeFormat("he-IL", {
+    weekday: "short",
+    day: "numeric",
+    month: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+/** משווה את החודש הנוכחי לקודם בטקסט קצר לכרטיס ה־KPI. */
+function compareHint(current: number, previous: number): string {
+  if (previous === 0) {
+    return current > 0 ? "אין נתוני השוואה לחודש שעבר" : "ללא פעילות החודש";
+  }
+
+  const change = Math.round(((current - previous) / previous) * 100);
+  if (change === 0) return "ללא שינוי מהחודש שעבר";
+  return `${change > 0 ? "▲" : "▼"} ${Math.abs(change)}% מהחודש שעבר`;
 }

@@ -9,19 +9,28 @@ export type Profile = Tables<"profiles">;
  */
 export async function getSessionProfile(): Promise<Profile | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userId = await currentUserId(supabase);
 
-  if (!user) return null;
+  if (!userId) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   return profile ?? null;
+}
+
+/**
+ * מזהה המשתמש המחובר לפי ה־JWT. getClaims מאמת את החתימה מקומית מול ה־JWKS
+ * של הפרויקט, ולכן חוסך את קריאת הרשת ש־getUser מבצע בכל טעינת עמוד.
+ */
+async function currentUserId(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<string | null> {
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims?.sub ?? null;
 }
 
 /**
@@ -52,15 +61,13 @@ export async function requireRole(
  */
 export async function getCurrentInstructor() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const userId = await currentUserId(supabase);
+  if (!userId) return null;
 
   const { data } = await supabase
     .from("instructors")
     .select("*")
-    .eq("profile_id", user.id)
+    .eq("profile_id", userId)
     .maybeSingle();
 
   return data ?? null;

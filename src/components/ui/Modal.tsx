@@ -75,7 +75,7 @@ export function Modal({
             </p>
           )}
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{children}</div>
       </div>
     </div>
   );

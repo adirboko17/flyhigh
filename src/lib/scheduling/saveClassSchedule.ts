@@ -19,6 +19,21 @@ export async function saveClassSchedule(
     return { error: "שמירת לוח הזמנים נכשלה." };
   }
 
+  // המפגשים נבנים מחדש בכל שמירה, ולכן שיבוצי המחליפות נשמרים לפי תאריך ושעה
+  // ומוחזרים למפגשים המקבילים אחרי היצירה מחדש.
+  const { data: previousSessions } = await supabase
+    .from("class_sessions")
+    .select("session_date, start_time, substitute_instructor_id")
+    .eq("class_id", classId)
+    .not("substitute_instructor_id", "is", null);
+
+  const substituteBySlot = new Map(
+    (previousSessions ?? []).map((session) => [
+      `${session.session_date}|${session.start_time.slice(0, 5)}`,
+      session.substitute_instructor_id,
+    ])
+  );
+
   const { error: deleteSessionsError } = await supabase
     .from("class_sessions")
     .delete()
@@ -52,6 +67,10 @@ export async function saveClassSchedule(
         end_time: session.endTime,
         status: session.status,
         notes: session.notes || null,
+        substitute_instructor_id:
+          substituteBySlot.get(
+            `${session.sessionDate}|${session.startTime.slice(0, 5)}`
+          ) ?? null,
       }))
     );
 

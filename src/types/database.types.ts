@@ -115,6 +115,7 @@ export type Database = {
           session_date: string
           start_time: string
           status: Database["public"]["Enums"]["class_session_status"]
+          substitute_instructor_id: string | null
         }
         Insert: {
           class_id: string
@@ -125,6 +126,7 @@ export type Database = {
           session_date: string
           start_time: string
           status?: Database["public"]["Enums"]["class_session_status"]
+          substitute_instructor_id?: string | null
         }
         Update: {
           class_id?: string
@@ -135,6 +137,7 @@ export type Database = {
           session_date?: string
           start_time?: string
           status?: Database["public"]["Enums"]["class_session_status"]
+          substitute_instructor_id?: string | null
         }
         Relationships: [
           {
@@ -142,6 +145,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_sessions_substitute_instructor_id_fkey"
+            columns: ["substitute_instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
             referencedColumns: ["id"]
           },
         ]
@@ -198,6 +208,7 @@ export type Database = {
           level: string | null
           price: number
           schedule_type: Database["public"]["Enums"]["schedule_type"]
+          sibling_discount_tiers: Json | null
           start_date: string | null
           start_time: string | null
           status: Database["public"]["Enums"]["class_status"]
@@ -219,6 +230,7 @@ export type Database = {
           level?: string | null
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
+          sibling_discount_tiers?: Json | null
           start_date?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
@@ -240,6 +252,7 @@ export type Database = {
           level?: string | null
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
+          sibling_discount_tiers?: Json | null
           start_date?: string | null
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
@@ -255,11 +268,148 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          created_at: string
+          discount_amount: number
+          enrollment_id: string | null
+          id: string
+          parent_id: string
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string
+          discount_amount: number
+          enrollment_id?: string | null
+          id?: string
+          parent_id: string
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string
+          discount_amount?: number
+          enrollment_id?: string | null
+          id?: string
+          parent_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          class_id: string | null
+          code: string
+          created_at: string
+          description: string | null
+          discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+          discount_value: number
+          ends_on: string | null
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          parent_id: string | null
+          pool_pass_id: string | null
+          program_id: string | null
+          starts_on: string | null
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          class_id?: string | null
+          code: string
+          created_at?: string
+          description?: string | null
+          discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+          discount_value: number
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          parent_id?: string | null
+          pool_pass_id?: string | null
+          program_id?: string | null
+          starts_on?: string | null
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          class_id?: string | null
+          code?: string
+          created_at?: string
+          description?: string | null
+          discount_type?: Database["public"]["Enums"]["coupon_discount_type"]
+          discount_value?: number
+          ends_on?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          parent_id?: string | null
+          pool_pass_id?: string | null
+          program_id?: string | null
+          starts_on?: string | null
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupons_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupons_pool_pass_id_fkey"
+            columns: ["pool_pass_id"]
+            isOneToOne: false
+            referencedRelation: "pool_passes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupons_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrollments: {
         Row: {
+          admin_assigned: boolean
           child_id: string | null
           class_id: string | null
           created_at: string
+          discount_percent: number
           id: string
           parent_id: string
           payment_status: Database["public"]["Enums"]["enrollment_payment_status"]
@@ -269,9 +419,11 @@ export type Database = {
           type: Database["public"]["Enums"]["enrollment_type"]
         }
         Insert: {
+          admin_assigned?: boolean
           child_id?: string | null
           class_id?: string | null
           created_at?: string
+          discount_percent?: number
           id?: string
           parent_id: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
@@ -281,9 +433,11 @@ export type Database = {
           type: Database["public"]["Enums"]["enrollment_type"]
         }
         Update: {
+          admin_assigned?: boolean
           child_id?: string | null
           class_id?: string | null
           created_at?: string
+          discount_percent?: number
           id?: string
           parent_id?: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
@@ -631,6 +785,31 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      class_sibling_discount_tiers: { Args: { p_class_id: string }; Returns: Json }
+      claim_coupon: {
+        Args: {
+          p_code: string
+          p_class_id?: string | null
+          p_program_id?: string | null
+          p_pool_pass_id?: string | null
+          p_amount?: number
+        }
+        Returns: {
+          redemption_id: string | null
+          coupon_id: string | null
+          code: string | null
+          discount_amount: number | null
+          error: string | null
+        }[]
+      }
+      coupon_discount_amount: {
+        Args: {
+          p_type: Database["public"]["Enums"]["coupon_discount_type"]
+          p_value: number
+          p_amount: number
+        }
+        Returns: number
+      }
       instructor_owns_class: { Args: { cid: string }; Returns: boolean }
       instructor_teaches_child: { Args: { cid: string }; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
@@ -640,6 +819,18 @@ export type Database = {
         Returns: {
           full_name: string
           id: string
+        }[]
+      }
+      list_public_class_sessions: {
+        Args: { p_class_id: string }
+        Returns: {
+          id: string
+          session_date: string
+          start_time: string
+          end_time: string
+          status: Database["public"]["Enums"]["class_session_status"]
+          notes: string | null
+          substitute_instructor_name: string | null
         }[]
       }
       list_public_classes: {
@@ -669,11 +860,34 @@ export type Database = {
           session_count: number
         }[]
       }
+      preview_coupon: {
+        Args: {
+          p_code: string
+          p_class_id?: string | null
+          p_program_id?: string | null
+          p_pool_pass_id?: string | null
+          p_amount?: number
+        }
+        Returns: {
+          coupon_id: string | null
+          code: string | null
+          discount_type: Database["public"]["Enums"]["coupon_discount_type"] | null
+          discount_value: number | null
+          discount_amount: number | null
+          error: string | null
+        }[]
+      }
+      link_coupon_redemption: {
+        Args: { p_redemption_id: string; p_enrollment_id: string }
+        Returns: undefined
+      }
+      release_coupon: { Args: { p_redemption_id: string }; Returns: undefined }
     }
     Enums: {
       attendance_status: "present" | "absent" | "late"
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
+      coupon_discount_type: "percent" | "fixed"
       enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded"
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
       enrollment_type: "class" | "program" | "pool_pass"
@@ -687,6 +901,9 @@ export type Database = {
         | "standing_order"
         | "cash"
         | "external"
+        | "bank_transfer"
+        | "maccabi"
+        | "amit"
       payment_status: "pending" | "paid" | "failed" | "refunded"
       schedule_type: "weekly" | "custom"
       user_role: "admin" | "instructor" | "parent"

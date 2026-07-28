@@ -1,5 +1,9 @@
 import { getSessionProfile, homeForRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import {
+  parseSiblingTiers,
+  type SiblingDiscountTier,
+} from "@/lib/finance/siblingDiscount";
 import { formatCurrency } from "@/utils/format";
 import type { PublicClass } from "@/types";
 import {
@@ -19,6 +23,12 @@ export async function ClassEnrollmentPanel({
 }: ClassEnrollmentPanelProps) {
   const profile = await getSessionProfile();
 
+  const supabase = await createClient();
+  const { data: tiersJson } = await supabase.rpc("class_sibling_discount_tiers", {
+    p_class_id: cls.id,
+  });
+  const siblingTiers = parseSiblingTiers(tiersJson);
+
   let enrollmentContent = (
     <GuestEnrollmentActions classId={cls.id} soldOut={soldOut} />
   );
@@ -29,7 +39,6 @@ export async function ClassEnrollmentPanel({
         <NonParentEnrollmentNotice homeHref={homeForRole(profile.role)} />
       );
     } else {
-      const supabase = await createClient();
       const [{ data: children }, { data: enrollments }, { data: waitlist }] =
         await Promise.all([
           supabase
@@ -59,9 +68,10 @@ export async function ClassEnrollmentPanel({
           classTitle={cls.title}
           classPrice={Number(cls.price)}
           soldOut={soldOut}
-          children={children ?? []}
+          kids={children ?? []}
           enrollments={enrollments ?? []}
           waitlist={waitlist ?? []}
+          siblingTiers={siblingTiers}
         />
       );
     }
@@ -74,6 +84,8 @@ export async function ClassEnrollmentPanel({
         <p className="mt-1 font-display text-4xl font-extrabold text-brand-700">
           {formatCurrency(cls.price)}
         </p>
+
+        <SiblingDiscountNote tiers={siblingTiers} />
 
         <div className="mt-5 rounded-2xl bg-ink-50 p-4">
           <div className="flex items-center justify-between text-sm">
@@ -98,5 +110,24 @@ export async function ClassEnrollmentPanel({
         {enrollmentContent}
       </div>
     </aside>
+  );
+}
+
+function SiblingDiscountNote({ tiers }: { tiers: SiblingDiscountTier[] }) {
+  if (tiers.length === 0) return null;
+
+  const sorted = [...tiers].sort((a, b) => a.minChildren - b.minChildren);
+
+  return (
+    <div className="mt-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3">
+      <p className="text-sm font-semibold text-aqua-800">הנחת אחים</p>
+      <ul className="mt-1 space-y-0.5 text-sm text-aqua-700">
+        {sorted.map((tier) => (
+          <li key={tier.minChildren}>
+            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה על ההרשמה
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

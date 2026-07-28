@@ -35,12 +35,15 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const isActive = (href: string) =>
+  const matchesPath = (href: string) =>
     href === pathname ||
     (href !== "/admin" &&
       href !== "/instructor" &&
       pathname.startsWith(href + "/")) ||
     (pathname.startsWith(href) && href.split("/").length > 2);
+
+  const isActive = (item: NavItem) =>
+    matchesPath(item.href) || (item.matchPaths ?? []).some(matchesPath);
 
   return (
     <>
@@ -83,7 +86,7 @@ export function Sidebar({
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
           {items.map((item) => {
-            const active = isActive(item.href);
+            const active = isActive(item);
             return (
               <Link
                 key={item.href}

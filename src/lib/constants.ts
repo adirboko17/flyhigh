@@ -18,6 +18,8 @@ export const CONTACT = {
   ],
 };
 
+export const MIN_PASSWORD_LENGTH = 8;
+
 export const HERO_POOL_IMAGE =
   "https://images.unsplash.com/photo-1600965962361-9035dbfd1c50?auto=format&fit=crop&w=1200&q=80";
 
@@ -58,6 +60,15 @@ export const LISTING_STATUS: Record<
   inactive: { label: "לא פעיל", tone: "danger" },
 };
 
+export const CLASS_SESSION_STATUS: Record<
+  Enums<"class_session_status">,
+  { label: string; tone: BadgeTone }
+> = {
+  scheduled: { label: "מתוכנן", tone: "info" },
+  cancelled: { label: "בוטל", tone: "danger" },
+  completed: { label: "התקיים", tone: "success" },
+};
+
 export const ENROLLMENT_STATUS: Record<
   Enums<"enrollment_status">,
   { label: string; tone: BadgeTone }
@@ -94,8 +105,40 @@ export const PAYMENT_METHOD: Record<Enums<"payment_method">, string> = {
   paybox: "פייבוקס",
   standing_order: "הוראת קבע",
   cash: "מזומן",
+  bank_transfer: "העברה בנקאית",
+  maccabi: "מכבי",
+  amit: "עמית",
   external: "חיצוני",
 };
+
+/**
+ * אמצעי תשלום שלא נגבים במעמד ההרשמה — ההרשמה נקלטת כחוב פתוח,
+ * והמנהל מסמן אותה כשולמה בעמוד הגבייה.
+ */
+export const DEFERRED_PAYMENT_METHODS = [
+  "cash",
+  "bank_transfer",
+  "maccabi",
+  "amit",
+] as const satisfies readonly Enums<"payment_method">[];
+
+export type DeferredPaymentMethod = (typeof DEFERRED_PAYMENT_METHODS)[number];
+
+export const DEFERRED_PAYMENT_HINT: Record<DeferredPaymentMethod, string> = {
+  cash: "התשלום יימסר במזומן במשרד.",
+  bank_transfer: "פרטי החשבון להעברה יישלחו אליכם, והתשלום יסומן עם קליטתו.",
+  maccabi: "התשלום יבוצע דרך אפליקציית מכבי מול המשרד.",
+  amit: "התשלום יבוצע דרך עמית מול המשרד.",
+};
+
+export function isDeferredPaymentMethod(
+  method: Enums<"payment_method"> | null
+): method is DeferredPaymentMethod {
+  return (
+    method !== null &&
+    (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(method)
+  );
+}
 
 export const WAITLIST_STATUS: Record<
   Enums<"waitlist_status">,

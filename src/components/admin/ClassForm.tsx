@@ -15,6 +15,17 @@ import { Field, Input, Textarea, Select } from "@/components/ui/Input";
 import { ClassImageUpload } from "@/components/admin/ClassImageUpload";
 import { ClassPreviewPanel } from "@/components/admin/ClassPreview";
 import { ClassScheduleEditor } from "@/components/admin/ClassScheduleEditor";
+import {
+  SiblingDiscountEditor,
+  SiblingDiscountSummary,
+} from "@/components/admin/SiblingDiscountEditor";
+import {
+  parseSiblingTiers,
+  serializeSiblingTiers,
+  type SiblingDiscountTier,
+} from "@/lib/finance/siblingDiscount";
+import { cn } from "@/utils/cn";
+import type { Json } from "@/types/database.types";
 import type { Instructor } from "@/types";
 
 export type ClassFormData = {
@@ -31,12 +42,15 @@ export type ClassFormData = {
   status: "active" | "inactive" | "full";
   image_url: string | null;
   schedule_type?: "weekly" | "custom";
+  sibling_discount_tiers?: Json | null;
 };
 
 interface Props {
   instructors: Pick<Instructor, "id" | "full_name">[];
   existing?: ClassFormData;
   initialSchedule?: ClassScheduleState;
+  /** מדרגות ברירת המחדל של המערכת, מוצגות כשהחוג לא מגדיר מדרגות משלו. */
+  defaultSiblingTiers: SiblingDiscountTier[];
 }
 
 const emptyForm = {
@@ -72,9 +86,11 @@ function toPayload(
   form: ReturnType<typeof toFormState>,
   imageUrl: string | null,
   scheduleType: ClassScheduleState["scheduleType"],
-  status: ClassFormData["status"]
+  status: ClassFormData["status"],
+  siblingDiscountTiers: Json | null
 ) {
   return {
+    sibling_discount_tiers: siblingDiscountTiers,
     title: form.title,
     description: form.description || null,
     category: form.category || null,
@@ -117,12 +133,25 @@ function validateSchedule(schedule: ClassScheduleState): string | null {
   return null;
 }
 
-export function ClassForm({ instructors, existing, initialSchedule }: Props) {
+export function ClassForm({
+  instructors,
+  existing,
+  initialSchedule,
+  defaultSiblingTiers,
+}: Props) {
   const router = useRouter();
   const isEdit = Boolean(existing);
   const [form, setForm] = useState(() => toFormState(existing));
   const [schedule, setSchedule] = useState(
     () => initialSchedule ?? emptyScheduleState()
+  );
+  const [usesDefaultDiscount, setUsesDefaultDiscount] = useState(
+    () => !Array.isArray(existing?.sibling_discount_tiers)
+  );
+  const [siblingTiers, setSiblingTiers] = useState<SiblingDiscountTier[]>(() =>
+    Array.isArray(existing?.sibling_discount_tiers)
+      ? parseSiblingTiers(existing.sibling_discount_tiers)
+      : defaultSiblingTiers
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -196,7 +225,8 @@ export function ClassForm({ instructors, existing, initialSchedule }: Props) {
       form,
       imageUrl,
       schedule.scheduleType,
-      existing?.status ?? "active"
+      existing?.status ?? "active",
+      usesDefaultDiscount ? null : serializeSiblingTiers(siblingTiers)
     );
 
     let classId = existing?.id;
@@ -320,6 +350,51 @@ export function ClassForm({ instructors, existing, initialSchedule }: Props) {
         </Card>
 
         <Card>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-display text-base font-bold text-ink-900">
+                הנחת אחים
+              </h3>
+              <p className="mt-0.5 text-sm text-ink-500">
+                כשמשפחה רושמת כמה ילדים לחוג הזה, ההנחה חלה על כל ההזמנה.
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <DiscountModeOption
+                selected={usesDefaultDiscount}
+                onSelect={() => {
+                  setUsesDefaultDiscount(true);
+                  setSiblingTiers(defaultSiblingTiers);
+                }}
+                title="ברירת המחדל של המערכת"
+                hint="מתעדכן אוטומטית אם תשנו את ההגדרה הכללית"
+                disabled={loading}
+              />
+              <DiscountModeOption
+                selected={!usesDefaultDiscount}
+                onSelect={() => setUsesDefaultDiscount(false)}
+                title="הגדרה מיוחדת לחוג זה"
+                hint="מדרגות משלכם, בלי קשר להגדרה הכללית"
+                disabled={loading}
+              />
+            </div>
+
+            {usesDefaultDiscount ? (
+              <div className="rounded-xl bg-ink-50 px-4 py-3">
+                <SiblingDiscountSummary tiers={defaultSiblingTiers} />
+              </div>
+            ) : (
+              <SiblingDiscountEditor
+                tiers={siblingTiers}
+                onChange={setSiblingTiers}
+                disabled={loading}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardContent className="space-y-5">
             <ClassScheduleEditor
               value={schedule}
@@ -370,6 +445,45 @@ export function ClassForm({ instructors, existing, initialSchedule }: Props) {
         previewStatus={existing?.status ?? "active"}
       />
     </div>
+  );
+}
+
+function DiscountModeOption({
+  selected,
+  onSelect,
+  title,
+  hint,
+  disabled,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  hint: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        "rounded-xl border px-4 py-3 text-start transition-colors disabled:opacity-60",
+        selected
+          ? "border-brand-500 bg-brand-50"
+          : "border-ink-200 bg-white hover:border-ink-300"
+      )}
+    >
+      <span
+        className={cn(
+          "block text-sm font-semibold",
+          selected ? "text-brand-800" : "text-ink-800"
+        )}
+      >
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs text-ink-500">{hint}</span>
+    </button>
   );
 }
 

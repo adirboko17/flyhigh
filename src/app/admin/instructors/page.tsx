@@ -9,7 +9,7 @@ export default async function AdminInstructorsPage() {
   const [{ data: instructors }, { data: classes }] = await Promise.all([
     supabase
       .from("instructors")
-      .select("id, full_name, phone, hourly_rate, status")
+      .select("id, full_name, phone, hourly_rate, status, profile_id, profiles(email)")
       .order("created_at", { ascending: false }),
     supabase.from("classes").select("instructor_id"),
   ]);
@@ -24,8 +24,9 @@ export default async function AdminInstructorsPage() {
     }
   });
 
-  const rows = (instructors ?? []).map((i) => ({
+  const rows = (instructors ?? []).map(({ profiles, ...i }) => ({
     ...i,
+    email: profiles?.email ?? null,
     classCount: classCount.get(i.id) ?? 0,
   }));
 

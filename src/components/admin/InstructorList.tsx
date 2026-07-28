@@ -4,11 +4,14 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
-import { Avatar } from "@/components/ui/Avatar";import { Badge } from "@/components/ui/Badge";
-import { ButtonLink } from "@/components/ui/Button";
+import { InstructorForm } from "@/components/admin/InstructorForm";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/utils/format";
@@ -18,6 +21,8 @@ export type AdminInstructorRow = {
   phone: string | null;
   hourly_rate: number | null;
   status: "active" | "inactive";
+  profile_id: string | null;
+  email: string | null;
   classCount: number;
 };
 
@@ -41,21 +46,49 @@ function matchesInstructor(item: AdminInstructorRow, query: string) {
 export function InstructorList({ instructors }: InstructorListProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<AdminInstructorRow | "new" | null>(
+    null
+  );
 
   const filtered = useMemo(
     () => instructors.filter((i) => matchesInstructor(i, query)),
     [instructors, query]
   );
 
+  const formModal = (
+    <Modal
+      open={editing !== null}
+      onClose={() => setEditing(null)}
+      title={editing === "new" ? "מדריכה חדשה" : "עריכת מדריכה"}
+      description={
+        editing === "new"
+          ? "המדריכה תיווצר כפעילה וניתן יהיה לשבץ אותה לחוגים."
+          : undefined
+      }
+    >
+      {editing !== null && (
+        <InstructorForm
+          existing={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </Modal>
+  );
+
   if (instructors.length === 0) {
     return (
-      <EmptyState
-        title="אין מדריכות עדיין"
-        description="הוסיפו את המדריכה הראשונה לצוות."
-        action={
-          <ButtonLink href="/admin/instructors/new">+ מדריכה חדשה</ButtonLink>
-        }
-      />
+      <>
+        <EmptyState
+          title="אין מדריכות עדיין"
+          description="הוסיפו את המדריכה הראשונה לצוות."
+          action={
+            <Button type="button" onClick={() => setEditing("new")}>
+              + מדריכה חדשה
+            </Button>
+          }
+        />
+        {formModal}
+      </>
     );
   }
 
@@ -66,6 +99,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
         onQueryChange={setQuery}
         resultCount={filtered.length}
         totalCount={instructors.length}
+        onNew={() => setEditing("new")}
       />
 
       {filtered.length === 0 ? (
@@ -92,9 +126,23 @@ export function InstructorList({ instructors }: InstructorListProps) {
                   <TD>
                     <div className="flex items-center gap-2.5">
                       <Avatar name={i.full_name} />
-                      <span className="font-semibold text-ink-900">
-                        {i.full_name}
-                      </span>
+                      <div className="min-w-0">
+                        <span className="block font-semibold text-ink-900">
+                          {i.full_name}
+                        </span>
+                        {i.email ? (
+                          <span
+                            dir="ltr"
+                            className="block truncate text-right text-xs text-ink-400"
+                          >
+                            {i.email}
+                          </span>
+                        ) : (
+                          <span className="block text-xs text-ink-400">
+                            ללא גישה למערכת
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </TD>
                   <TD dir="ltr" className="text-right text-ink-600">
@@ -111,7 +159,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
                   </TD>
                   <TD>
                     <AdminRowActions
-                      editHref={`/admin/instructors/${i.id}/edit`}
+                      onEdit={() => setEditing(i)}
                       itemLabel={i.full_name}
                       onDelete={async () => {
                         const result = await deleteAdminRow(
@@ -130,6 +178,8 @@ export function InstructorList({ instructors }: InstructorListProps) {
           </Table>
         </Card>
       )}
+
+      {formModal}
     </div>
   );
 }
@@ -139,11 +189,13 @@ function InstructorSearchBar({
   onQueryChange,
   resultCount,
   totalCount,
+  onNew,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
   resultCount: number;
   totalCount: number;
+  onNew: () => void;
 }) {
   const isSearching = query.trim().length > 0;
 
@@ -176,12 +228,13 @@ function InstructorSearchBar({
               </button>
             )}
           </div>
-          <ButtonLink
-            href="/admin/instructors/new"
+          <Button
+            type="button"
+            onClick={onNew}
             className="h-12 shrink-0 px-6 sm:w-auto"
           >
             + מדריכה חדשה
-          </ButtonLink>
+          </Button>
         </div>
         {isSearching && (
           <p className="mt-3 text-sm text-ink-500">
