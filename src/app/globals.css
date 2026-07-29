@@ -22,11 +22,14 @@
 
   html {
     scroll-behavior: smooth;
+    /* רשת ביטחון: אלמנטים דקורטיביים או שורות רחבות לא יגררו גלילה אופקית של כל העמוד. */
+    overflow-x: clip;
   }
 
   body {
     @apply bg-ink-50 text-ink-900 font-sans antialiased;
     text-rendering: optimizeLegibility;
+    overflow-x: clip;
   }
 
   ::selection {

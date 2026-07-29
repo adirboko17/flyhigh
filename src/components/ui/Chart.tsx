@@ -48,7 +48,14 @@ export function ColumnChart({
         ))}
       </div>
 
-      <div className="flex items-stretch gap-1 sm:gap-1.5">
+      {/* במובייל אין רוחב ל־12 עמודות, ולכן הגרף מקבל רוחב מינימלי וגלילה אופקית. */}
+      <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1">
+        <div
+          className={cn(
+            "flex items-stretch gap-1 sm:gap-1.5",
+            data.length > 6 && "min-w-[28rem] sm:min-w-0"
+          )}
+        >
         {data.map((datum) => {
           const column = (
             <>
@@ -96,6 +103,7 @@ export function ColumnChart({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );
@@ -229,7 +237,7 @@ export function RankBars({
       {items.map((item, index) => (
         <li key={item.key}>
           <div className="mb-1.5 flex items-baseline justify-between gap-3">
-            <span className="flex min-w-0 items-baseline gap-2">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
               <span className="shrink-0 font-display text-xs font-bold text-ink-300">
                 {index + 1}
               </span>
@@ -274,12 +282,12 @@ export function SplitBar({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline justify-between text-sm">
-        <span className="text-ink-600">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
+        <span className="min-w-0 text-ink-600">
           {label}
           <span className="ms-1.5 text-xs text-ink-400">{percent}%</span>
         </span>
-        <span className="font-semibold tabular-nums text-ink-900">
+        <span className="shrink-0 font-semibold tabular-nums text-ink-900">
           {formatValue(value)}
         </span>
       </div>

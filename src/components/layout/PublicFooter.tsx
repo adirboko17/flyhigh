@@ -36,7 +36,7 @@ export function PublicFooter() {
           <h4 className="font-display text-sm font-bold text-ink-800">צור קשר</h4>
           <ul className="mt-3 space-y-2 text-sm text-ink-500">
             <li>טלפון: {BRAND.phone}</li>
-            <li>דוא״ל: {BRAND.email}</li>
+            <li className="[overflow-wrap:anywhere]">דוא״ל: {BRAND.email}</li>
           </ul>
         </div>
 

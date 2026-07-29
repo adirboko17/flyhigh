@@ -43,9 +43,11 @@ export function AdminRowActions({
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const menuWidth = 168;
+    // הצמדה לקצה המסך כדי שהתפריט לא ייחתך במסכים צרים.
+    const maxLeft = Math.max(8, window.innerWidth - menuWidth - 8);
     setMenuPos({
       top: rect.bottom + 4,
-      left: Math.max(8, rect.right - menuWidth),
+      left: Math.min(Math.max(8, rect.right - menuWidth), maxLeft),
     });
   }
 
@@ -101,7 +103,7 @@ export function AdminRowActions({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-800 disabled:opacity-50"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-800 disabled:opacity-50"
       >
         <MoreIcon />
       </button>

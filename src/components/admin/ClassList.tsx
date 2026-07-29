@@ -518,7 +518,10 @@ function ClassDetailPanel({
               סגירה
             </button>
           </div>
-          <h2 id="class-panel-title" className="font-display text-2xl font-bold">
+          <h2
+            id="class-panel-title"
+            className="break-words font-display text-xl font-bold sm:text-2xl"
+          >
             {cls.title}
           </h2>
           <p className="mt-1 text-sm text-white/80">
@@ -536,7 +539,7 @@ function ClassDetailPanel({
                 onClick={() => setTab(t.id)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all sm:px-3 sm:text-sm",
                   active
                     ? "bg-white text-brand-700 shadow-soft"
                     : "text-ink-500 hover:bg-white/70 hover:text-ink-800"
@@ -634,10 +637,10 @@ function EnrollmentCard({
   return (
     <Card className={cn("overflow-hidden", muted && "opacity-60")}>
       <CardContent className="flex items-start gap-3 p-4">
-        <Avatar name={childName} className="h-10 w-10" />
+        <Avatar name={childName} className="h-10 w-10 shrink-0" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-ink-900">
+          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+            <p className="min-w-0 break-words font-semibold text-ink-900">
               {childName}
               {age !== null && (
                 <span className="mr-1.5 text-xs font-normal text-ink-400">
@@ -651,7 +654,7 @@ function EnrollmentCard({
           </div>
 
           {enrollment.profiles && (
-            <p className="mt-0.5 text-sm text-ink-500">
+            <p className="mt-0.5 break-words text-sm text-ink-500">
               הורה: {enrollment.profiles.full_name}
               {enrollment.profiles.phone && (
                 <span dir="ltr" className="mr-1.5 text-ink-400">

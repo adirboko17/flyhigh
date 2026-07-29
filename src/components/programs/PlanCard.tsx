@@ -32,7 +32,7 @@ export function PlanCard({
   return (
     <div
       className={cn(
-        "feat-card relative flex flex-col overflow-hidden rounded-[26px] p-[30px] transition-all duration-300",
+        "feat-card relative flex flex-col overflow-hidden rounded-[26px] p-5 transition-all duration-300 sm:p-[30px]",
         featured
           ? "bg-[linear-gradient(150deg,#0a4a71_0%,#0072b8_55%,#0c97cc_100%)] text-white shadow-[0_26px_54px_-24px_rgba(10,74,113,0.6)]"
           : "border border-ink-100 bg-white shadow-card"
@@ -66,7 +66,7 @@ export function PlanCard({
 
         <h3
           className={cn(
-            "mt-[18px] font-display text-[21px] font-extrabold",
+            "mt-[18px] break-words font-display text-[19px] font-extrabold sm:text-[21px]",
             featured ? "text-white" : "text-ink-900"
           )}
         >
@@ -84,10 +84,10 @@ export function PlanCard({
           </p>
         )}
 
-        <div className="mt-5 flex items-baseline gap-1.5">
+        <div className="mt-5 flex flex-wrap items-baseline gap-x-1.5">
           <span
             className={cn(
-              "font-display text-[42px] font-extrabold leading-none",
+              "font-display text-4xl font-extrabold leading-none sm:text-[42px]",
               featured ? "text-white" : "text-brand-700"
             )}
           >

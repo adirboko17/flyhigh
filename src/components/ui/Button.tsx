@@ -17,13 +17,14 @@ const variants: Record<Variant, string> = {
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3.5 text-sm gap-1.5 rounded-full",
-  md: "h-11 px-5 text-sm gap-2 rounded-full",
-  lg: "h-12 px-7 text-base gap-2 rounded-full",
+  sm: "h-9 px-3 sm:px-3.5 text-sm gap-1.5 rounded-full",
+  md: "h-11 px-4 sm:px-5 text-sm gap-2 rounded-full",
+  lg: "h-12 px-5 sm:px-7 text-base gap-2 rounded-full",
 };
 
+// max-w-full ו־overflow-hidden מונעים מכפתורים עם תווית ארוכה לגלוש מהמכל במסכים צרים.
 const base =
-  "inline-flex items-center justify-center font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex max-w-full items-center justify-center overflow-hidden font-semibold whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none";
 
 interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {

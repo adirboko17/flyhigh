@@ -10,14 +10,14 @@ export const metadata = { title: "הרשמה" };
 export default function RegisterPage() {
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="relative flex items-start justify-center overflow-hidden px-6 py-14">
+      <div className="relative flex items-start justify-center overflow-hidden px-5 py-10 sm:px-6 sm:py-14">
         <ScrollReveal className="relative z-10 w-full max-w-[440px]">
           <div className="flex justify-start">
             <AuthHomeLink />
           </div>
 
           <div className="mt-8 text-right">
-            <h1 className="font-display text-[32px] font-extrabold text-ink-900">
+            <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-[32px]">
               פתיחת חשבון
             </h1>
             <p className="mt-1.5 text-ink-500">

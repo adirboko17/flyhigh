@@ -92,9 +92,11 @@ export function AttendanceMarker({
               return (
                 <div
                   key={child.id}
-                  className="flex flex-col gap-2 rounded-xl border border-ink-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-xl border border-ink-100 bg-white p-3 md:flex-row md:items-center md:justify-between"
                 >
-                  <span className="font-medium text-ink-800">{child.full_name}</span>
+                  <span className="min-w-0 truncate font-medium text-ink-800">
+                    {child.full_name}
+                  </span>
                   <div className="flex gap-1.5">
                     {STATUS_OPTIONS.map((opt) => (
                       <button
@@ -102,7 +104,7 @@ export function AttendanceMarker({
                         type="button"
                         onClick={() => setMarks((m) => ({ ...m, [child.id]: opt.value }))}
                         className={cn(
-                          "rounded-lg px-3.5 py-1.5 text-sm font-semibold transition-colors",
+                          "min-h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors md:flex-none md:px-3.5",
                           current === opt.value
                             ? opt.active
                             : "bg-ink-100 text-ink-600 hover:bg-ink-200"
@@ -116,7 +118,7 @@ export function AttendanceMarker({
               );
             })}
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button onClick={save} disabled={saving}>
                 {saving ? "שומר..." : "שמירת נוכחות"}
               </Button>

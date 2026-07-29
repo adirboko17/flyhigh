@@ -126,12 +126,12 @@ export function CouponList({ coupons, options, today }: CouponListProps) {
               <TR>
                 <TH>קוד</TH>
                 <TH>הנחה</TH>
-                <TH>חל על</TH>
-                <TH>לקוח</TH>
-                <TH>תוקף</TH>
-                <TH>שימושים</TH>
+                <TH className="hidden md:table-cell">חל על</TH>
+                <TH className="hidden lg:table-cell">לקוח</TH>
+                <TH className="hidden lg:table-cell">תוקף</TH>
+                <TH className="hidden sm:table-cell">שימושים</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-28">פעולות</TH>
+                <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
             </THead>
             <TBody>
@@ -160,7 +160,7 @@ export function CouponList({ coupons, options, today }: CouponListProps) {
                         coupon.discount_value
                       )}
                     </TD>
-                    <TD>
+                    <TD className="hidden max-w-[12rem] md:table-cell">
                       {subject.label}
                       {!subject.redeemable && (
                         <span className="block text-xs font-normal text-amber-600">
@@ -168,15 +168,15 @@ export function CouponList({ coupons, options, today }: CouponListProps) {
                         </span>
                       )}
                     </TD>
-                    <TD>
+                    <TD className="hidden max-w-[10rem] truncate lg:table-cell">
                       {coupon.parent_id
                         ? labelOf.get(`parent:${coupon.parent_id}`) ?? "לקוח שנמחק"
                         : "כל הלקוחות"}
                     </TD>
-                    <TD className="text-sm text-ink-600">
+                    <TD className="hidden text-sm text-ink-600 lg:table-cell">
                       {describeCouponWindow(coupon.starts_on, coupon.ends_on)}
                     </TD>
-                    <TD className="text-sm text-ink-600">
+                    <TD className="hidden whitespace-nowrap text-sm text-ink-600 sm:table-cell">
                       {describeCouponUsage(coupon.used_count, coupon.max_uses)}
                     </TD>
                     <TD>

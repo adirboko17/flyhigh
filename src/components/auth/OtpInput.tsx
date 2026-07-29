@@ -46,7 +46,7 @@ export function OtpInput({ value, onChange, disabled, error }: OtpInputProps) {
   }
 
   return (
-    <div className="flex justify-center gap-2" dir="ltr">
+    <div className="flex justify-center gap-1.5 sm:gap-2" dir="ltr">
       {digits.map((digit, index) => (
         <input
           key={index}
@@ -65,7 +65,7 @@ export function OtpInput({ value, onChange, disabled, error }: OtpInputProps) {
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
           className={cn(
-            "h-12 w-11 rounded-xl border bg-white text-center font-display text-xl font-extrabold text-ink-900 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-ink-50 sm:h-14 sm:w-12 sm:text-2xl",
+                  "h-12 w-full min-w-0 max-w-[3rem] rounded-xl border bg-white text-center font-display text-xl font-extrabold text-ink-900 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-ink-50 sm:h-14 sm:text-2xl",
             error ? "border-red-300" : "border-ink-200"
           )}
         />

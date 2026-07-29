@@ -181,10 +181,14 @@ export function ClassEnrollmentCheckoutDialog({
               {selectedChildren.map((child) => (
                 <li
                   key={child.id}
-                  className="flex items-center justify-between text-sm"
+                  className="flex items-center justify-between gap-3 text-sm"
                 >
-                  <span className="font-medium text-ink-900">{child.full_name}</span>
-                  <span className="text-ink-500">{formatCurrency(unitPrice)}</span>
+                  <span className="min-w-0 truncate font-medium text-ink-900">
+                    {child.full_name}
+                  </span>
+                  <span className="shrink-0 text-ink-500">
+                    {formatCurrency(unitPrice)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -201,23 +205,23 @@ export function ClassEnrollmentCheckoutDialog({
           />
 
           <div className="space-y-2 border-t border-ink-100 pt-4 text-sm">
-            <div className="flex justify-between text-ink-600">
+            <div className="flex justify-between gap-3 text-ink-600">
               <span>מחיר לילד/ה</span>
-              <span>{formatCurrency(unitPrice)}</span>
+              <span className="shrink-0">{formatCurrency(unitPrice)}</span>
             </div>
-            <div className="flex justify-between text-ink-600">
+            <div className="flex justify-between gap-3 text-ink-600">
               <span>כמות ילדים</span>
-              <span>{count}</span>
+              <span className="shrink-0">{count}</span>
             </div>
             {(order.percent > 0 || couponDiscount > 0) && (
-              <div className="flex justify-between text-ink-600">
+              <div className="flex justify-between gap-3 text-ink-600">
                 <span>סכום ביניים</span>
-                <span>{formatCurrency(order.listTotal)}</span>
+                <span className="shrink-0">{formatCurrency(order.listTotal)}</span>
               </div>
             )}
             {order.percent > 0 && (
-              <div className="flex justify-between font-semibold text-aqua-700">
-                <span>
+              <div className="flex justify-between gap-3 font-semibold text-aqua-700">
+                <span className="min-w-0">
                   הנחת אחים {order.percent}%
                   {enrolledSiblings > 0 && (
                     <span className="ms-1 text-xs font-normal text-ink-400">
@@ -225,31 +229,42 @@ export function ClassEnrollmentCheckoutDialog({
                     </span>
                   )}
                 </span>
-                <span>-{formatCurrency(order.discountAmount)}</span>
+                <span className="shrink-0">
+                  -{formatCurrency(order.discountAmount)}
+                </span>
               </div>
             )}
             {coupon && couponDiscount > 0 && (
-              <div className="flex justify-between font-semibold text-aqua-700">
-                <span>
+              <div className="flex justify-between gap-3 font-semibold text-aqua-700">
+                <span className="min-w-0 break-all">
                   קופון
                   <span className="ms-1 font-mono text-xs" dir="ltr">
                     {coupon.code}
                   </span>
                 </span>
-                <span>-{formatCurrency(couponDiscount)}</span>
+                <span className="shrink-0">-{formatCurrency(couponDiscount)}</span>
               </div>
             )}
-            <div className="flex justify-between font-display text-lg font-extrabold text-brand-700">
+            <div className="flex justify-between gap-3 font-display text-lg font-extrabold text-brand-700">
               <span>סה״כ לתשלום</span>
-              <span>{formatCurrency(total)}</span>
+              <span className="shrink-0">{formatCurrency(total)}</span>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              className="sm:flex-1"
+              onClick={handleClose}
+            >
               ביטול
             </Button>
-            <Button type="button" className="flex-1" onClick={() => setStep("payment")}>
+            <Button
+              type="button"
+              className="sm:flex-1"
+              onClick={() => setStep("payment")}
+            >
               המשך לתשלום
             </Button>
           </div>
@@ -259,11 +274,11 @@ export function ClassEnrollmentCheckoutDialog({
       {step === "payment" && (
         <div className="space-y-5">
           <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm">
-            <div className="flex justify-between font-semibold text-brand-800">
+            <div className="flex justify-between gap-3 font-semibold text-brand-800">
               <span>לתשלום</span>
-              <span>{formatCurrency(total)}</span>
+              <span className="shrink-0">{formatCurrency(total)}</span>
             </div>
-            <p className="mt-1 text-brand-700">
+            <p className="mt-1 break-words text-brand-700">
               {count} {count === 1 ? "ילד/ה" : "ילדים"} · {classTitle}
               {order.percent > 0 && ` · כולל ${order.percent}% הנחת אחים`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
@@ -348,11 +363,11 @@ export function ClassEnrollmentCheckoutDialog({
             </p>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={loading}
               onClick={() => setStep("summary")}
             >
@@ -360,7 +375,7 @@ export function ClassEnrollmentCheckoutDialog({
             </Button>
             <Button
               type="button"
-              className="flex-1"
+              className="sm:flex-1"
               disabled={loading}
               onClick={handlePay}
             >
@@ -473,12 +488,13 @@ function CouponField({
             }}
             placeholder="למשל SUMMER25"
             dir="ltr"
-            className="text-right font-mono tracking-wider"
+            className="min-w-0 text-right font-mono tracking-wider"
             disabled={loading}
           />
           <Button
             type="button"
             variant="outline"
+            className="shrink-0"
             onClick={onApply}
             disabled={loading || value.trim().length === 0}
           >

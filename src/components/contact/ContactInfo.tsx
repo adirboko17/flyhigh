@@ -33,7 +33,7 @@ function ContactDetail({ icon, accent, label, value, href }: ContactDetailProps)
         <p className="text-xs font-semibold text-ink-400">{label}</p>
         <p
           className={cn(
-            "mt-0.5 text-[15px] font-semibold text-ink-900",
+            "mt-0.5 break-words text-[15px] font-semibold text-ink-900 [overflow-wrap:anywhere]",
             href && "text-brand-700"
           )}
         >

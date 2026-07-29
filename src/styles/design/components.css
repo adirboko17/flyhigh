@@ -18,6 +18,10 @@
   border-radius: var(--radius-full);
   transition: all var(--transition-base) ease;
   outline: none;
+  /* גובה הכפתור קבוע, ולכן במקום לשבור שורה הכפתור מצטמצם בתוך שורות צרות. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 .ah-btn:focus-visible {
   box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--focus-ring);
@@ -43,6 +47,12 @@
 .ah-btn--danger { background: var(--red-600); color: var(--white); }
 .ah-btn--danger:hover { background: var(--red-700); }
 .ah-btn--block { width: 100%; }
+
+/* במסכים צרים מצמצמים ריווח פנימי כדי שתוויות ארוכות לא ייחתכו. */
+@media (max-width: 420px) {
+  .ah-btn--md { padding: 0 16px; }
+  .ah-btn--lg { padding: 0 18px; font-size: var(--text-sm); }
+}
 
 /* --------------------------------------------------------------- Inputs --- */
 .ah-input, .ah-textarea, .ah-select {

@@ -301,7 +301,7 @@ export function RegisterForm() {
             </h3>
             <p className="mt-1 text-sm text-ink-500">
               שלחנו קוד בן {OTP_CODE_LENGTH} ספרות ל-
-              <span dir="ltr" className="font-semibold text-ink-700">
+              <span dir="ltr" className="break-all font-semibold text-ink-700">
                 {" "}
                 {credentials.email}
               </span>
@@ -634,8 +634,15 @@ export function RegisterForm() {
 }
 
 function Stepper({ current }: { current: Step }) {
+  const currentLabel = STEPS[current - 1]?.label;
+
   return (
-    <ol className="flex list-none items-center gap-2 p-0">
+    <div className="space-y-2">
+      {/* במובייל אין מקום לתוויות בכל צעד, ולכן מוצג שם הצעד הנוכחי מעל הפס. */}
+      <p className="text-xs font-semibold text-ink-500 sm:hidden">
+        שלב {current} מתוך {STEPS.length} · {currentLabel}
+      </p>
+      <ol className="flex list-none items-center gap-2 p-0">
       {STEPS.map((s, i) => {
         const index = i + 1;
         const done = current > index;
@@ -668,7 +675,8 @@ function Stepper({ current }: { current: Step }) {
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </div>
   );
 }
 

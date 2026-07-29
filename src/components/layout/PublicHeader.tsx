@@ -98,7 +98,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
   };
 
   const menuButtonClass = cn(
-    "rounded-lg p-2 md:hidden",
+    "flex h-10 w-10 items-center justify-center rounded-lg md:hidden",
     glass ? "text-ink-600 hover:bg-ink-100" : "text-white hover:bg-white/10"
   );
 
@@ -143,11 +143,13 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
         </button>
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex h-16 items-center justify-center md:static md:h-auto md:w-auto md:justify-start">
-          <BrandLogo
-            height={48}
-            light={overlayHeader && !glass}
-            className="pointer-events-auto"
-          />
+          {/* לוגו קטן יותר במובייל כדי שלא יתנגש בכפתור התפריט ובכפתורי ההתחברות. */}
+          <span className="pointer-events-auto md:hidden">
+            <BrandLogo height={38} light={overlayHeader && !glass} />
+          </span>
+          <span className="pointer-events-auto hidden md:block">
+            <BrandLogo height={48} light={overlayHeader && !glass} />
+          </span>
         </div>
 
         <nav
@@ -185,7 +187,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className={navLinkClass(item.href)}
+                className={cn(navLinkClass(item.href), "w-full px-4 py-3 text-base")}
               >
                 {item.label}
               </Link>

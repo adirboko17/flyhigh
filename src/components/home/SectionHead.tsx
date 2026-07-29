@@ -19,7 +19,7 @@ export function SectionHead({
 }: SectionHeadProps) {
   return (
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
+      <div className="min-w-0">
         {eyebrow && (
           <span
             className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide"
@@ -32,10 +32,10 @@ export function SectionHead({
             {eyebrow}
           </span>
         )}
-        <h2 className="mt-2.5 font-display text-[34px] font-extrabold leading-tight text-ink-900">
+        <h2 className="mt-2.5 font-display text-2xl font-extrabold leading-tight text-ink-900 sm:text-[34px]">
           {title}
         </h2>
-        {sub && <p className="mt-1.5 text-ink-500">{sub}</p>}
+        {sub && <p className="mt-1.5 text-sm text-ink-500 sm:text-base">{sub}</p>}
       </div>
       {link && linkHref && (
         <Link

@@ -55,7 +55,7 @@ export function ClassImageUpload({
               type="button"
               onClick={handleClear}
               disabled={disabled}
-              className="absolute left-3 top-3 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-ink-700 shadow-sm transition hover:bg-white disabled:opacity-50"
+              className="absolute start-3 top-3 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-ink-700 shadow-sm transition hover:bg-white disabled:opacity-50"
             >
               הסרת תמונה
             </button>

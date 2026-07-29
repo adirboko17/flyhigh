@@ -113,11 +113,11 @@ export function InstructorList({ instructors }: InstructorListProps) {
             <THead>
               <TR>
                 <TH>שם</TH>
-                <TH>טלפון</TH>
-                <TH>תעריף שעתי</TH>
-                <TH>חוגים</TH>
+                <TH className="hidden sm:table-cell">טלפון</TH>
+                <TH className="hidden md:table-cell">תעריף שעתי</TH>
+                <TH className="hidden lg:table-cell">חוגים</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-28">פעולות</TH>
+                <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
             </THead>
             <TBody>
@@ -125,9 +125,9 @@ export function InstructorList({ instructors }: InstructorListProps) {
                 <TR key={i.id}>
                   <TD>
                     <div className="flex items-center gap-2.5">
-                      <Avatar name={i.full_name} />
-                      <div className="min-w-0">
-                        <span className="block font-semibold text-ink-900">
+                      <Avatar name={i.full_name} className="shrink-0" />
+                      <div className="min-w-0 max-w-[10rem] sm:max-w-[14rem]">
+                        <span className="block truncate font-semibold text-ink-900">
                           {i.full_name}
                         </span>
                         {i.email ? (
@@ -145,13 +145,16 @@ export function InstructorList({ instructors }: InstructorListProps) {
                       </div>
                     </div>
                   </TD>
-                  <TD dir="ltr" className="text-right text-ink-600">
+                  <TD
+                    dir="ltr"
+                    className="hidden whitespace-nowrap text-right text-ink-600 sm:table-cell"
+                  >
                     {i.phone ?? "—"}
                   </TD>
-                  <TD className="font-medium">
+                  <TD className="hidden whitespace-nowrap font-medium md:table-cell">
                     {formatCurrency(i.hourly_rate)}
                   </TD>
-                  <TD>{i.classCount}</TD>
+                  <TD className="hidden lg:table-cell">{i.classCount}</TD>
                   <TD>
                     <Badge tone={i.status === "active" ? "success" : "neutral"}>
                       {i.status === "active" ? "פעילה" : "לא פעילה"}

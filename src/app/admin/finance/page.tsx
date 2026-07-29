@@ -360,26 +360,30 @@ export default async function AdminFinancePage({
               <THead>
                 <TR>
                   <TH>מדריכה</TH>
-                  <TH>מפגשים</TH>
+                  <TH className="hidden sm:table-cell">מפגשים</TH>
                   <TH>שעות</TH>
-                  <TH>תעריף שעתי</TH>
+                  <TH className="hidden md:table-cell">תעריף שעתי</TH>
                   <TH>לתשלום</TH>
                 </TR>
               </THead>
               <TBody>
                 {workingPayrollLines.map((line) => (
                   <TR key={line.instructorId}>
-                    <TD className="font-semibold text-ink-900">{line.name}</TD>
-                    <TD>{line.sessions}</TD>
-                    <TD className="text-ink-600">{formatHours(line.hours)}</TD>
-                    <TD className="text-ink-600">
+                    <TD className="max-w-[9rem] truncate font-semibold text-ink-900 sm:max-w-none">
+                      {line.name}
+                    </TD>
+                    <TD className="hidden sm:table-cell">{line.sessions}</TD>
+                    <TD className="whitespace-nowrap text-ink-600">
+                      {formatHours(line.hours)}
+                    </TD>
+                    <TD className="hidden text-ink-600 md:table-cell">
                       {line.hourlyRate > 0 ? (
                         formatCurrency(line.hourlyRate)
                       ) : (
                         <Badge tone="warning">לא הוגדר תעריף</Badge>
                       )}
                     </TD>
-                    <TD className="font-display font-bold text-ink-900">
+                    <TD className="whitespace-nowrap font-display font-bold text-ink-900">
                       {formatCurrency(line.amount)}
                     </TD>
                   </TR>
@@ -447,32 +451,36 @@ export default async function AdminFinancePage({
             <THead>
               <TR>
                 <TH>הורה</TH>
-                <TH>עבור</TH>
+                <TH className="hidden md:table-cell">עבור</TH>
                 <TH>סכום</TH>
-                <TH>אמצעי</TH>
-                <TH>סטטוס</TH>
+                <TH className="hidden lg:table-cell">אמצעי</TH>
+                <TH className="hidden sm:table-cell">סטטוס</TH>
                 <TH>תאריך</TH>
               </TR>
             </THead>
             <TBody>
               {monthPayments.map((payment) => (
                 <TR key={payment.id}>
-                  <TD className="font-semibold text-ink-900">
+                  <TD className="max-w-[9rem] truncate font-semibold text-ink-900 sm:max-w-none">
                     {payment.profiles?.full_name ?? "-"}
                   </TD>
-                  <TD className="text-ink-600">{subjectLabel(payment.enrollments)}</TD>
-                  <TD className="font-medium">{formatCurrency(payment.amount)}</TD>
-                  <TD className="text-ink-600">
+                  <TD className="hidden max-w-[14rem] truncate text-ink-600 md:table-cell">
+                    {subjectLabel(payment.enrollments)}
+                  </TD>
+                  <TD className="whitespace-nowrap font-medium">
+                    {formatCurrency(payment.amount)}
+                  </TD>
+                  <TD className="hidden text-ink-600 lg:table-cell">
                     {payment.payment_method
                       ? PAYMENT_METHOD[payment.payment_method]
                       : "-"}
                   </TD>
-                  <TD>
+                  <TD className="hidden sm:table-cell">
                     <Badge tone={PAYMENT_STATUS[payment.status].tone}>
                       {PAYMENT_STATUS[payment.status].label}
                     </Badge>
                   </TD>
-                  <TD className="text-ink-500">
+                  <TD className="whitespace-nowrap text-ink-500">
                     {formatDate(payment.paid_at ?? payment.created_at)}
                   </TD>
                 </TR>
@@ -501,11 +509,11 @@ function MonthSwitcher({
   monthTitle: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-2xl border border-ink-100 bg-white p-1.5 shadow-soft">
+    <div className="flex w-full items-center justify-between gap-1.5 rounded-2xl border border-ink-100 bg-white p-1.5 shadow-soft sm:w-auto sm:justify-start">
       <MonthArrow href={`/admin/finance?month=${shiftMonth(month, -1)}`} label="החודש הקודם">
         <ChevronIcon className="h-4 w-4 rotate-180" />
       </MonthArrow>
-      <span className="min-w-[7.5rem] text-center text-sm font-semibold text-ink-800">
+      <span className="min-w-0 flex-1 text-center text-sm font-semibold text-ink-800 sm:min-w-[7.5rem] sm:flex-none">
         {monthTitle}
       </span>
       <MonthArrow href={`/admin/finance?month=${shiftMonth(month, 1)}`} label="החודש הבא">

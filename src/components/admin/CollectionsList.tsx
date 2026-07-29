@@ -168,7 +168,7 @@ export function CollectionsList({ parents }: CollectionsListProps) {
                 aria-label="חיפוש ברשימת הגבייה"
               />
             </div>
-            <div className="flex gap-1.5 rounded-full bg-ink-100 p-1">
+            <div className="flex flex-wrap gap-1.5 rounded-2xl bg-ink-100 p-1 sm:flex-nowrap sm:rounded-full">
               {STATUS_FILTERS.map((filter) => (
                 <button
                   key={filter.id}
@@ -176,7 +176,7 @@ export function CollectionsList({ parents }: CollectionsListProps) {
                   onClick={() => setStatusFilter(filter.id)}
                   aria-pressed={statusFilter === filter.id}
                   className={cn(
-                    "rounded-full px-4 py-2 text-sm font-semibold transition-colors",
+                    "flex-1 whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold transition-colors sm:flex-none sm:px-4",
                     statusFilter === filter.id
                       ? "bg-white text-brand-700 shadow-soft"
                       : "text-ink-500 hover:text-ink-800"
@@ -275,11 +275,13 @@ function ParentCard({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 bg-ink-50/60 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 bg-ink-50/60 px-4 py-4 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <Avatar name={parent.name} />
           <div className="min-w-0">
-            <p className="font-display font-bold text-ink-900">{parent.name}</p>
+            <p className="truncate font-display font-bold text-ink-900">
+              {parent.name}
+            </p>
             {parent.phone ? (
               <a
                 href={`tel:${parent.phone}`}
@@ -294,7 +296,7 @@ function ParentCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4">
           <div className="text-end">
             <p className="text-xs text-ink-500">{hasDebt ? "חוב פתוח" : "אין חוב פתוח"}</p>
             <p
@@ -310,6 +312,7 @@ function ParentCard({
             <Button
               type="button"
               size="sm"
+              className="ms-auto sm:ms-0"
               disabled={disabled}
               onClick={onSettleAll}
             >
@@ -348,9 +351,9 @@ function ChargeRow({
   const open = isOpen(charge);
 
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-ink-900">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-5">
+      <div className="w-full min-w-0 sm:flex-1">
+        <p className="break-words font-medium text-ink-900">
           {charge.subject}
           {charge.childName && (
             <span className="text-ink-500"> · {charge.childName}</span>
@@ -374,6 +377,7 @@ function ChargeRow({
         type="button"
         size="sm"
         variant={open ? "primary" : "outline"}
+        className="ms-auto"
         disabled={disabled}
         onClick={onToggle}
       >

@@ -68,13 +68,16 @@ export default async function InstructorDashboard() {
             <ul className="divide-y divide-ink-100">
               {myClasses.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 py-3">
-                  <div>
-                    <p className="font-semibold text-ink-900">{c.title}</p>
-                    <p className="text-sm text-ink-500">
-                      יום {dayLabel(c.day_of_week)} · {formatTime(c.start_time)}–{formatTime(c.end_time)}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-ink-900">{c.title}</p>
+                    <p className="truncate text-sm text-ink-500">
+                      יום {dayLabel(c.day_of_week)} ·{" "}
+                      <span dir="ltr" className="tabular-nums">
+                        {formatTime(c.start_time)}–{formatTime(c.end_time)}
+                      </span>
                     </p>
                   </div>
-                  <Badge tone={CLASS_STATUS[c.status].tone}>
+                  <Badge tone={CLASS_STATUS[c.status].tone} className="shrink-0">
                     {CLASS_STATUS[c.status].label}
                   </Badge>
                 </li>

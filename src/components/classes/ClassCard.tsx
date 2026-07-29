@@ -46,18 +46,18 @@ export function ClassCard({
             🏊
           </div>
         )}
-        <div className="absolute left-3 top-3 flex gap-2">
+        <div className="absolute end-3 top-3 flex gap-2">
           <Badge tone={status.tone}>{status.label}</Badge>
         </div>
         {cls.category && (
-          <span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+          <span className="absolute bottom-3 start-3 max-w-[60%] truncate rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
             {cls.category}
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-lg font-bold text-ink-900 group-hover:text-brand-700">
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <h3 className="break-words font-display text-lg font-bold text-ink-900 group-hover:text-brand-700">
           {cls.title}
         </h3>
         {cls.description && (
@@ -68,9 +68,9 @@ export function ClassCard({
 
         <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
           {cls.instructor_name && (
-            <div className="col-span-2 flex items-center gap-1.5 text-ink-600">
-              <span>👩‍🏫</span>
-              {cls.instructor_name}
+            <div className="col-span-2 flex min-w-0 items-center gap-1.5 text-ink-600">
+              <span className="shrink-0">👩‍🏫</span>
+              <span className="truncate">{cls.instructor_name}</span>
             </div>
           )}
           <div className="flex items-center gap-1.5 text-ink-600">
@@ -101,11 +101,11 @@ export function ClassCard({
           </div>
         </dl>
 
-        <div className="mt-5 flex items-center justify-between border-t border-ink-100 pt-4">
-          <span className="font-display text-xl font-extrabold text-brand-700">
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-ink-100 pt-4">
+          <span className="shrink-0 font-display text-xl font-extrabold text-brand-700">
             {formatCurrency(cls.price)}
           </span>
-          <span className="text-sm font-semibold text-brand-600 group-hover:underline">
+          <span className="min-w-0 truncate text-sm font-semibold text-brand-600 group-hover:underline">
             לפרטים והרשמה
           </span>
         </div>

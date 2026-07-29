@@ -121,7 +121,7 @@ export function SessionSubstituteDialog({
                   <li key={other.id}>
                     <label
                       className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
+                        "flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-3 py-2.5 text-sm transition-colors",
                         checked
                           ? "border-brand-300 bg-brand-50"
                           : "border-ink-100 bg-white hover:border-ink-200"
@@ -141,7 +141,7 @@ export function SessionSubstituteDialog({
                         {other.startTime}–{other.endTime}
                       </span>
                       {other.substituteInstructor && (
-                        <span className="ms-auto text-xs text-amber-700">
+                        <span className="text-xs text-amber-700 sm:ms-auto">
                           מוחלף כעת
                         </span>
                       )}

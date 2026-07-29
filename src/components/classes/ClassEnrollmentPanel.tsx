@@ -79,9 +79,9 @@ export async function ClassEnrollmentPanel({
 
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
-      <div className="rounded-3xl border border-ink-100 bg-white p-6 shadow-card">
+      <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
         <p className="text-sm text-ink-500">מחיר החוג</p>
-        <p className="mt-1 font-display text-4xl font-extrabold text-brand-700">
+        <p className="mt-1 font-display text-3xl font-extrabold text-brand-700 sm:text-4xl">
           {formatCurrency(cls.price)}
         </p>
 

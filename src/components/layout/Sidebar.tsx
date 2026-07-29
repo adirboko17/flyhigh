@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { ROLE_LABEL } from "@/lib/constants";
 import type { NavItem } from "@/lib/navigation";
@@ -35,6 +36,23 @@ export function Sidebar({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  // נעילת גלילת הרקע כשהמגירה פתוחה במובייל, אחרת התוכן זז מתחת לשכבת הכיסוי.
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  // סגירת המגירה במעבר בין עמודים, כדי שהיא לא תישאר פתוחה מעל התוכן החדש.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   const matchesPath = (href: string) =>
     href === pathname ||
     (href !== "/admin" &&
@@ -48,29 +66,32 @@ export function Sidebar({
   return (
     <>
       {/* פס עליון למובייל */}
-      <div className="flex items-center justify-between border-b border-ink-100 bg-white px-4 py-3 lg:hidden">
-        <BrandMark
-          area={area}
-          logoSrc={logoSrc}
-          logoHeight={logoHeight}
-          logoWidth={logoWidth}
-          logoHref={logoHref}
-        />
-        <div className="flex items-center gap-2">
+      <div className="flex w-full shrink-0 items-center justify-between gap-2 border-b border-ink-100 bg-white px-4 py-3 lg:hidden">
+        <div className="min-w-0">
+          <BrandMark
+            area={area}
+            logoSrc={logoSrc}
+            logoHeight={40}
+            logoWidth={logoWidth ? 130 : undefined}
+            logoHref={logoHref}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Avatar name={profile.full_name} className="h-8 w-8 text-xs" />
           <button
             onClick={() => setOpen((v) => !v)}
-            className="rounded-lg p-2 text-ink-600 hover:bg-ink-100"
-            aria-label="תפריט"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100"
+            aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+            aria-expanded={open}
           >
-            {open ? "✕" : "☰"}
+            <Icon name={open ? "x" : "menu"} size={22} />
           </button>
         </div>
       </div>
 
       <aside
         className={cn(
-          "fixed inset-y-0 inset-inline-start-0 z-40 flex w-72 transform flex-col border-e border-ink-100 bg-white transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+          "fixed inset-y-0 start-0 z-40 flex w-[17rem] max-w-[85vw] transform flex-col border-e border-ink-100 bg-white transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:max-w-none lg:translate-x-0",
           open ? "translate-x-0" : "translate-x-full lg:translate-x-0"
         )}
       >

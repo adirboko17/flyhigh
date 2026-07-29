@@ -24,23 +24,32 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
     <section className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_44%,#0072b8_80%,#0c97cc_100%)]">
       <Orb color={MAG} size={420} top={-120} left={-80} blur={90} opacity={0.35} motion="drift-a" />
       <Orb color={CYN} size={360} bottom={-40} right={-60} blur={90} opacity={0.4} motion="drift-c" />
-      <Orb color={ORG} size={160} top={120} right={420} blur={50} opacity={0.45} motion="drift-b" />
+      <Orb
+        color={ORG}
+        size={160}
+        top={120}
+        right={420}
+        blur={50}
+        opacity={0.45}
+        motion="drift-b"
+        className="hidden lg:block"
+      />
       <div className="absolute inset-0 opacity-[0.18] [background-image:radial-gradient(circle_at_80%_0%,#fff,transparent_45%)]" />
 
-      <div className="container-page relative grid items-center gap-12 pb-44 pt-24 lg:grid-cols-2 lg:gap-12 lg:pb-40 lg:pt-28 xl:pt-32">
+      <div className="container-page relative grid items-center gap-12 pb-28 pt-20 sm:pb-36 sm:pt-24 lg:grid-cols-2 lg:gap-12 lg:pb-40 lg:pt-28 xl:pt-32">
         <div className="text-white">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[13px] font-semibold backdrop-blur-sm">
+          <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm sm:px-4 sm:text-[13px]">
             <span style={{ color: ORG }}>
               <Icon name="waves" size={16} />
             </span>
             בית הספר לשחייה ופעילות מים
           </span>
 
-          <h1 className="mt-5 font-display text-5xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl lg:text-[72px]">
+          <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl sm:leading-[0.98] lg:text-[72px]">
             {BRAND.name}
           </h1>
           <p
-            className="mt-3.5 font-display text-2xl font-bold leading-snug sm:text-[27px]"
+            className="mt-3.5 font-display text-xl font-bold leading-snug sm:text-[27px]"
             style={{
               background: "linear-gradient(90deg, #ffd9ef, #aef0ff)",
               WebkitBackgroundClip: "text",
@@ -49,7 +58,7 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
           >
             שחייה, ביטחון והנאה בגובה העיניים
           </p>
-          <p className="mt-5 max-w-[480px] text-[17px] leading-relaxed text-white/85">
+          <p className="mt-5 max-w-[480px] text-[15px] leading-relaxed text-white/85 sm:text-[17px]">
             הרשמה לחוגים, מסלולים וכניסות לבריכה בכמה קליקים. ניהול הילדים,
             ההרשמות והתשלומים - הכל במקום אחד.
           </p>
@@ -66,15 +75,17 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
             </Link>
           </div>
 
-          <div className="mt-9 flex flex-wrap items-center gap-6">
+          <div className="mt-9 grid grid-cols-3 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6">
             {stats.map(([big, small], i) => (
               <div key={small} className="flex items-center gap-6">
                 {i > 0 && <span className="hidden h-[34px] w-px bg-white/20 sm:block" />}
                 <div>
-                  <p className="font-display text-[26px] font-extrabold text-white">
+                  <p className="font-display text-xl font-extrabold text-white sm:text-[26px]">
                     {big}
                   </p>
-                  <p className="text-[12.5px] text-white/70">{small}</p>
+                  <p className="text-[11.5px] text-white/70 sm:text-[12.5px]">
+                    {small}
+                  </p>
                 </div>
               </div>
             ))}

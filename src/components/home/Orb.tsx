@@ -10,6 +10,8 @@ interface OrbProps {
   blur?: number;
   opacity?: number;
   motion?: "drift-a" | "drift-b" | "drift-c";
+  /** אורבים שממוקמים לפי רוחב דסקטופ נחתכים במובייל — אפשר להסתיר אותם. */
+  className?: string;
 }
 
 const motionClass: Record<NonNullable<OrbProps["motion"]>, string> = {
@@ -28,10 +30,11 @@ export function Orb({
   blur = 60,
   opacity = 0.5,
   motion,
+  className,
 }: OrbProps) {
   return (
     <div
-      className="pointer-events-none absolute"
+      className={cn("pointer-events-none absolute", className)}
       style={{
         top,
         left,

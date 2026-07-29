@@ -305,8 +305,9 @@ function SessionList({
                 : "border-ink-100 bg-white"
             }`}
           >
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_auto_auto_auto] md:gap-3">
               <Input
+                className="col-span-2 md:col-span-1"
                 type="date"
                 value={session.sessionDate}
                 onChange={(e) =>
@@ -326,11 +327,12 @@ function SessionList({
                 onChange={(e) => onUpdate(index, { endTime: e.target.value })}
                 disabled={disabled || session.status === "cancelled"}
               />
-              <div className="flex gap-2">
+              <div className="col-span-2 flex gap-2 md:col-span-1">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="flex-1 md:flex-none"
                   disabled={disabled}
                   onClick={() =>
                     onUpdate(index, {
@@ -349,6 +351,7 @@ function SessionList({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="flex-1 md:flex-none"
                   disabled={disabled}
                   onClick={() => onRemove(index)}
                 >

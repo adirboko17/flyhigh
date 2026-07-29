@@ -49,18 +49,29 @@ export function PublicPageHero({
     <section className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_48%,#0072b8_100%)]">
       <Orb color={MAG} size={340} top={-120} right={-60} blur={90} opacity={0.32} motion="drift-a" />
       <Orb color={CYN} size={300} bottom={-40} left={-50} blur={90} opacity={0.36} motion="drift-c" />
-      <Orb color={ORG} size={130} top={70} left={360} blur={50} opacity={0.4} motion="drift-b" />
+      <Orb
+        color={ORG}
+        size={130}
+        top={70}
+        left={360}
+        blur={50}
+        opacity={0.4}
+        motion="drift-b"
+        className="hidden sm:block"
+      />
 
       <div
         className={cn(
           "container-page relative text-center text-white",
-          compact ? "pb-20 pt-24 lg:pt-28" : "pb-[130px] pt-28 lg:pt-32"
+          compact
+            ? "pb-16 pt-24 sm:pb-20 lg:pt-28"
+            : "pb-24 pt-24 sm:pb-28 md:pb-[130px] md:pt-28 lg:pt-32"
         )}
       >
         {backLink && backLinkPlacement === "top" && (
           <div className="mb-6 text-start">{backLinkEl}</div>
         )}
-        <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[13px] font-semibold backdrop-blur-sm">
+        <span className="inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm sm:px-4 sm:text-[13px]">
           <span style={{ color: badgeIconColor }}>
             <Icon name={badgeIcon} size={16} />
           </span>
@@ -68,8 +79,10 @@ export function PublicPageHero({
         </span>
         <h1
           className={cn(
-            "mt-4 font-display font-extrabold leading-tight tracking-tight",
-            compact ? "text-3xl sm:text-4xl" : "mt-5 text-4xl sm:text-[50px]"
+            "mt-4 break-words font-display font-extrabold leading-tight tracking-tight",
+            compact
+              ? "text-2xl sm:text-4xl"
+              : "mt-5 text-3xl sm:text-4xl md:text-[50px]"
           )}
         >
           {title}
@@ -77,7 +90,9 @@ export function PublicPageHero({
         <p
           className={cn(
             "mx-auto max-w-[560px] leading-relaxed text-white/85",
-            compact ? "mt-2.5 text-base" : "mt-3.5 text-[17px]"
+            compact
+              ? "mt-2.5 text-sm sm:text-base"
+              : "mt-3.5 text-[15px] sm:text-[17px]"
           )}
         >
           {description}

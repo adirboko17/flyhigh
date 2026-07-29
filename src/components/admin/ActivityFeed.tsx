@@ -175,7 +175,7 @@ export function ActivityFeed({ entries, todayKey }: ActivityFeedProps) {
                 <span className="h-px flex-1 bg-ink-100" />
               </div>
 
-              <ol className="relative space-y-3 pe-5">
+              <ol className="relative space-y-3 pe-10">
                 {/* קו הציר של הטיימליין */}
                 <span
                   aria-hidden
@@ -203,7 +203,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       <span
         aria-hidden
         className={cn(
-          "absolute end-[-20px] top-4 flex h-8 w-8 items-center justify-center rounded-full text-sm ring-4 ring-ink-50",
+          "absolute end-0 top-4 flex h-8 w-8 items-center justify-center rounded-full text-sm ring-4 ring-ink-50",
           style.dot
         )}
       >

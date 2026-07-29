@@ -93,7 +93,10 @@ function DetailRow({
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-ink-100 pb-3 last:border-0 last:pb-0">
       <span className="shrink-0 text-sm text-ink-500">{label}</span>
-      <span dir={dir} className="text-left text-sm font-medium text-ink-900">
+      <span
+        dir={dir}
+        className="min-w-0 text-end text-sm font-medium text-ink-900 [overflow-wrap:anywhere]"
+      >
         {children}
       </span>
     </div>

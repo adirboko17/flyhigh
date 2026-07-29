@@ -56,7 +56,8 @@ export default async function ClassDetailPage({
       />
 
       <div className="container-page relative z-[3] grid gap-8 pb-16 pt-8 lg:grid-cols-[1.4fr_1fr]">
-        <div>
+        {/* במובייל כרטיס ההרשמה עולה לראש העמוד כדי שהמחיר וההרשמה יהיו מעל הקיפול. */}
+        <div className="order-2 lg:order-1">
           <div className="relative h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
             {cls.image_url ? (
               <Image
@@ -137,7 +138,9 @@ export default async function ClassDetailPage({
           )}
         </div>
 
-        <ClassEnrollmentPanel cls={cls} soldOut={soldOut} />
+        <div className="order-1 lg:order-2">
+          <ClassEnrollmentPanel cls={cls} soldOut={soldOut} />
+        </div>
       </div>
     </div>
   );

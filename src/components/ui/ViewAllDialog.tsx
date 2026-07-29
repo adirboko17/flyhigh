@@ -39,7 +39,7 @@ export function ViewAllDialog({
         onClick={() => setOpen(true)}
         disabled={disabled}
         className={cn(
-          "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-brand-600 transition-colors hover:bg-brand-50 disabled:pointer-events-none disabled:text-ink-300",
+          "inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-brand-600 transition-colors hover:bg-brand-50 disabled:pointer-events-none disabled:text-ink-300",
           className
         )}
       >

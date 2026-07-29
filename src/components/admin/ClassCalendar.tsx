@@ -165,14 +165,14 @@ export function ClassCalendar({
   return (
     <div className="space-y-4">
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-brand-gradient px-5 py-4 text-white">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-brand-gradient px-4 py-4 text-white sm:px-5">
+          <div className="min-w-0">
             <p className="text-xs font-medium text-white/70">לוח החוגים החודשי</p>
-            <h1 className="font-display text-2xl font-bold leading-tight sm:text-3xl">
+            <h1 className="font-display text-xl font-bold leading-tight sm:text-3xl">
               {monthTitle}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
             <MonthNavLink
               href={`/admin/calendar?month=${previousMonth}`}
               label="החודש הקודם"
@@ -346,7 +346,7 @@ function DayCell({
       disabled={!hasSessions}
       aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
       className={cn(
-        "flex min-h-[96px] flex-col gap-1.5 p-1.5 text-start transition-colors sm:min-h-[124px] sm:p-2 lg:min-h-[140px]",
+        "flex min-h-[68px] flex-col gap-1 p-1 text-start transition-colors sm:min-h-[124px] sm:gap-1.5 sm:p-2 lg:min-h-[140px]",
         day.inMonth ? "bg-white" : "bg-ink-50/60",
         day.inMonth && day.isWeekend && "bg-brand-50/50",
         hasSessions && "hover:bg-brand-50"
@@ -355,7 +355,7 @@ function DayCell({
       <div className="flex items-center justify-between gap-1">
         <span
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums",
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums sm:h-7 sm:w-7 sm:text-sm",
             day.isToday
               ? "bg-brand-600 text-white shadow-glow"
               : day.inMonth

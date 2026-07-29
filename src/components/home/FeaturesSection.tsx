@@ -28,14 +28,14 @@ const accents = [CYN, MAG, ORG];
 
 export function FeaturesSection() {
   return (
-    <section className="container-page relative z-[3] -mt-28">
+    <section className="container-page relative z-[3] -mt-16 sm:-mt-20 lg:-mt-28">
       <div className="grid gap-5 md:grid-cols-3">
         {features.map((f, i) => {
           const accent = accents[i % 3];
           return (
             <ScrollReveal key={f.title} delay={i * 80} className="h-full">
               <div
-                className="feat-card relative h-full overflow-hidden rounded-[22px] border border-ink-100 bg-white p-[26px] shadow-card"
+                className="feat-card relative h-full overflow-hidden rounded-[22px] border border-ink-100 bg-white p-5 shadow-card sm:p-[26px]"
               >
                 <div
                   className="absolute inset-x-0 top-0 h-1"

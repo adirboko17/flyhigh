@@ -181,7 +181,7 @@ export default async function InstructorPayrollPage() {
           <THead>
             <TR>
               <TH>חודש</TH>
-              <TH>מפגשים</TH>
+              <TH className="hidden sm:table-cell">מפגשים</TH>
               <TH>שעות</TH>
               <TH>שכר</TH>
             </TR>
@@ -189,12 +189,14 @@ export default async function InstructorPayrollPage() {
           <TBody>
             {[...monthlySummary].reverse().map((entry) => (
               <TR key={entry.month}>
-                <TD className="font-semibold text-ink-900">
+                <TD className="whitespace-nowrap font-semibold text-ink-900">
                   {monthLabel(entry.month)}
                 </TD>
-                <TD>{entry.sessions}</TD>
-                <TD className="text-ink-600">{formatHours(entry.hours)}</TD>
-                <TD className="font-display font-bold text-ink-900">
+                <TD className="hidden sm:table-cell">{entry.sessions}</TD>
+                <TD className="whitespace-nowrap text-ink-600">
+                  {formatHours(entry.hours)}
+                </TD>
+                <TD className="whitespace-nowrap font-display font-bold text-ink-900">
                   {formatCurrency(entry.amount)}
                 </TD>
               </TR>
@@ -221,18 +223,23 @@ export default async function InstructorPayrollPage() {
                 .sort((a, b) => a.session_date.localeCompare(b.session_date))
                 .map((session) => (
                   <TR key={`${session.class_id}-${session.session_date}-${session.start_time}`}>
-                    <TD className="font-semibold text-ink-900">
+                    <TD className="whitespace-nowrap font-semibold text-ink-900">
                       {session.session_date.split("-").reverse().join("/")}
                     </TD>
                     <TD className="text-ink-600">
-                      {session.classes?.title ?? "-"}
-                      {session.substitute_instructor_id && (
-                        <Badge tone="warning" className="ms-2">
-                          החלפה
-                        </Badge>
-                      )}
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="min-w-0">
+                          {session.classes?.title ?? "-"}
+                        </span>
+                        {session.substitute_instructor_id && (
+                          <Badge tone="warning">החלפה</Badge>
+                        )}
+                      </span>
                     </TD>
-                    <TD className="text-ink-600">
+                    <TD
+                      dir="ltr"
+                      className="whitespace-nowrap text-right tabular-nums text-ink-600"
+                    >
                       {session.start_time.slice(0, 5)}–{session.end_time.slice(0, 5)}
                     </TD>
                   </TR>

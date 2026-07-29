@@ -47,17 +47,22 @@ export default async function InstructorClassesPage() {
           {classes.map((c) => (
             <Card key={c.id}>
               <CardContent className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-display text-lg font-bold text-ink-900">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 break-words font-display text-lg font-bold text-ink-900">
                     {c.title}
                   </h3>
-                  <Badge tone={CLASS_STATUS[c.status].tone}>
+                  <Badge tone={CLASS_STATUS[c.status].tone} className="shrink-0">
                     {CLASS_STATUS[c.status].label}
                   </Badge>
                 </div>
                 <div className="space-y-1.5 text-sm text-ink-600">
                   <p>📅 יום {dayLabel(c.day_of_week)}</p>
-                  <p>🕒 {formatTime(c.start_time)}–{formatTime(c.end_time)}</p>
+                  <p>
+                    🕒{" "}
+                    <span dir="ltr" className="tabular-nums">
+                      {formatTime(c.start_time)}–{formatTime(c.end_time)}
+                    </span>
+                  </p>
                   <p>👥 {counts.get(c.id) ?? 0} מתוך {c.capacity} תלמידים</p>
                 </div>
                 <ButtonLink

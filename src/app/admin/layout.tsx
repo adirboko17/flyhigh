@@ -10,7 +10,7 @@ export default async function AdminLayout({
   const profile = await requireRole("admin");
 
   return (
-    <div className="flex min-h-screen bg-ink-50">
+    <div className="flex min-h-screen flex-col bg-ink-50 lg:flex-row">
       <Sidebar
         items={ADMIN_NAV}
         profile={profile}
@@ -19,7 +19,9 @@ export default async function AdminLayout({
         logoWidth={210}
         logoHref="/admin"
       />
-      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+      <main className="w-full min-w-0 p-4 sm:p-6 lg:flex-1 lg:p-8">
+        {children}
+      </main>
     </div>
   );
 }

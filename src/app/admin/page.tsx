@@ -274,9 +274,9 @@ export default async function AdminDashboard() {
                   return (
                     <li
                       key={session.id}
-                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0"
                     >
-                      <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
                         <div className="w-16 shrink-0 rounded-xl bg-brand-50 px-2 py-1.5 text-center">
                           <span className="block font-display text-sm font-bold text-brand-700">
                             {session.start_time.slice(0, 5)}
@@ -403,9 +403,9 @@ export default async function AdminDashboard() {
                   return (
                     <li
                       key={enrollment.id}
-                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0"
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-ink-900">{title}</p>
                         <p className="truncate text-sm text-ink-500">
                           {enrollment.profiles?.full_name ?? "-"}
@@ -414,7 +414,7 @@ export default async function AdminDashboard() {
                             : ""}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <Badge
                           tone={
                             ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status].tone

@@ -5,7 +5,9 @@ export function Table({
   ...props
 }: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    // הגלילה האופקית מאפשרת לטבלאות רחבות לשמור על מבנה קריא במובייל
+    // במקום להידחס לעמודות צרות עם שבירת שורות.
+    <div className="w-full overflow-x-auto overscroll-x-contain">
       <table
         className={cn("w-full border-collapse text-right text-sm", className)}
         {...props}
@@ -57,7 +59,15 @@ export function TH({
   className,
   ...props
 }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th className={cn("px-4 py-3 font-semibold", className)} {...props} />;
+  return (
+    <th
+      className={cn(
+        "whitespace-nowrap px-3 py-3 font-semibold sm:px-4",
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 export function TD({
@@ -65,6 +75,6 @@ export function TD({
   ...props
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={cn("px-4 py-3 text-ink-800", className)} {...props} />
+    <td className={cn("px-3 py-3 text-ink-800 sm:px-4", className)} {...props} />
   );
 }

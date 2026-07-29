@@ -72,21 +72,23 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
                 <TH>שם המסלול</TH>
                 <TH>מחיר</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-28">פעולות</TH>
+                <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
             </THead>
             <TBody>
               {filtered.map((p) => (
                 <TR key={p.id}>
-                  <TD className="font-semibold text-ink-900">
+                  <TD className="max-w-[12rem] font-semibold text-ink-900 sm:max-w-none">
                     {p.title}
                     {p.description && (
-                      <span className="block text-xs font-normal text-ink-400">
+                      <span className="block line-clamp-2 text-xs font-normal text-ink-400">
                         {p.description}
                       </span>
                     )}
                   </TD>
-                  <TD className="font-medium">{formatCurrency(p.price)}</TD>
+                  <TD className="whitespace-nowrap font-medium">
+                    {formatCurrency(p.price)}
+                  </TD>
                   <TD>
                     <Badge tone={LISTING_STATUS[p.status].tone}>
                       {LISTING_STATUS[p.status].label}

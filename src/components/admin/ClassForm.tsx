@@ -297,7 +297,7 @@ export function ClassForm({
 
         <Card>
           <CardContent className="space-y-5">
-            <div className="grid gap-5 sm:grid-cols-3">
+            <div className="grid gap-4 grid-cols-2 sm:gap-5 lg:grid-cols-3">
               <Field label="גיל מינימום">
                 <Input
                   type="number"
@@ -314,7 +314,7 @@ export function ClassForm({
                   onChange={set("age_max")}
                 />
               </Field>
-              <Field label="מכסת משתתפים" required>
+              <Field label="מכסת משתתפים" required className="col-span-2 lg:col-span-1">
                 <Input
                   type="number"
                   min={1}
@@ -422,7 +422,7 @@ export function ClassForm({
           </p>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Button type="submit" size="lg" disabled={loading}>
             {loading ? "שומר..." : isEdit ? "עדכון החוג" : "שמירת החוג"}
           </Button>

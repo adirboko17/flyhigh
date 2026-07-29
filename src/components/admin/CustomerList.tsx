@@ -100,9 +100,9 @@ export function CustomerList({ customers }: CustomerListProps) {
               <TR>
                 <TH>שם</TH>
                 <TH>טלפון</TH>
-                <TH>אימייל</TH>
+                <TH className="hidden md:table-cell">אימייל</TH>
                 <TH>ילדים</TH>
-                <TH>הצטרף</TH>
+                <TH className="hidden sm:table-cell">הצטרף</TH>
               </TR>
             </THead>
             <TBody>
@@ -116,16 +116,19 @@ export function CustomerList({ customers }: CustomerListProps) {
                 >
                   <TD>
                     <div className="flex items-center gap-2.5">
-                      <Avatar name={customer.full_name} />
-                      <span className="font-semibold text-ink-900">
+                      <Avatar name={customer.full_name} className="shrink-0" />
+                      <span className="max-w-[9rem] truncate font-semibold text-ink-900 sm:max-w-none">
                         {customer.full_name}
                       </span>
                     </div>
                   </TD>
-                  <TD dir="ltr" className="text-right text-ink-600">
+                  <TD dir="ltr" className="whitespace-nowrap text-right text-ink-600">
                     {customer.phone ?? "—"}
                   </TD>
-                  <TD dir="ltr" className="text-right text-ink-600">
+                  <TD
+                    dir="ltr"
+                    className="hidden max-w-[14rem] truncate text-right text-ink-600 md:table-cell"
+                  >
                     {customer.email ?? "—"}
                   </TD>
                   <TD>
@@ -144,7 +147,7 @@ export function CustomerList({ customers }: CustomerListProps) {
                       <span className="text-ink-400">—</span>
                     )}
                   </TD>
-                  <TD className="text-ink-500">
+                  <TD className="hidden whitespace-nowrap text-ink-500 sm:table-cell">
                     {formatDate(customer.created_at)}
                   </TD>
                 </TR>
@@ -284,7 +287,7 @@ function CustomerDetailPanel({
           "border-s border-ink-100 bg-white shadow-card animate-fade-in"
         )}
       >
-        <div className="bg-brand-gradient px-6 pb-8 pt-6 text-white">
+        <div className="bg-brand-gradient px-5 pb-8 pt-6 text-white sm:px-6">
           <div className="mb-5 flex items-start justify-between gap-3">
             <button
               type="button"
@@ -302,7 +305,7 @@ function CustomerDetailPanel({
             <div className="min-w-0">
               <h2
                 id="customer-panel-title"
-                className="font-display text-2xl font-bold"
+                className="truncate font-display text-xl font-bold sm:text-2xl"
               >
                 {customer.full_name}
               </h2>
@@ -375,7 +378,7 @@ function DetailRow({
       <span className="shrink-0 text-sm text-ink-500">{label}</span>
       <span
         dir={dir}
-        className="text-left text-sm font-medium text-ink-900"
+        className="min-w-0 break-words text-end text-sm font-medium text-ink-900"
       >
         {children}
       </span>

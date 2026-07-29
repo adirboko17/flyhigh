@@ -244,7 +244,7 @@ export default async function ParentDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-3xl bg-brand-gradient p-6 text-white shadow-glow sm:p-8">
+      <section className="relative overflow-hidden rounded-3xl bg-brand-gradient p-5 text-white shadow-glow sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-white/10 blur-2xl"
@@ -254,12 +254,12 @@ export default async function ParentDashboard() {
           className="pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-aqua-400/20 blur-3xl"
         />
 
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <div className="min-w-0">
             <p className="text-xs font-medium text-white/70">
               {dayLabelLong(today)}
             </p>
-            <h1 className="font-display text-2xl font-extrabold sm:text-3xl">
+            <h1 className="break-words font-display text-2xl font-extrabold sm:text-3xl">
               שלום, {profile.full_name} 👋
             </h1>
             <p className="mt-1 text-sm text-white/85">
@@ -277,13 +277,13 @@ export default async function ParentDashboard() {
           <div className="flex shrink-0 flex-wrap gap-2">
             <Link
               href="/classes"
-              className="ah-btn ah-btn--md bg-white text-brand-700 hover:bg-white/90"
+              className="ah-btn ah-btn--md flex-1 bg-white text-brand-700 hover:bg-white/90 sm:flex-none"
             >
               הרשמה לחוג חדש
             </Link>
             <Link
               href="#children"
-              className="ah-btn ah-btn--md bg-white/15 text-white ring-1 ring-inset ring-white/30 hover:bg-white/25"
+              className="ah-btn ah-btn--md flex-1 bg-white/15 text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none"
             >
               הילדים שלי
             </Link>
@@ -534,8 +534,8 @@ export default async function ParentDashboard() {
                         key={receipt.id}
                         className="flex items-center justify-between gap-3 py-3"
                       >
-                        <div className="min-w-0">
-                          <p className="font-semibold text-ink-900">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-ink-900">
                             קבלה {receipt.receipt_number ?? "—"}
                           </p>
                           <p className="truncate text-sm text-ink-500">
@@ -548,7 +548,7 @@ export default async function ParentDashboard() {
                             href={receipt.receipt_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="shrink-0 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100"
+                            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-brand-50 px-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100"
                           >
                             צפייה
                           </a>
@@ -682,7 +682,7 @@ function SessionRow({
   return (
     <li
       className={cn(
-        "flex items-center gap-4 rounded-2xl border p-3.5 transition-colors",
+        "flex items-center gap-3 rounded-2xl border p-3 transition-colors sm:gap-4 sm:p-3.5",
         cancelled
           ? "border-ink-100 bg-ink-50/60"
           : isToday
@@ -692,7 +692,7 @@ function SessionRow({
     >
       <div
         className={cn(
-          "flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl",
+          "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl sm:h-14 sm:w-14",
           isToday && !cancelled
             ? "bg-brand-gradient text-white"
             : "bg-white text-ink-700 ring-1 ring-inset ring-ink-100"
@@ -701,23 +701,31 @@ function SessionRow({
         <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
           {chip.month}
         </span>
-        <span className="font-display text-xl font-extrabold leading-none">
+        <span className="font-display text-lg font-extrabold leading-none sm:text-xl">
           {chip.day}
         </span>
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <p
             className={cn(
-              "truncate font-display font-bold text-ink-900",
+              "min-w-0 flex-1 truncate font-display font-bold text-ink-900",
               cancelled && "text-ink-400 line-through decoration-ink-300"
             )}
           >
             {session.title}
           </p>
-          {isToday && !cancelled && <Badge tone="brand">היום</Badge>}
-          {cancelled && <Badge tone="danger">בוטל</Badge>}
+          {isToday && !cancelled && (
+            <Badge tone="brand" className="shrink-0">
+              היום
+            </Badge>
+          )}
+          {cancelled && (
+            <Badge tone="danger" className="shrink-0">
+              בוטל
+            </Badge>
+          )}
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-500">
@@ -728,15 +736,23 @@ function SessionRow({
             </span>
           </span>
           {session.attendees.length > 0 && (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
               <Icon name="child" size={15} className="shrink-0 text-ink-400" />
               <span className="truncate">{session.attendees.join(", ")}</span>
             </span>
           )}
+          {/* במובייל שם המדריכה נכנס לשורת המטא כדי לא לדחוס את השורה לשלוש עמודות. */}
+          <span className="inline-flex min-w-0 items-center gap-1.5 sm:hidden">
+            <Icon name="teacher" size={15} className="shrink-0 text-ink-400" />
+            <span className="truncate">
+              {session.instructorName ?? "ללא מדריכה"}
+              {session.isSubstitute && " (מחליפה)"}
+            </span>
+          </span>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 self-start text-end">
+      <div className="hidden shrink-0 items-center gap-1.5 self-start text-end sm:flex">
         <Icon
           name="teacher"
           size={15}

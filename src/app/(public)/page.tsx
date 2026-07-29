@@ -125,9 +125,11 @@ function PriceRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-[20px] border border-ink-100 bg-white p-4 shadow-card">
-      <div>
-        <p className="font-semibold text-ink-900">{title}</p>
-        {desc && <p className="mt-0.5 text-sm text-ink-500">{desc}</p>}
+      <div className="min-w-0 flex-1">
+        <p className="break-words font-semibold text-ink-900">{title}</p>
+        {desc && (
+          <p className="mt-0.5 line-clamp-2 text-sm text-ink-500">{desc}</p>
+        )}
       </div>
       <span className="shrink-0 font-display text-lg font-extrabold text-brand-700">
         {price}
