@@ -16,11 +16,12 @@ import { ViewAllDialog } from "@/components/ui/ViewAllDialog";
 import { requireProfile } from "@/lib/auth";
 import {
   DAY_ABBR,
-  ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
   ENROLLMENT_TYPE,
+  isNonImmediatePaymentMethod,
+  parentEnrollmentPaymentBadge,
+  parentPaymentBadge,
   PAYMENT_METHOD,
-  PAYMENT_STATUS,
 } from "@/lib/constants";
 import { addDays, dayLabelLong, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
@@ -33,6 +34,7 @@ export const metadata = { title: "האזור האישי" };
 /** כמה פריטים להציג בכרטיס עצמו — השאר נפתח ב"צפה בהכל". */
 const AGENDA_LIMIT = 5;
 const ENROLLMENTS_LIMIT = 4;
+const PLANS_LIMIT = 4;
 const PAYMENTS_LIMIT = 4;
 
 /** עד כמה ימים קדימה מחפשים מפגשים ללוח "המפגשים הקרובים". */
@@ -57,7 +59,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, classes(id, title, day_of_week, start_time, end_time), programs(title), pool_passes(title), children(full_name)"
+        "*, classes(id, title, day_of_week, start_time, end_time), programs(title), pool_passes(title, entries_count), children(full_name)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -80,6 +82,12 @@ export default async function ParentDashboard() {
   const allReceipts = receipts ?? [];
   const waitingList = waitlist ?? [];
 
+  // ההרשמות מופרדות לפי סוג: חוגים מוצגים עם לוח מפגשים, ומסלולים וכניסות
+  // מקבלים כרטיס משלהם כי אין להם מפגשים קבועים.
+  const classEnrollments = allEnrollments.filter((e) => e.type === "class");
+  const planEnrollments = allEnrollments.filter((e) => e.type !== "class");
+  const activePlans = planEnrollments.filter((e) => e.status === "active");
+
   const activeEnrollments = allEnrollments.filter((e) => e.status === "active");
   const pendingEnrollments = allEnrollments.filter((e) => e.status === "pending");
   const unpaidEnrollments = allEnrollments.filter(
@@ -91,6 +99,28 @@ export default async function ParentDashboard() {
   const openPayments = allPayments.filter((p) => p.status === "pending");
   const openAmount = sumAmount(openPayments);
   const paidAmount = sumAmount(allPayments.filter((p) => p.status === "paid"));
+
+  const paymentMethodByEnrollment = new Map<
+    string,
+    Enums<"payment_method"> | null
+  >();
+  for (const payment of allPayments) {
+    if (
+      payment.enrollment_id &&
+      !paymentMethodByEnrollment.has(payment.enrollment_id)
+    ) {
+      paymentMethodByEnrollment.set(
+        payment.enrollment_id,
+        payment.payment_method
+      );
+    }
+  }
+
+  const allOpenAreDeferred =
+    openPayments.length > 0 &&
+    openPayments.every((payment) =>
+      isNonImmediatePaymentMethod(payment.payment_method)
+    );
 
   // הפעילויות הפעילות של כל ילד/ה, ובנפרד אלה שנרשמו על שם ההורה עצמו.
   const activitiesByChild = new Map<string, string[]>();
@@ -183,9 +213,12 @@ export default async function ParentDashboard() {
     openAmount > 0 && {
       icon: "💳",
       tone: "amber" as const,
-      title: `יתרה לתשלום: ${formatCurrency(openAmount)}`,
-      detail:
-        openPayments.length === 1
+      title: allOpenAreDeferred
+        ? "ממתין לאישור מנהל"
+        : `יתרה לתשלום: ${formatCurrency(openAmount)}`,
+      detail: allOpenAreDeferred
+        ? `${openPayments.length} ${openPayments.length === 1 ? "רכישה" : "רכישות"} · ${formatCurrency(openAmount)} — המשרד יאשר עם קליטת התשלום`
+        : openPayments.length === 1
           ? "חיוב אחד ממתין להשלמה"
           : `${openPayments.length} חיובים ממתינים להשלמה`,
       href: "#payments",
@@ -267,6 +300,7 @@ export default async function ParentDashboard() {
                 nextSession,
                 today,
                 openAmount,
+                allOpenAreDeferred,
                 hasChildren: allChildren.length > 0,
                 hasEnrollments: allEnrollments.length > 0,
               })}
@@ -280,6 +314,12 @@ export default async function ParentDashboard() {
               className="ah-btn ah-btn--md flex-1 bg-white text-brand-700 hover:bg-white/90 sm:flex-none"
             >
               הרשמה לחוג חדש
+            </Link>
+            <Link
+              href="/programs"
+              className="ah-btn ah-btn--md flex-1 bg-white/15 text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none"
+            >
+              מסלולים וכניסות
             </Link>
             <Link
               href="#children"
@@ -317,13 +357,19 @@ export default async function ParentDashboard() {
           }
         />
         <StatCard
-          label="יתרה לתשלום"
-          value={formatCurrency(openAmount)}
+          label={allOpenAreDeferred ? "ממתין לאישור" : "יתרה לתשלום"}
+          value={
+            allOpenAreDeferred
+              ? openPayments.length.toString()
+              : formatCurrency(openAmount)
+          }
           icon="💳"
           tone={openAmount > 0 ? "amber" : "aqua"}
           hint={
             openAmount > 0
-              ? `${openPayments.length} ${openPayments.length === 1 ? "חיוב פתוח" : "חיובים פתוחים"}`
+              ? allOpenAreDeferred
+                ? `${openPayments.length} ${openPayments.length === 1 ? "רכישה ממתינה" : "רכישות ממתינות"} לאישור מנהל`
+                : `${openPayments.length} ${openPayments.length === 1 ? "חיוב פתוח" : "חיובים פתוחים"}`
               : paidAmount > 0
                 ? `שולם עד היום ${formatCurrency(paidAmount)}`
                 : "אין חובות פתוחים"
@@ -449,19 +495,20 @@ export default async function ParentDashboard() {
 
         <Card id="enrollments" className="scroll-mt-24">
           <CardHeader>
-            <CardTitle>ההרשמות שלי</CardTitle>
+            <CardTitle>ההרשמות לחוגים</CardTitle>
             <ViewAllDialog
-              title="ההרשמות שלי"
-              description="כל ההרשמות של החשבון, כולל היסטוריה"
-              count={allEnrollments.length}
-              disabled={allEnrollments.length === 0}
+              title="ההרשמות לחוגים"
+              description="כל ההרשמות לחוגים בחשבון, כולל היסטוריה"
+              count={classEnrollments.length}
+              disabled={classEnrollments.length === 0}
             >
               <ul className="divide-y divide-ink-100">
-                {allEnrollments.map((enrollment) => (
+                {classEnrollments.map((enrollment) => (
                   <EnrollmentRow
                     key={enrollment.id}
                     enrollment={enrollment}
                     parentName={profile.full_name}
+                    paymentMethod={paymentMethodByEnrollment.get(enrollment.id)}
                     showDate
                   />
                 ))}
@@ -469,10 +516,10 @@ export default async function ParentDashboard() {
             </ViewAllDialog>
           </CardHeader>
           <CardContent>
-            {allEnrollments.length === 0 ? (
+            {classEnrollments.length === 0 ? (
               <EmptyState
                 icon="📝"
-                title="עדיין אין הרשמות"
+                title="עדיין אין הרשמות לחוגים"
                 description="עיינו בחוגים והירשמו בקלות — ההרשמה לוקחת דקה."
                 action={
                   <ButtonLink href="/classes" size="sm">
@@ -483,18 +530,85 @@ export default async function ParentDashboard() {
               />
             ) : (
               <ul className="divide-y divide-ink-100">
-                {allEnrollments.slice(0, ENROLLMENTS_LIMIT).map((enrollment) => (
-                  <EnrollmentRow
-                    key={enrollment.id}
-                    enrollment={enrollment}
-                    parentName={profile.full_name}
-                  />
-                ))}
+                {classEnrollments
+                  .slice(0, ENROLLMENTS_LIMIT)
+                  .map((enrollment) => (
+                    <EnrollmentRow
+                      key={enrollment.id}
+                      enrollment={enrollment}
+                      parentName={profile.full_name}
+                      paymentMethod={paymentMethodByEnrollment.get(enrollment.id)}
+                    />
+                  ))}
               </ul>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <Card id="plans" className="scroll-mt-24">
+        <CardHeader>
+          <CardTitle>המסלולים והכניסות שלי</CardTitle>
+          <div className="flex items-center gap-2">
+            {activePlans.length > 0 && (
+              <Badge tone="brand">{activePlans.length} פעילים</Badge>
+            )}
+            <ViewAllDialog
+              title="המסלולים והכניסות שלי"
+              description="כל המסלולים והכרטיסיות שרכשתם, כולל היסטוריה"
+              count={planEnrollments.length}
+              disabled={planEnrollments.length === 0}
+            >
+              <ul className="grid gap-3">
+                {planEnrollments.map((enrollment) => (
+                  <PlanRow
+                    key={enrollment.id}
+                    enrollment={enrollment}
+                    parentName={profile.full_name}
+                    paymentMethod={paymentMethodByEnrollment.get(enrollment.id)}
+                  />
+                ))}
+              </ul>
+            </ViewAllDialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {planEnrollments.length === 0 ? (
+            <EmptyState
+              icon="🎫"
+              title="עדיין לא רכשתם מסלול או כניסות"
+              description="מנוי חודשי לשחייה חופשית או כרטיסיית כניסות — הרכישה מתבצעת אונליין בכמה קליקים."
+              action={
+                <ButtonLink href="/programs" size="sm">
+                  למסלולים ולכניסות
+                </ButtonLink>
+              }
+              className="border-0 bg-transparent py-8"
+            />
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {planEnrollments.slice(0, PLANS_LIMIT).map((enrollment) => (
+                <PlanRow
+                  key={enrollment.id}
+                  enrollment={enrollment}
+                  parentName={profile.full_name}
+                  paymentMethod={paymentMethodByEnrollment.get(enrollment.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </CardContent>
+        {planEnrollments.length > 0 && (
+          <CardFooter className="flex flex-wrap items-center justify-between gap-3 bg-ink-50/60">
+            <span className="text-sm text-ink-600">
+              רוצים להוסיף מסלול או כרטיסייה נוספת?
+            </span>
+            <ButtonLink href="/programs" size="sm" variant="outline">
+              לרכישה
+            </ButtonLink>
+          </CardFooter>
+        )}
+      </Card>
 
       <Card id="payments" className="scroll-mt-24">
         <CardHeader>
@@ -594,14 +708,16 @@ export default async function ParentDashboard() {
               </span>
             </span>
             <span className="text-sm text-ink-600">
-              יתרה לתשלום{" "}
+              {allOpenAreDeferred ? "ממתין לאישור מנהל" : "יתרה לתשלום"}{" "}
               <span
                 className={cn(
                   "font-semibold tabular-nums",
                   openAmount > 0 ? "text-amber-700" : "text-aqua-700"
                 )}
               >
-                {formatCurrency(openAmount)}
+                {allOpenAreDeferred
+                  ? `${openPayments.length} ${openPayments.length === 1 ? "רכישה" : "רכישות"}`
+                  : formatCurrency(openAmount)}
               </span>
             </span>
           </CardFooter>
@@ -636,7 +752,7 @@ type EnrollmentRowData = {
     end_time: string | null;
   } | null;
   programs: { title: string } | null;
-  pool_passes: { title: string } | null;
+  pool_passes: { title: string; entries_count: number } | null;
   children: { full_name: string } | null;
 };
 
@@ -794,13 +910,19 @@ function dateChip(date: string): { day: number; month: string } {
 function EnrollmentRow({
   enrollment,
   parentName,
+  paymentMethod,
   showDate,
 }: {
   enrollment: EnrollmentRowData;
   parentName: string;
+  paymentMethod?: Enums<"payment_method"> | null;
   showDate?: boolean;
 }) {
   const schedule = classSchedule(enrollment.classes);
+  const paymentBadge = parentEnrollmentPaymentBadge(
+    enrollment.payment_status,
+    paymentMethod
+  );
 
   return (
     <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
@@ -831,15 +953,71 @@ function EnrollmentRow({
         <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
           {ENROLLMENT_STATUS[enrollment.status].label}
         </Badge>
-        <Badge tone={ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status].tone}>
-          {ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status].label}
+        <Badge tone={paymentBadge.tone}>{paymentBadge.label}</Badge>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * מסלול או כרטיסיית כניסות שנרכשו. אין להם לוח מפגשים, ולכן מוצגים
+ * כאריח עם המשתתף/ת, מועד הרכישה וסטטוס התשלום.
+ */
+function PlanRow({
+  enrollment,
+  parentName,
+  paymentMethod,
+}: {
+  enrollment: EnrollmentRowData;
+  parentName: string;
+  paymentMethod?: Enums<"payment_method"> | null;
+}) {
+  const isPass = enrollment.type === "pool_pass";
+  const entries = enrollment.pool_passes?.entries_count ?? null;
+  const paymentBadge = parentEnrollmentPaymentBadge(
+    enrollment.payment_status,
+    paymentMethod
+  );
+
+  return (
+    <li className="flex items-start gap-3 rounded-2xl border border-ink-100 bg-white p-3.5 transition-colors hover:border-ink-200">
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg",
+          isPass ? "bg-aqua-100 text-aqua-700" : "bg-brand-100 text-brand-700"
+        )}
+      >
+        {isPass ? "🎫" : "🏊"}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-display font-bold text-ink-900">
+          {enrollmentTitle(enrollment)}
+        </p>
+        <p className="truncate text-sm text-ink-500">
+          {enrollment.children?.full_name ?? parentName}
+          {" · "}
+          {ENROLLMENT_TYPE[enrollment.type]}
+          {isPass && entries !== null && ` · ${entries} כניסות`}
+        </p>
+        <p className="mt-0.5 text-xs text-ink-400">
+          נרכש ב-{formatDate(enrollment.created_at)}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
+          {ENROLLMENT_STATUS[enrollment.status].label}
         </Badge>
+        <Badge tone={paymentBadge.tone}>{paymentBadge.label}</Badge>
       </div>
     </li>
   );
 }
 
 function PaymentRow({ payment }: { payment: PaymentRowData }) {
+  const paymentBadge = parentPaymentBadge(payment.status, payment.payment_method);
+
   return (
     <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0">
@@ -854,8 +1032,8 @@ function PaymentRow({ payment }: { payment: PaymentRowData }) {
           {formatDate(payment.paid_at ?? payment.created_at)}
         </p>
       </div>
-      <Badge tone={PAYMENT_STATUS[payment.status].tone} className="shrink-0">
-        {PAYMENT_STATUS[payment.status].label}
+      <Badge tone={paymentBadge.tone} className="shrink-0">
+        {paymentBadge.label}
       </Badge>
     </li>
   );
@@ -916,12 +1094,14 @@ function heroLine({
   nextSession,
   today,
   openAmount,
+  allOpenAreDeferred,
   hasChildren,
   hasEnrollments,
 }: {
   nextSession: AgendaSession | null;
   today: string;
   openAmount: number;
+  allOpenAreDeferred: boolean;
   hasChildren: boolean;
   hasEnrollments: boolean;
 }): string {
@@ -929,7 +1109,9 @@ function heroLine({
     return `המפגש הבא: ${nextSession.title} · ${whenLabel(nextSession.date, today)} בשעה ${formatTime(nextSession.startTime)}`;
   }
   if (openAmount > 0) {
-    return `נשארה יתרה של ${formatCurrency(openAmount)} להשלמה`;
+    return allOpenAreDeferred
+      ? "רכישה אחת או יותר ממתינות לאישור מנהל"
+      : `נשארה יתרה של ${formatCurrency(openAmount)} להשלמה`;
   }
   if (!hasChildren && !hasEnrollments) {
     return "אפשר להוסיף ילדים לחשבון ולהירשם לחוג הראשון";

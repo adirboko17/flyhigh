@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Heebo, Assistant } from "next/font/google";
+import { AccessibilityWidget } from "@/components/a11y/AccessibilityWidget";
+import { A11Y_INIT_SCRIPT } from "@/components/a11y/a11ySettings";
 import "./globals.css";
 
 const heebo = Heebo({
@@ -35,7 +37,12 @@ export default function RootLayout({
       className={`${heebo.variable} ${assistant.variable}`}
       suppressHydrationWarning
     >
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {/* מחיל העדפות נגישות שמורות לפני הצביעה הראשונה, כדי למנוע הבהוב. */}
+        <script dangerouslySetInnerHTML={{ __html: A11Y_INIT_SCRIPT }} />
+        {children}
+        <AccessibilityWidget />
+      </body>
     </html>
   );
 }

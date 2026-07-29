@@ -29,6 +29,7 @@ export function PublicFooter() {
             <li><Link href="/contact" className="hover:text-brand-600">צור קשר</Link></li>
             <li><Link href="/register" className="hover:text-brand-600">הרשמה</Link></li>
             <li><Link href="/login" className="hover:text-brand-600">התחברות</Link></li>
+            <li><Link href="/accessibility" className="hover:text-brand-600">הצהרת נגישות</Link></li>
           </ul>
         </div>
 

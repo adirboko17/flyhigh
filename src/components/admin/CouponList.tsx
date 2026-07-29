@@ -36,7 +36,6 @@ function normalizeSearch(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
 }
 
-/** מסלולים וכניסות עדיין אינם נמכרים באתר, ולכן קופון שמוגבל להם לא ניתן למימוש. */
 function subjectOf(coupon: AdminCouponRow, labelOf: Map<string, string>) {
   if (coupon.class_id) {
     return {
@@ -47,13 +46,13 @@ function subjectOf(coupon: AdminCouponRow, labelOf: Map<string, string>) {
   if (coupon.program_id) {
     return {
       label: labelOf.get(`program:${coupon.program_id}`) ?? "מסלול שנמחק",
-      redeemable: false,
+      redeemable: true,
     };
   }
   if (coupon.pool_pass_id) {
     return {
       label: labelOf.get(`pool_pass:${coupon.pool_pass_id}`) ?? "כרטיסייה שנמחקה",
-      redeemable: false,
+      redeemable: true,
     };
   }
   return { label: "כל מה שבתשלום", redeemable: true };

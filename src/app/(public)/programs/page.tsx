@@ -2,7 +2,12 @@ import Link from "next/link";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { SectionHead } from "@/components/home/SectionHead";
 import { PlanCard } from "@/components/programs/PlanCard";
+import {
+  PlanPurchaseButton,
+  type PlanViewer,
+} from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
   POOL_PASS_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
@@ -18,10 +23,30 @@ export const metadata = {
 export default async function ProgramsPage() {
   const supabase = await createClient();
 
-  const [{ data: programs }, { data: poolPasses }] = await Promise.all([
+  const [{ data: programs }, { data: poolPasses }, profile] = await Promise.all([
     supabase.from("programs").select("*").eq("status", "active"),
     supabase.from("pool_passes").select("*").eq("status", "active"),
+    getSessionProfile(),
   ]);
+
+  // הורה מחובר רוכש ישירות מהעמוד; אורח מופנה להתחברות, ומנהל/מדריכה לאזור שלהם.
+  let viewer: PlanViewer = { kind: "guest" };
+
+  if (profile && profile.role !== "parent") {
+    viewer = { kind: "other", homeHref: homeForRole(profile.role) };
+  } else if (profile) {
+    const { data: kids } = await supabase
+      .from("children")
+      .select("id, full_name")
+      .eq("parent_id", profile.id)
+      .order("created_at");
+
+    viewer = {
+      kind: "parent",
+      parentName: profile.full_name,
+      children: kids ?? [],
+    };
+  }
 
   return (
     <div className="bg-ink-50">
@@ -64,6 +89,16 @@ export default async function ProgramsPage() {
                     accent={template.accent}
                     featured={template.featured}
                     badge={template.badge}
+                    cta={
+                      <PlanPurchaseButton
+                        planKind="program"
+                        planId={program.id}
+                        planTitle={program.title}
+                        price={program.price}
+                        featured={template.featured}
+                        viewer={viewer}
+                      />
+                    }
                   />
                 </ScrollReveal>
               );
@@ -107,6 +142,17 @@ export default async function ProgramsPage() {
                     accent={template.accent}
                     featured={template.featured}
                     badge={template.badge}
+                    cta={
+                      <PlanPurchaseButton
+                        planKind="pool_pass"
+                        planId={pass.id}
+                        planTitle={pass.title}
+                        price={pass.price}
+                        entriesCount={pass.entries_count}
+                        featured={template.featured}
+                        viewer={viewer}
+                      />
+                    }
                   />
                 </ScrollReveal>
               );
@@ -127,13 +173,28 @@ export default async function ProgramsPage() {
                 לא בטוחים מה מתאים לכם?
               </h3>
               <p className="mt-1 text-ink-600">
-                פתחו חשבון בחינם - תוכלו לבחור מסלול או כניסה בכל רגע.
+                {viewer.kind === "guest"
+                  ? "פתחו חשבון בחינם - תוכלו לבחור מסלול או כניסה בכל רגע."
+                  : "כל המסלולים והכניסות שרכשתם מרוכזים באזור האישי שלכם."}
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/register" className="hero-cta-primary ah-btn ah-btn--lg">
-                פתיחת חשבון
-              </Link>
+              {viewer.kind === "guest" ? (
+                <Link href="/register" className="hero-cta-primary ah-btn ah-btn--lg">
+                  פתיחת חשבון
+                </Link>
+              ) : (
+                <Link
+                  href={
+                    viewer.kind === "parent"
+                      ? "/parent/dashboard#plans"
+                      : viewer.homeHref
+                  }
+                  className="hero-cta-primary ah-btn ah-btn--lg"
+                >
+                  לאזור האישי
+                </Link>
+              )}
               <Link href="/classes" className="ah-btn ah-btn--lg ah-btn--outline">
                 עיון בחוגים
               </Link>

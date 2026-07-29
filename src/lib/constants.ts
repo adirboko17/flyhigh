@@ -89,6 +89,32 @@ export const ENROLLMENT_PAYMENT_STATUS: Record<
   refunded: { label: "הוחזר", tone: "neutral" },
 };
 
+/** תווית ללקוח כשהתשלום לא בוצע בכרטיס אשראי — נגבה/מאושר מול המשרד. */
+export const PARENT_PENDING_MANAGER_APPROVAL = {
+  label: "ממתין לאישור מנהל",
+  tone: "warning" as const satisfies BadgeTone,
+};
+
+export function isNonImmediatePaymentMethod(
+  method: Enums<"payment_method"> | null | undefined
+): boolean {
+  return method != null && method !== "credit_card";
+}
+
+/** תצוגת סטטוס תשלום להרשמה באזור האישי — לא בניהול. */
+export function parentEnrollmentPaymentBadge(
+  paymentStatus: Enums<"enrollment_payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined
+): { label: string; tone: BadgeTone } {
+  if (
+    paymentStatus === "unpaid" &&
+    isNonImmediatePaymentMethod(paymentMethod)
+  ) {
+    return PARENT_PENDING_MANAGER_APPROVAL;
+  }
+  return ENROLLMENT_PAYMENT_STATUS[paymentStatus];
+}
+
 export const PAYMENT_STATUS: Record<
   Enums<"payment_status">,
   { label: string; tone: BadgeTone }
@@ -98,6 +124,17 @@ export const PAYMENT_STATUS: Record<
   failed: { label: "נכשל", tone: "danger" },
   refunded: { label: "הוחזר", tone: "neutral" },
 };
+
+/** תצוגת סטטוס חיוב באזור האישי — לא בניהול. */
+export function parentPaymentBadge(
+  status: Enums<"payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined
+): { label: string; tone: BadgeTone } {
+  if (status === "pending" && isNonImmediatePaymentMethod(paymentMethod)) {
+    return PARENT_PENDING_MANAGER_APPROVAL;
+  }
+  return PAYMENT_STATUS[status];
+}
 
 export const PAYMENT_METHOD: Record<Enums<"payment_method">, string> = {
   credit_card: "כרטיס אשראי",

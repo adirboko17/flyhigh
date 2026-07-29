@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@/components/icons/Icon";
 import { cn } from "@/utils/cn";
 
@@ -24,15 +25,25 @@ export function Modal({
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  // onClose מגיע לרוב כפונקציה חדשה בכל רינדור. בלי ref האפקט שלמטה היה רץ
+  // מחדש על כל הקלדה בתוך החלון ומחזיר את המיקוד לחלון עצמו במקום לשדה.
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!open) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open || !mounted) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -42,12 +53,15 @@ export function Modal({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open, mounted]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+  // החלון מוגר ל-body: כשהוא נשאר בתוך העץ, אב עם transform (למשל אנימציית
+  // הגלילה של הכרטיסים) הופך למסגרת המיקום של fixed והחלון נחתך בתוך הכרטיס.
+  // ה-z גבוה מתפריט הנגישות הצף (120) כדי שלא יצוף מעל החלון.
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
         className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px]"
@@ -94,6 +108,7 @@ export function Modal({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

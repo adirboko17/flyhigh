@@ -3,6 +3,7 @@
 @import "../styles/design/spacing.css";
 @import "../styles/design/components.css";
 @import "../styles/design/extras.css";
+@import "../styles/design/a11y.css";
 
 @tailwind base;
 @tailwind components;

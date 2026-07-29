@@ -49,7 +49,7 @@ export async function ClassEnrollmentPanel({
           supabase
             .from("enrollments")
             .select(
-              "id, child_id, status, payment_status, children(full_name)"
+              "id, child_id, status, payment_status, children(full_name), payments(payment_method)"
             )
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)

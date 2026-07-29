@@ -16,6 +16,8 @@ interface PlanCardProps {
   accent: string;
   featured?: boolean;
   badge?: string;
+  /** כפתור הפעולה של הכרטיס — רכישה, התחברות או הפניה לאזור האישי. */
+  cta?: React.ReactNode;
 }
 
 export function PlanCard({
@@ -28,6 +30,7 @@ export function PlanCard({
   accent,
   featured = false,
   badge,
+  cta,
 }: PlanCardProps) {
   return (
     <div
@@ -133,15 +136,16 @@ export function PlanCard({
         </ul>
 
         <div className="mt-[26px]">
-          {featured ? (
+          {cta ?? (
             <Link
               href="/register"
-              className="ah-btn ah-btn--lg ah-btn--block bg-white text-brand-700 hover:bg-white/95"
+              className={cn(
+                "ah-btn ah-btn--lg ah-btn--block",
+                featured
+                  ? "bg-white text-brand-700 hover:bg-white/95"
+                  : "hero-cta-primary"
+              )}
             >
-              הצטרפות למסלול
-            </Link>
-          ) : (
-            <Link href="/register" className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block">
               הצטרפות למסלול
             </Link>
           )}

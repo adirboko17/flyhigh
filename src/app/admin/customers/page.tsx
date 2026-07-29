@@ -7,7 +7,9 @@ export default async function AdminCustomersPage() {
 
   const { data: parents } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, city, address, created_at, children(*)")
+    .select(
+      "id, full_name, email, phone, birth_date, city, address, created_at, children(*)"
+    )
     .eq("role", "parent")
     .order("created_at", { ascending: false });
 
@@ -16,6 +18,7 @@ export default async function AdminCustomersPage() {
     full_name: p.full_name,
     email: p.email,
     phone: p.phone,
+    birth_date: p.birth_date,
     city: p.city,
     address: p.address,
     created_at: p.created_at,

@@ -48,6 +48,7 @@ export function RegisterForm() {
   const [details, setDetails] = useState({
     fullName: "",
     phone: "",
+    birth: "",
     city: "",
     address: "",
   });
@@ -61,6 +62,13 @@ export function RegisterForm() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // התאריך המקסימלי נקבע אחרי ההידרציה, כדי שהשעון של השרת לא ייצור פער מול הדפדפן.
+  const [maxBirthDate, setMaxBirthDate] = useState("");
+
+  useEffect(() => {
+    setMaxBirthDate(todayIso());
+  }, []);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -111,6 +119,9 @@ export function RegisterForm() {
     if (step === 1) {
       if (!details.fullName.trim()) return setError("נא למלא שם מלא.");
       if (!details.phone.trim()) return setError("נא למלא מספר טלפון.");
+      if (!details.birth) return setError("נא למלא תאריך לידה.");
+      const birthError = validateBirthDate(details.birth);
+      if (birthError) return setError(birthError);
       if (!details.city.trim()) return setError("נא למלא עיר.");
       if (!details.address.trim()) return setError("נא למלא כתובת.");
       setStep(2);
@@ -193,6 +204,7 @@ export function RegisterForm() {
         data: {
           full_name: details.fullName.trim(),
           phone: details.phone.trim(),
+          birth_date: details.birth || null,
           city: details.city.trim(),
           address: details.address.trim(),
           role: "parent",
@@ -360,18 +372,32 @@ export function RegisterForm() {
               onChange={setDetailsField("fullName")}
             />
           </Field>
-          <Field label="מספר טלפון" htmlFor="phone" required variant="ds">
-            <Input
-              id="phone"
-              type="tel"
-              dir="ltr"
-              variant="ds"
-              autoComplete="tel"
-              placeholder="050-0000000"
-              value={details.phone}
-              onChange={setDetailsField("phone")}
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="מספר טלפון" htmlFor="phone" required variant="ds">
+              <Input
+                id="phone"
+                type="tel"
+                dir="ltr"
+                variant="ds"
+                autoComplete="tel"
+                placeholder="050-0000000"
+                value={details.phone}
+                onChange={setDetailsField("phone")}
+              />
+            </Field>
+            <Field label="תאריך לידה" htmlFor="birth" required variant="ds">
+              <Input
+                id="birth"
+                type="date"
+                dir="ltr"
+                variant="ds"
+                autoComplete="bday"
+                max={maxBirthDate || undefined}
+                value={details.birth}
+                onChange={setDetailsField("birth")}
+              />
+            </Field>
+          </div>
           <Field label="עיר" htmlFor="city" required variant="ds">
             <Input
               id="city"
@@ -751,6 +777,19 @@ function Summary({
       </li>
     </ul>
   );
+}
+
+function todayIso(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+function validateBirthDate(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "תאריך הלידה אינו תקין.";
+  if (value > todayIso()) return "תאריך הלידה לא יכול להיות בעתיד.";
+  if (Number(value.slice(0, 4)) < 1900) return "תאריך הלידה אינו תקין.";
+  return null;
 }
 
 function translateAuthError(message: string): string {

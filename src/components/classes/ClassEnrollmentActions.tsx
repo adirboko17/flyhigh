@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/utils/cn";
 import {
   ENROLLMENT_STATUS,
-  ENROLLMENT_PAYMENT_STATUS,
+  parentEnrollmentPaymentBadge,
   WAITLIST_STATUS,
 } from "@/lib/constants";
 import { joinClassWaitlist } from "@/lib/enrollment/actions";
@@ -23,6 +23,7 @@ type ExistingEnrollment = {
   status: Enums<"enrollment_status">;
   payment_status: Enums<"enrollment_payment_status">;
   children: { full_name: string } | null;
+  payments?: { payment_method: Enums<"payment_method"> | null }[] | null;
 };
 
 type WaitlistEntry = {
@@ -164,7 +165,14 @@ export function ClassEnrollmentActions({
               כבר רשומים לחוג זה
             </p>
             <ul className="mt-2 space-y-2">
-              {enrollments.map((e) => (
+              {enrollments.map((e) => {
+                const paymentMethod = e.payments?.[0]?.payment_method;
+                const paymentBadge = parentEnrollmentPaymentBadge(
+                  e.payment_status,
+                  paymentMethod
+                );
+
+                return (
                 <li
                   key={e.id}
                   className="flex flex-wrap items-center gap-2 text-sm"
@@ -175,11 +183,12 @@ export function ClassEnrollmentActions({
                   <Badge tone={ENROLLMENT_STATUS[e.status].tone}>
                     {ENROLLMENT_STATUS[e.status].label}
                   </Badge>
-                  <Badge tone={ENROLLMENT_PAYMENT_STATUS[e.payment_status].tone}>
-                    {ENROLLMENT_PAYMENT_STATUS[e.payment_status].label}
+                  <Badge tone={paymentBadge.tone}>
+                    {paymentBadge.label}
                   </Badge>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             <ButtonLink
               href="/parent/dashboard#enrollments"

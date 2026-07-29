@@ -15,10 +15,16 @@ export default async function PublicLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-ink-50">
+      {/* נחשף רק בניווט מקלדת, ומאפשר לדלג על התפריט ישר לתוכן. */}
+      <a href="#main-content" className="a11y-skip-link">
+        דילוג לתוכן המרכזי
+      </a>
       <Suspense fallback={<div className="h-16" aria-hidden />}>
         <PublicHeader user={user} overlayAtTop />
       </Suspense>
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">
+        {children}
+      </main>
       <PublicFooter />
     </div>
   );

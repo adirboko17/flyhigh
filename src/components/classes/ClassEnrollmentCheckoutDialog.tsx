@@ -4,22 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Input";
+import {
+  CouponField,
+  DemoCardFields,
+  PaymentMethodPicker,
+} from "@/components/checkout/CheckoutFields";
 import {
   DEFERRED_PAYMENT_HINT,
-  DEFERRED_PAYMENT_METHODS,
   PAYMENT_METHOD,
   isDeferredPaymentMethod,
 } from "@/lib/constants";
-import {
-  normalizeCouponCode,
-  type AppliedCoupon,
-} from "@/lib/finance/coupon";
+import type { AppliedCoupon } from "@/lib/finance/coupon";
 import {
   calculateOrderTotal,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
-import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/format";
 import {
   completeClassEnrollmentPayment,
@@ -28,11 +27,6 @@ import {
 } from "@/lib/enrollment/actions";
 
 type Child = { id: string; full_name: string };
-
-const METHOD_OPTIONS: CheckoutPaymentMethod[] = [
-  "credit_card",
-  ...DEFERRED_PAYMENT_METHODS,
-];
 
 interface ClassEnrollmentCheckoutDialogProps {
   open: boolean;
@@ -285,38 +279,11 @@ export function ClassEnrollmentCheckoutDialog({
             </p>
           </div>
 
-          <fieldset className="space-y-2">
-            <legend className="mb-2 text-sm font-semibold text-ink-800">
-              בחירת אמצעי תשלום
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {METHOD_OPTIONS.map((option) => {
-                const selected = option === method;
-                return (
-                  <label
-                    key={option}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
-                      selected
-                        ? "border-brand-500 bg-brand-50 text-brand-800"
-                        : "border-ink-200 bg-white text-ink-700 hover:border-ink-300"
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      name="payment-method"
-                      value={option}
-                      checked={selected}
-                      onChange={() => setMethod(option)}
-                      disabled={loading}
-                      className="h-4 w-4 text-brand-600 focus:ring-brand-300"
-                    />
-                    {PAYMENT_METHOD[option]}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
+          <PaymentMethodPicker
+            value={method}
+            onChange={setMethod}
+            disabled={loading}
+          />
 
           {deferred ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -334,27 +301,7 @@ export function ClassEnrollmentCheckoutDialog({
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              <p className="text-xs text-ink-400">
-                זהו מסך דמו — לא מתבצע חיוב אמיתי.
-              </p>
-              <Field label="מספר כרטיס" htmlFor="demo-card">
-                <Input
-                  id="demo-card"
-                  dir="ltr"
-                  defaultValue="4580 0000 0000 0001"
-                  readOnly
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="תוקף" htmlFor="demo-expiry">
-                  <Input id="demo-expiry" dir="ltr" defaultValue="12/28" readOnly />
-                </Field>
-                <Field label="CVV" htmlFor="demo-cvv">
-                  <Input id="demo-cvv" dir="ltr" defaultValue="123" readOnly />
-                </Field>
-              </div>
-            </div>
+            <DemoCardFields />
           )}
 
           {error && (
@@ -429,84 +376,3 @@ export function ClassEnrollmentCheckoutDialog({
   );
 }
 
-function CouponField({
-  value,
-  onChange,
-  applied,
-  loading,
-  error,
-  onApply,
-  onRemove,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  applied: AppliedCoupon | null;
-  loading: boolean;
-  error: string | null;
-  onApply: () => void;
-  onRemove: () => void;
-}) {
-  if (applied) {
-    return (
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-aqua-800">
-            הקופון{" "}
-            <span className="font-mono" dir="ltr">
-              {applied.code}
-            </span>{" "}
-            הופעל
-          </p>
-          <p className="text-xs text-aqua-700">
-            הנחה של {formatCurrency(applied.discountAmount)} מהסכום לתשלום
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-aqua-800 transition-colors hover:bg-aqua-100"
-        >
-          הסרה
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <Field label="קוד קופון" htmlFor="coupon-code" hint="יש לכם קוד הנחה? הזינו אותו כאן.">
-        <div className="flex gap-2">
-          <Input
-            id="coupon-code"
-            value={value}
-            onChange={(e) => onChange(normalizeCouponCode(e.target.value))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onApply();
-              }
-            }}
-            placeholder="למשל SUMMER25"
-            dir="ltr"
-            className="min-w-0 text-right font-mono tracking-wider"
-            disabled={loading}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            className="shrink-0"
-            onClick={onApply}
-            disabled={loading || value.trim().length === 0}
-          >
-            {loading ? "בודק..." : "החלה"}
-          </Button>
-        </div>
-      </Field>
-      {error && (
-        <p className="mt-1.5 text-xs font-medium text-red-600" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
