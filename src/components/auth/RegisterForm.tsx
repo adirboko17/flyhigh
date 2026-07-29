@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Field, Input, Select } from "@/components/ui/Input";
@@ -206,6 +207,13 @@ export function RegisterForm() {
 
     if (signUpError) {
       setError(translateAuthError(signUpError.message));
+      setLoading(false);
+      return;
+    }
+
+    const identities = data.user?.identities ?? [];
+    if (data.user && identities.length === 0) {
+      setError("duplicate_email");
       setLoading(false);
       return;
     }
@@ -574,10 +582,22 @@ export function RegisterForm() {
         </div>
       )}
 
-      {error && (
+      {error && error !== "duplicate_email" && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
           {error}
         </p>
+      )}
+      {error === "duplicate_email" && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">המייל הזה כבר רשום במערכת.</p>
+          <p className="mt-1">
+            לא נשלח קוד אימות חדש למייל שכבר מאומת.{" "}
+            <Link href="/login" className="font-bold text-brand-600 hover:underline">
+              התחברו לחשבון
+            </Link>{" "}
+            או השתמשו במייל אחר.
+          </p>
+        </div>
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row-reverse">
