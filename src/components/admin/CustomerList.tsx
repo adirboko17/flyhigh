@@ -29,6 +29,8 @@ export type CustomerWithChildren = {
   full_name: string;
   email: string | null;
   phone: string | null;
+  city: string | null;
+  address: string | null;
   created_at: string;
   children: CustomerChild[];
 };
@@ -321,6 +323,8 @@ function CustomerDetailPanel({
               <DetailRow label="דוא״ל" dir="ltr">
                 {customer.email ?? "—"}
               </DetailRow>
+              <DetailRow label="עיר">{customer.city ?? "—"}</DetailRow>
+              <DetailRow label="כתובת">{customer.address ?? "—"}</DetailRow>
               <DetailRow label="תאריך הצטרפות">
                 {formatDate(customer.created_at)}
               </DetailRow>

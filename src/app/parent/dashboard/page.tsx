@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/icons/Icon";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import {
@@ -115,8 +116,21 @@ export default async function ParentDashboard() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-ink-500">לא נוספו ילדים עדיין.</p>
+              <p className="text-sm text-ink-500">
+                לא נוספו ילדים עדיין - נרשמתם לעצמכם? אין צורך להוסיף.
+              </p>
             )}
+            <Link
+              href="/parent/children"
+              className="group mt-3 flex items-center gap-3 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50/40 px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-transform group-hover:rotate-90">
+                <Icon name="plus" size={18} stroke={2.5} />
+              </span>
+              <span className="text-sm font-bold text-ink-900">
+                הוספת ילד/ה לחשבון
+              </span>
+            </Link>
           </CardContent>
         </Card>
 
