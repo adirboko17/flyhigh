@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Icon } from "@/components/icons/Icon";
 import { setChargePaid, settleParentCharges } from "@/lib/collections/actions";
 import {
   DEFERRED_PAYMENT_METHODS,
@@ -351,21 +352,30 @@ function ChargeRow({
   const open = isOpen(charge);
 
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-5">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
       <div className="w-full min-w-0 sm:flex-1">
-        <p className="break-words font-medium text-ink-900">
-          {charge.subject}
-          {charge.childName && (
-            <span className="text-ink-500"> · {charge.childName}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <PaymentMethodBadge method={charge.method} />
+          {charge.childName ? (
+            <Badge tone="brand" className="gap-1.5 text-sm">
+              <Icon name="child" size={14} className="shrink-0 opacity-80" />
+              {charge.childName}
+            </Badge>
+          ) : (
+            <Badge tone="neutral" className="gap-1.5 text-sm">
+              <Icon name="user" size={14} className="shrink-0 opacity-80" />
+              עבור ההורה
+            </Badge>
           )}
-        </p>
+          {charge.enrollmentCancelled && <Badge tone="warning">ההרשמה בוטלה</Badge>}
+        </div>
+
+        <p className="mt-2 break-words font-medium text-ink-900">{charge.subject}</p>
         <p className="mt-0.5 text-xs text-ink-400">
-          {PAYMENT_METHOD[charge.method]} · נרשם {formatDate(charge.createdAt)}
+          נרשם {formatDate(charge.createdAt)}
           {charge.paidAt && ` · שולם ${formatDate(charge.paidAt)}`}
         </p>
       </div>
-
-      {charge.enrollmentCancelled && <Badge tone="warning">ההרשמה בוטלה</Badge>}
 
       <span className="font-display text-lg font-bold tabular-nums text-ink-900">
         {formatCurrency(charge.amount)}
@@ -384,6 +394,32 @@ function ChargeRow({
         {busy ? "מעדכן..." : open ? "סמן כשולם" : "ביטול סימון"}
       </Button>
     </li>
+  );
+}
+
+const METHOD_BADGE: Record<
+  DeferredPaymentMethod,
+  { tone: "warning" | "info" | "brand" | "success"; ring: string }
+> = {
+  cash: { tone: "warning", ring: "ring-amber-200" },
+  bank_transfer: { tone: "info", ring: "ring-sky-200" },
+  maccabi: { tone: "brand", ring: "ring-brand-200" },
+  amit: { tone: "success", ring: "ring-aqua-200" },
+};
+
+function PaymentMethodBadge({ method }: { method: DeferredPaymentMethod }) {
+  const style = METHOD_BADGE[method];
+
+  return (
+    <Badge
+      tone={style.tone}
+      className={cn(
+        "px-3 py-1 text-sm font-bold ring-1 ring-inset",
+        style.ring
+      )}
+    >
+      {PAYMENT_METHOD[method]}
+    </Badge>
   );
 }
 
