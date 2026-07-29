@@ -1,5 +1,4 @@
 import { ClassCard } from "@/components/classes/ClassCard";
-import { CtaSection } from "@/components/home/CtaSection";
 import { FeaturesSection } from "@/components/home/FeaturesSection";
 import { HeroSection } from "@/components/home/HeroSection";
 import { SectionHead } from "@/components/home/SectionHead";
@@ -106,10 +105,6 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
-      <ScrollReveal>
-        <CtaSection />
-      </ScrollReveal>
     </>
   );
 }
