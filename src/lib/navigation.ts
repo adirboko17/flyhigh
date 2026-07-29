@@ -42,13 +42,6 @@ export const INSTRUCTOR_NAV: NavItem[] = [
   { href: "/instructor/payroll", label: "שכר ופעילות", icon: "💰" },
 ];
 
-export const PARENT_NAV: NavItem[] = [
-  { href: "/parent/dashboard", label: "סקירה", icon: "🏠" },
-  { href: "/parent/children", label: "הילדים שלי", icon: "🧒" },
-  { href: "/parent/enrollments", label: "ההרשמות שלי", icon: "📝" },
-  { href: "/parent/payments", label: "תשלומים וקבלות", icon: "💳" },
-];
-
 export const PUBLIC_NAV: NavItem[] = [
   { href: "/", label: "בית", icon: "" },
   { href: "/classes", label: "חוגים", icon: "" },

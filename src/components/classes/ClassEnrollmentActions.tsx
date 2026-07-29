@@ -148,7 +148,7 @@ export function ClassEnrollmentActions({
         <p className="text-sm text-ink-600">
           כדי להירשם לחוג, הוסיפו תחילה ילד/ה לפרופיל המשפחתי.
         </p>
-        <ButtonLink href="/parent/children" size="lg" className="w-full">
+        <ButtonLink href="/parent/dashboard#children" size="lg" className="w-full">
           הוספת ילד/ה
         </ButtonLink>
       </div>
@@ -182,7 +182,7 @@ export function ClassEnrollmentActions({
               ))}
             </ul>
             <ButtonLink
-              href="/parent/enrollments"
+              href="/parent/dashboard#enrollments"
               variant="outline"
               size="sm"
               className="mt-3 w-full"
