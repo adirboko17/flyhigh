@@ -65,28 +65,25 @@ export function Sidebar({
 
   return (
     <>
-      {/* פס עליון למובייל */}
-      <div className="flex w-full shrink-0 items-center justify-between gap-2 border-b border-ink-100 bg-white px-4 py-3 lg:hidden">
-        <div className="min-w-0">
-          <BrandMark
-            area={area}
-            logoSrc={logoSrc}
-            logoHeight={40}
-            logoWidth={logoWidth ? 130 : undefined}
-            logoHref={logoHref}
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Avatar name={profile.full_name} className="h-8 w-8 text-xs" />
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100"
-            aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
-            aria-expanded={open}
-          >
-            <Icon name={open ? "x" : "menu"} size={22} />
-          </button>
-        </div>
+      {/* פס עליון למובייל — דביק בגלילה, לוגו במרכז, תפריט מימין (RTL: start) */}
+      <div className="sticky top-0 z-50 flex w-full shrink-0 items-center justify-center border-b border-ink-100/80 bg-white/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90 lg:hidden">
+        <BrandMark
+          logoSrc={logoSrc}
+          logoHeight={40}
+          logoWidth={logoWidth ? 130 : undefined}
+          logoHref={logoHref}
+        />
+        {/* ריווח סימטרי משמאל כדי שהלוגו יישאר ממורכז ויזואלית */}
+        <div aria-hidden className="pointer-events-none absolute end-4 h-10 w-10" />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="absolute start-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100"
+          aria-label={open ? "סגירת תפריט" : "פתיחת תפריט"}
+          aria-expanded={open}
+        >
+          <Icon name={open ? "x" : "menu"} size={22} />
+        </button>
       </div>
 
       <aside
@@ -105,7 +102,28 @@ export function Sidebar({
         />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+        {/* כותרת המגירה — מובייל בלבד */}
+        <div className="shrink-0 border-b border-ink-100/80 bg-gradient-to-b from-ink-50/70 to-white px-5 pb-4 pt-5 lg:hidden">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="h-4 w-0.5 shrink-0 rounded-full bg-brand-gradient"
+            />
+            <div>
+              <p className="font-display text-[15px] font-bold tracking-tight text-ink-800">
+                תפריט
+              </p>
+              {area && (
+                <p className="mt-0.5 text-xs font-medium text-ink-400">{area}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <nav
+          aria-label="תפריט ניווט"
+          className="flex flex-1 flex-col gap-1 overflow-y-auto p-3 lg:pt-3"
+        >
           {items.map((item) => {
             const active = isActive(item);
             return (

@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Field, Input } from "@/components/ui/Input";
@@ -15,6 +16,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect");
+  const justReset = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,13 +93,19 @@ export function LoginForm() {
           />
           זכרו אותי
         </label>
-        <span
-          className="cursor-default text-[13.5px] font-semibold text-brand-600 opacity-70"
-          title="איפוס סיסמה - בקרוב"
+        <Link
+          href="/forgot-password"
+          className="text-[13.5px] font-semibold text-brand-600 transition-colors hover:text-brand-700 hover:underline"
         >
           שכחתם סיסמה?
-        </span>
+        </Link>
       </div>
+
+      {justReset && !error && (
+        <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm font-medium text-aqua-700">
+          ✓ הסיסמה עודכנה. התחברו עם הסיסמה החדשה.
+        </p>
+      )}
 
       {error && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
@@ -110,7 +118,7 @@ export function LoginForm() {
         className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block"
         disabled={loading}
       >
-        {loading ? "מתחבר..." : "כניסה לחשבון"}
+        {loading ? "מתחבר..." : "כניסה לאזור האישי"}
       </button>
     </form>
   );

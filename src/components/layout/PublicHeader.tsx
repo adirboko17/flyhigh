@@ -125,10 +125,10 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 w-full transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300",
+        "sticky top-0 z-50 w-full pt-[env(safe-area-inset-top,0px)] transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300",
         glass
-          ? "border-b border-ink-100/80 bg-white/80 pt-0 shadow-sm backdrop-blur-md"
-          : "border-b border-transparent bg-transparent pt-4 shadow-none backdrop-blur-none"
+          ? "border-b border-ink-100/80 bg-white/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
+          : "border-b border-transparent bg-transparent pb-0 pt-4 shadow-none backdrop-blur-none max-md:pt-[calc(1rem+env(safe-area-inset-top,0px))]"
       )}
     >
       <div className="container-page relative flex h-16 items-center justify-between gap-2 md:gap-4">

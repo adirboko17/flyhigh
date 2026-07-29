@@ -37,8 +37,6 @@ export const ADMIN_NAV: NavItem[] = [
 
 export const INSTRUCTOR_NAV: NavItem[] = [
   { href: "/instructor", label: "דשבורד", icon: "📊" },
-  { href: "/instructor/classes", label: "החוגים שלי", icon: "🏊" },
-  { href: "/instructor/attendance", label: "סימון נוכחות", icon: "✅" },
   { href: "/instructor/payroll", label: "שכר ופעילות", icon: "💰" },
 ];
 

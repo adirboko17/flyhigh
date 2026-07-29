@@ -7,19 +7,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, getCurrentInstructor } from "@/lib/auth";
-import {
-  buildPayroll,
-  formatHours,
-  type PayrollSession,
-} from "@/lib/finance/payroll";
-import {
-  listMonths,
-  monthLabel,
-  monthOf,
-  monthRange,
-  shortMonthLabel,
-  todayInIsrael,
-} from "@/lib/scheduling/monthGrid";
+import { formatHours } from "@/lib/finance/payroll";
+import { loadInstructorPayroll } from "@/lib/finance/instructorPayroll";
+import { monthLabel, shortMonthLabel } from "@/lib/scheduling/monthGrid";
 import { formatCurrency } from "@/utils/format";
 
 export const metadata = { title: "שכר ופעילות" };
@@ -31,94 +21,13 @@ export default async function InstructorPayrollPage() {
   const instructor = await getCurrentInstructor();
   const supabase = await createClient();
 
-  const currentMonth = monthOf(todayInIsrael());
-  const trendMonths = listMonths(currentMonth, TREND_MONTHS);
-  const trendStart = monthRange(trendMonths[0]).start;
-  const { end: monthEnd } = monthRange(currentMonth);
-
-  const { data: classes } = instructor
-    ? await supabase
-        .from("classes")
-        .select("id, title")
-        .eq("instructor_id", instructor.id)
-    : { data: [] };
-
-  const classIds = (classes ?? []).map((c) => c.id);
-
-  // מפגשים של החוגים שלה, ובנוסף מפגשים בחוגים אחרים שבהם היא משמשת כמחליפה.
-  const ownershipFilter = [
-    classIds.length > 0 ? `class_id.in.(${classIds.join(",")})` : null,
-    instructor ? `substitute_instructor_id.eq.${instructor.id}` : null,
-  ]
-    .filter(Boolean)
-    .join(",");
-
-  const { data: sessions } = ownershipFilter
-    ? await supabase
-        .from("class_sessions")
-        .select(
-          "class_id, session_date, start_time, end_time, status, substitute_instructor_id, classes(title)"
-        )
-        .or(ownershipFilter)
-        .gte("session_date", trendStart)
-        .lte("session_date", monthEnd)
-    : { data: [] };
-
-  // מפגש שהועבר למחליפה יורד מהשכר של המדריכה הקבועה ונזקף למחליפה.
-  const mySessions = (sessions ?? []).filter((session) =>
-    session.substitute_instructor_id
-      ? session.substitute_instructor_id === instructor?.id
-      : true
-  );
-
-  const payrollInstructor = instructor
-    ? [
-        {
-          id: instructor.id,
-          full_name: instructor.full_name,
-          hourly_rate: instructor.hourly_rate,
-        },
-      ]
-    : [];
-
-  const toPayrollSession = (session: {
-    status: PayrollSession["status"];
-    start_time: string;
-    end_time: string;
-  }): PayrollSession => ({
-    instructorId: instructor?.id ?? null,
-    status: session.status,
-    startTime: session.start_time,
-    endTime: session.end_time,
-  });
-
-  const monthlySummary = trendMonths.map((month) => {
-    const monthSessions = mySessions
-      .filter((session) => session.session_date.startsWith(month))
-      .map(toPayrollSession);
-    const [line] = buildPayroll(monthSessions, payrollInstructor);
-
-    return {
-      month,
-      sessions: line?.sessions ?? 0,
-      hours: line?.hours ?? 0,
-      amount: line?.amount ?? 0,
-    };
-  });
-
-  const thisMonth =
-    monthlySummary.find((entry) => entry.month === currentMonth) ?? {
-      month: currentMonth,
-      sessions: 0,
-      hours: 0,
-      amount: 0,
-    };
-
-  const rate = Number(instructor?.hourly_rate ?? 0);
-  const sessionsThisMonth = mySessions.filter(
-    (session) =>
-      session.session_date.startsWith(currentMonth) && session.status !== "cancelled"
-  );
+  const {
+    currentMonth,
+    monthlySummary,
+    thisMonth,
+    sessionsThisMonth,
+    rate,
+  } = await loadInstructorPayroll(supabase, instructor, TREND_MONTHS);
 
   return (
     <div className="space-y-6">
