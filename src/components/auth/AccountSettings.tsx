@@ -20,6 +20,8 @@ interface AccountSettingsProps {
   phone: string | null;
   role: Enums<"user_role">;
   createdAt: string;
+  /** identity-only — רק כרטיס הזיהות, בלי טפסי עריכה (לעמוד הגדרות מנהל). */
+  layout?: "full" | "identity-only";
 }
 
 export function AccountSettings({
@@ -29,6 +31,7 @@ export function AccountSettings({
   phone,
   role,
   createdAt,
+  layout = "full",
 }: AccountSettingsProps) {
   return (
     <div className="space-y-6">
@@ -38,8 +41,26 @@ export function AccountSettings({
         role={role}
         createdAt={createdAt}
       />
-      <ProfileCard id={id} fullName={fullName} phone={phone} />
-      <PasswordCard email={email} />
+      {layout === "full" && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>פרטים אישיים</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProfileSettingsForm id={id} fullName={fullName} phone={phone} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>שינוי סיסמה</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PasswordSettingsForm email={email} />
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -103,14 +124,18 @@ function DetailRow({
   );
 }
 
-function ProfileCard({
+export function ProfileSettingsForm({
   id,
   fullName,
   phone,
+  onSuccess,
+  onCancel,
 }: {
   id: string;
   fullName: string;
   phone: string | null;
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState({ fullName, phone: phone ?? "" });
@@ -149,66 +174,67 @@ function ProfileCard({
 
     setSaved(true);
     router.refresh();
+    onSuccess?.();
+  }
+
+  function handleCancel() {
+    setForm({ fullName, phone: phone ?? "" });
+    setError(null);
+    onCancel?.();
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>פרטים אישיים</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="שם מלא" required>
-              <Input
-                value={form.fullName}
-                onChange={(e) => {
-                  setSaved(false);
-                  setForm((f) => ({ ...f, fullName: e.target.value }));
-                }}
-                required
-              />
-            </Field>
-            <Field label="טלפון">
-              <Input
-                dir="ltr"
-                value={form.phone}
-                onChange={(e) => {
-                  setSaved(false);
-                  setForm((f) => ({ ...f, phone: e.target.value }));
-                }}
-                placeholder="052-7654321"
-              />
-            </Field>
-          </div>
+    <form onSubmit={submit} className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="שם מלא" required>
+          <Input
+            value={form.fullName}
+            onChange={(e) => {
+              setSaved(false);
+              setForm((f) => ({ ...f, fullName: e.target.value }));
+            }}
+            required
+          />
+        </Field>
+        <Field label="טלפון">
+          <Input
+            dir="ltr"
+            value={form.phone}
+            onChange={(e) => {
+              setSaved(false);
+              setForm((f) => ({ ...f, phone: e.target.value }));
+            }}
+            placeholder="052-7654321"
+          />
+        </Field>
+      </div>
 
-          {error && <FormError>{error}</FormError>}
-          {saved && <FormSuccess>הפרטים עודכנו בהצלחה.</FormSuccess>}
+      {error && <FormError>{error}</FormError>}
+      {saved && <FormSuccess>הפרטים עודכנו בהצלחה.</FormSuccess>}
 
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={loading || !isDirty}>
-              {loading ? "שומר..." : "שמירת פרטים"}
-            </Button>
-            {isDirty && !loading && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setForm({ fullName, phone: phone ?? "" });
-                  setError(null);
-                }}
-              >
-                ביטול
-              </Button>
-            )}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={loading || !isDirty}>
+          {loading ? "שומר..." : "שמירת פרטים"}
+        </Button>
+        {(isDirty || onCancel) && !loading && (
+          <Button type="button" variant="outline" onClick={handleCancel}>
+            ביטול
+          </Button>
+        )}
+      </div>
+    </form>
   );
 }
 
-function PasswordCard({ email }: { email: string }) {
+export function PasswordSettingsForm({
+  email,
+  onSuccess,
+  onCancel,
+}: {
+  email: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}) {
   const [form, setForm] = useState({
     current: "",
     next: "",
@@ -245,8 +271,6 @@ function PasswordCard({ email }: { email: string }) {
     setLoading(true);
     const supabase = createClient();
 
-    // updateUser לא מוודא את הסיסמה הנוכחית, ולכן מאמתים אותה בהתחברות מחדש
-    // כדי שמישהו עם גישה לדפדפן פתוח לא יוכל להשתלט על החשבון.
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: form.current,
@@ -270,58 +294,59 @@ function PasswordCard({ email }: { email: string }) {
 
     setForm({ current: "", next: "", confirm: "" });
     setSaved(true);
+    onSuccess?.();
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>שינוי סיסמה</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="space-y-5">
-          <Field label="סיסמה נוכחית" required>
-            <Input
-              type="password"
-              autoComplete="current-password"
-              value={form.current}
-              onChange={set("current")}
-              required
-            />
-          </Field>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field
-              label="סיסמה חדשה"
-              hint={`לפחות ${MIN_PASSWORD_LENGTH} תווים`}
-              required
-            >
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={form.next}
-                onChange={set("next")}
-                required
-              />
-            </Field>
-            <Field label="אימות סיסמה חדשה" required>
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={form.confirm}
-                onChange={set("confirm")}
-                required
-              />
-            </Field>
-          </div>
+    <form onSubmit={submit} className="space-y-5">
+      <Field label="סיסמה נוכחית" required>
+        <Input
+          type="password"
+          autoComplete="current-password"
+          value={form.current}
+          onChange={set("current")}
+          required
+        />
+      </Field>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field
+          label="סיסמה חדשה"
+          hint={`לפחות ${MIN_PASSWORD_LENGTH} תווים`}
+          required
+        >
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={form.next}
+            onChange={set("next")}
+            required
+          />
+        </Field>
+        <Field label="אימות סיסמה חדשה" required>
+          <Input
+            type="password"
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={set("confirm")}
+            required
+          />
+        </Field>
+      </div>
 
-          {error && <FormError>{error}</FormError>}
-          {saved && <FormSuccess>הסיסמה עודכנה בהצלחה.</FormSuccess>}
+      {error && <FormError>{error}</FormError>}
+      {saved && <FormSuccess>הסיסמה עודכנה בהצלחה.</FormSuccess>}
 
-          <Button type="submit" disabled={loading}>
-            {loading ? "מעדכן..." : "עדכון סיסמה"}
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={loading}>
+          {loading ? "מעדכן..." : "עדכון סיסמה"}
+        </Button>
+        {onCancel && !loading && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            ביטול
           </Button>
-        </form>
-      </CardContent>
-    </Card>
+        )}
+      </div>
+    </form>
   );
 }
 

@@ -612,6 +612,7 @@ export type Database = {
           email: string | null
           full_name: string
           id: string
+          is_primary_admin: boolean
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
@@ -623,6 +624,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id: string
+          is_primary_admin?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
@@ -634,6 +636,7 @@ export type Database = {
           email?: string | null
           full_name?: string
           id?: string
+          is_primary_admin?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }

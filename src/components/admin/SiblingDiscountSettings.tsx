@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { SiblingDiscountEditor } from "@/components/admin/SiblingDiscountEditor";
@@ -12,6 +13,28 @@ export function SiblingDiscountSettings({
 }: {
   initialTiers: SiblingDiscountTier[];
 }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>הנחת אחים — ברירת מחדל</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <SiblingDiscountForm initialTiers={initialTiers} />
+      </CardContent>
+    </Card>
+  );
+}
+
+export function SiblingDiscountForm({
+  initialTiers,
+  onSuccess,
+  onCancel,
+}: {
+  initialTiers: SiblingDiscountTier[];
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}) {
+  const router = useRouter();
   const [tiers, setTiers] = useState(initialTiers);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,43 +55,42 @@ export function SiblingDiscountSettings({
     }
 
     setMessage("ההנחה נשמרה.");
+    router.refresh();
+    onSuccess?.();
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>הנחת אחים — ברירת מחדל</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-ink-500">
-          ההנחה חלה על כל ההזמנה כשמשפחה רושמת כמה ילדים לאותו חוג. חוג יכול
-          להגדיר מדרגות משלו ולעקוף את ברירת המחדל.
+    <div className="space-y-4">
+      <SiblingDiscountEditor
+        tiers={tiers}
+        onChange={(next) => {
+          setTiers(next);
+          setMessage(null);
+        }}
+        disabled={saving}
+      />
+
+      {error && (
+        <p className="text-sm font-medium text-red-600" role="alert">
+          {error}
         </p>
+      )}
+      {message && (
+        <p className="text-sm font-medium text-aqua-700" role="status">
+          {message}
+        </p>
+      )}
 
-        <SiblingDiscountEditor
-          tiers={tiers}
-          onChange={(next) => {
-            setTiers(next);
-            setMessage(null);
-          }}
-          disabled={saving}
-        />
-
-        {error && (
-          <p className="text-sm font-medium text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-        {message && (
-          <p className="text-sm font-medium text-aqua-700" role="status">
-            {message}
-          </p>
-        )}
-
+      <div className="flex items-center gap-3">
         <Button type="button" onClick={handleSave} disabled={saving}>
           {saving ? "שומר..." : "שמירת ההנחה"}
         </Button>
-      </CardContent>
-    </Card>
+        {onCancel && !saving && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            ביטול
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -7,10 +7,11 @@ import {
   type DeferredPaymentMethod,
 } from "@/lib/constants";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
+import { getPaymentProvider } from "@/lib/integrations/payments";
 import { createClient } from "@/lib/supabase/server";
 
-/** "none" — שיבוץ בלי ליצור חיוב בעמוד הגבייה. */
-export type AssignChargeMethod = DeferredPaymentMethod | "none";
+/** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — חיוב מיידי (דמו). */
+export type AssignChargeMethod = DeferredPaymentMethod | "credit_card" | "none";
 
 export type AssignResult =
   | { success: true; assigned: number; overCapacity: boolean }
@@ -29,6 +30,7 @@ type AssignCore = {
 function isAllowedMethod(value: string): value is AssignChargeMethod {
   return (
     value === "none" ||
+    value === "credit_card" ||
     (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(value)
   );
 }
@@ -103,7 +105,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity")
+        .select("id, capacity, title")
         .eq("id", input.classId)
         .maybeSingle(),
       // אימות שהילדים באמת שייכים ללקוח שנבחר, ולא נשלחו מהדפדפן.
@@ -147,6 +149,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     .eq("class_id", input.classId)
     .in("status", ["active", "pending"]);
 
+  const isCreditCard = input.method === "credit_card";
+  const settledNow = input.markPaid || isCreditCard;
+
   const { data: created, error: enrollmentError } = await supabase
     .from("enrollments")
     .insert(
@@ -156,7 +161,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         class_id: input.classId,
         type: "class" as const,
         status: "active" as const,
-        payment_status: input.markPaid ? ("paid" as const) : ("unpaid" as const),
+        payment_status: settledNow ? ("paid" as const) : ("unpaid" as const),
         admin_assigned: true,
       }))
     )
@@ -168,16 +173,46 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   if (input.method !== "none" && total > 0) {
     const parts = splitAmount(total, created.length);
-    const paidAt = input.markPaid ? new Date().toISOString() : null;
+    let paymentReference: string | null = null;
+
+    if (isCreditCard) {
+      const charge = await getPaymentProvider().createCharge({
+        amount: total,
+        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "ילד/ה" : "ילדים"})`,
+        parentId: input.parentId,
+        method: "credit_card",
+        metadata: {
+          classId: input.classId,
+          childIds,
+          adminAssigned: true,
+        },
+      });
+
+      if (!charge.success) {
+        await supabase
+          .from("enrollments")
+          .delete()
+          .in(
+            "id",
+            created.map((enrollment) => enrollment.id)
+          );
+        return { success: false, error: "התשלום בכרטיס אשראי נכשל. נסו שוב." };
+      }
+
+      paymentReference = charge.reference;
+    }
+
+    const paidAt = settledNow ? new Date().toISOString() : null;
 
     const { error: paymentError } = await supabase.from("payments").insert(
       created.map((enrollment, index) => ({
         parent_id: input.parentId,
         enrollment_id: enrollment.id,
         amount: parts[index],
-        payment_method: input.method as DeferredPaymentMethod,
-        status: input.markPaid ? ("paid" as const) : ("pending" as const),
+        payment_method: input.method as Exclude<AssignChargeMethod, "none">,
+        status: settledNow ? ("paid" as const) : ("pending" as const),
         paid_at: paidAt,
+        external_reference: paymentReference,
       }))
     );
 

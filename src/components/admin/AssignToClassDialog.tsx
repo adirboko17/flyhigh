@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { DemoCardFields } from "@/components/checkout/CheckoutFields";
 import {
   assignChildrenToClass,
   assignWaitlistEntry,
@@ -151,6 +152,12 @@ export function AssignToClassDialog({
 
   const available = cls.capacity - registered;
   const overCapacity = childIds.length > 0 && childIds.length > available;
+  const isCreditCard = method === "credit_card";
+
+  function handleMethodChange(next: AssignChargeMethod) {
+    setMethod(next);
+    if (next === "credit_card") setMarkPaid(false);
+  }
 
   function toggleChild(id: string) {
     setChildIds((current) =>
@@ -274,13 +281,22 @@ export function AssignToClassDialog({
         <Field
           label="אמצעי תשלום"
           htmlFor="assign-method"
-          hint="החיוב ייפתח כחוב בעמוד הגבייה, עד לסימון כשולם."
+          hint={
+            method === "credit_card"
+              ? "זהו מסך דמו — לא מתבצע חיוב אמיתי. התשלום יסומן כשולם מיד."
+              : method === "none"
+                ? "השיבוץ ייווצר בלי רשומת חיוב."
+                : "החיוב ייפתח כחוב בעמוד הגבייה, עד לסימון כשולם."
+          }
         >
           <Select
             id="assign-method"
             value={method}
-            onChange={(e) => setMethod(e.target.value as AssignChargeMethod)}
+            onChange={(e) =>
+              handleMethodChange(e.target.value as AssignChargeMethod)
+            }
           >
+            <option value="credit_card">{PAYMENT_METHOD.credit_card}</option>
             {DEFERRED_PAYMENT_METHODS.map((value) => (
               <option key={value} value={value}>
                 {PAYMENT_METHOD[value]}
@@ -292,6 +308,8 @@ export function AssignToClassDialog({
 
         {method !== "none" && (
           <>
+            {isCreditCard && <DemoCardFields />}
+
             <Field
               label="סכום לחיוב"
               htmlFor="assign-amount"
@@ -316,15 +334,17 @@ export function AssignToClassDialog({
               />
             </Field>
 
-            <label className="flex items-center gap-2.5 text-sm text-ink-700">
-              <input
-                type="checkbox"
-                checked={markPaid}
-                onChange={(e) => setMarkPaid(e.target.checked)}
-                className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
-              />
-              התשלום כבר התקבל — לסמן כשולם
-            </label>
+            {!isCreditCard && (
+              <label className="flex items-center gap-2.5 text-sm text-ink-700">
+                <input
+                  type="checkbox"
+                  checked={markPaid}
+                  onChange={(e) => setMarkPaid(e.target.checked)}
+                  className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
+                />
+                התשלום כבר התקבל — לסמן כשולם
+              </label>
+            )}
           </>
         )}
 
@@ -340,10 +360,16 @@ export function AssignToClassDialog({
           </Button>
           <Button type="submit" disabled={saving || childIds.length === 0}>
             {saving
-              ? "משבץ..."
-              : childIds.length > 1
-                ? `שיבוץ ${childIds.length} ילדים`
-                : "שיבוץ לחוג"}
+              ? isCreditCard
+                ? "מעבד תשלום..."
+                : "משבץ..."
+              : isCreditCard && Number(amount || 0) > 0
+                ? childIds.length > 1
+                  ? `שיבוץ ותשלום (${childIds.length} ילדים)`
+                  : "שיבוץ ותשלום"
+                : childIds.length > 1
+                  ? `שיבוץ ${childIds.length} ילדים`
+                  : "שיבוץ לחוג"}
           </Button>
         </div>
       </form>
