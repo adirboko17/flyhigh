@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { ROLE_LABEL } from "@/lib/constants";
 import type { NavItem } from "@/lib/navigation";
 import type { Profile } from "@/lib/auth";
+import { THEME_COLOR } from "@/lib/theme-color";
 import { cn } from "@/utils/cn";
 import { BrandLogo } from "./BrandLogo";
 import { LogoutButton } from "./LogoutButton";
@@ -34,7 +35,9 @@ export function Sidebar({
   profile,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
 
   // נעילת גלילת הרקע כשהמגירה פתוחה במובייל, אחרת התוכן זז מתחת לשכבת הכיסוי.
   useEffect(() => {
@@ -51,6 +54,7 @@ export function Sidebar({
   // סגירת המגירה במעבר בין עמודים, כדי שהיא לא תישאר פתוחה מעל התוכן החדש.
   useEffect(() => {
     setOpen(false);
+    setNavigatingTo(null);
   }, [pathname]);
 
   const matchesPath = (href: string) =>
@@ -65,8 +69,21 @@ export function Sidebar({
 
   return (
     <>
+      {navigatingTo && (
+        <div
+          className="fixed inset-x-0 top-[env(safe-area-inset-top,0px)] z-[200] h-1 overflow-hidden bg-brand-100"
+          role="progressbar"
+          aria-label="טוען את העמוד הבא"
+        >
+          <span className="admin-route-progress block h-full bg-brand-gradient" />
+        </div>
+      )}
+
       {/* פס עליון למובייל — דביק בגלילה, לוגו במרכז, תפריט מימין (RTL: start) */}
-      <div className="sticky top-0 z-50 flex w-full shrink-0 items-center justify-center border-b border-ink-100/80 bg-white/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90 lg:hidden">
+      <div
+        data-theme-color={THEME_COLOR.transparent}
+        className="sticky top-0 z-50 flex w-full shrink-0 items-center justify-center border-b border-ink-100/80 bg-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm lg:hidden"
+      >
         <BrandMark
           logoSrc={logoSrc}
           logoHeight={40}
@@ -88,8 +105,10 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 start-0 z-40 flex w-[17rem] max-w-[85vw] transform flex-col border-e border-ink-100 bg-white transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:max-w-none lg:translate-x-0",
-          open ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+          "fixed inset-x-0 top-0 z-[70] flex h-[100svh] w-full max-w-none transform flex-col overflow-hidden bg-transparent transition-transform duration-300 lg:visible lg:sticky lg:top-0 lg:z-40 lg:h-screen lg:w-72 lg:max-w-none lg:border-e lg:border-ink-100 lg:bg-white lg:translate-x-0",
+          open
+            ? "visible translate-x-0"
+            : "invisible pointer-events-none translate-x-full lg:pointer-events-auto lg:translate-x-0"
         )}
       >
         <div className="hidden border-b border-ink-100 px-6 py-5 lg:flex lg:justify-center">
@@ -103,26 +122,34 @@ export function Sidebar({
         </div>
 
         {/* כותרת המגירה — מובייל בלבד */}
-        <div className="shrink-0 border-b border-ink-100/80 bg-gradient-to-b from-ink-50/70 to-white px-5 pb-4 pt-5 lg:hidden">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-ink-100 bg-white px-6 pb-5 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] lg:hidden">
           <div className="flex items-center gap-2">
             <span
               aria-hidden
               className="h-4 w-0.5 shrink-0 rounded-full bg-brand-gradient"
             />
             <div>
-              <p className="font-display text-[15px] font-bold tracking-tight text-ink-800">
+              <p className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
                 תפריט
               </p>
-              {area && (
-                <p className="mt-0.5 text-xs font-medium text-ink-400">{area}</p>
-              )}
+              <p className="mt-0.5 text-xs text-ink-400">
+                {area ?? "לאן תרצו להגיע?"}
+              </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="סגירת תפריט"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-ink-100 bg-white text-ink-500 shadow-sm transition-colors active:bg-ink-50 active:text-ink-800"
+          >
+            <Icon name="x" size={20} />
+          </button>
         </div>
 
         <nav
           aria-label="תפריט ניווט"
-          className="flex flex-1 flex-col gap-1 overflow-y-auto p-3 lg:pt-3"
+          className="flex flex-1 flex-col gap-1 overflow-y-auto bg-white p-3 lg:pt-3"
         >
           {items.map((item) => {
             const active = isActive(item);
@@ -130,9 +157,16 @@ export function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setOpen(false)}
+                onPointerEnter={() => router.prefetch(item.href)}
+                onTouchStart={() => router.prefetch(item.href)}
+                onFocus={() => router.prefetch(item.href)}
+                onClick={() => {
+                  setOpen(false);
+                  if (item.href !== pathname) setNavigatingTo(item.href);
+                }}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
+                  "flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:px-3.5 lg:py-2.5 lg:text-sm lg:font-medium",
                   active
                     ? "bg-brand-gradient text-white shadow-glow"
                     : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
@@ -147,14 +181,6 @@ export function Sidebar({
 
         <SidebarUser profile={profile} />
       </aside>
-
-      {open && (
-        <button
-          aria-label="סגירת תפריט"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 bg-ink-900/40 lg:hidden"
-        />
-      )}
     </>
   );
 }
@@ -165,7 +191,7 @@ function SidebarUser({
   profile: Pick<Profile, "full_name" | "role">;
 }) {
   return (
-    <div className="mt-auto border-t border-ink-100 bg-ink-50/60 p-4">
+    <div className="mb-[env(safe-area-inset-bottom,0px)] mt-auto border-t border-ink-100 bg-ink-50/60 p-4 lg:mb-0">
       <div className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-3 shadow-soft">
         <Avatar name={profile.full_name} className="h-10 w-10" />
         <div className="min-w-0 flex-1">

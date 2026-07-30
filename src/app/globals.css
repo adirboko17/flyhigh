@@ -84,6 +84,16 @@
     margin-top: -5rem;
   }
 
+  /* אלמנטים מתחת להדר לא י intercept לחיצות; רק קישורים/כפתורים בתוך ההירו נשארים פעילים. */
+  .hero-bleed-top,
+  .hero-bleed-top * {
+    pointer-events: none;
+  }
+
+  .hero-bleed-top :is(a, button, input, select, textarea, [role="button"]) {
+    pointer-events: auto;
+  }
+
   .container-page {
     @apply mx-auto w-full max-w-7xl;
     /* עם viewport-fit=cover התוכן עלול לרוץ מתחת ל-notch בסיבוב לרוחב. */
@@ -213,8 +223,121 @@
 
 /* במובייל התוכן תמיד גלוי; אנימציות חשיפה עלולות להמתין ל-hydration ברשת איטית. */
 @media (max-width: 639px) {
-  html[data-public-page-scrolled] [data-public-header] {
+  #main-content {
+    position: relative;
+    z-index: 0;
+  }
+
+  /* בראש העמוד: הדר שקוף עם גרדיאנט כהה לקריאות הלוגו הלבן. */
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay] {
     padding-top: 0 !important;
+    border-bottom-color: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    isolation: isolate;
+  }
+
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    bottom: -5rem;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(6, 49, 79, 0.97) 0%,
+      rgba(6, 49, 79, 0.9) 18%,
+      rgba(6, 49, 79, 0.72) 42%,
+      rgba(6, 49, 79, 0.42) 62%,
+      rgba(6, 49, 79, 0.2) 78%,
+      rgba(6, 49, 79, 0.08) 90%,
+      transparent 100%
+    );
+  }
+
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay]
+    .container-page {
+    position: relative;
+    z-index: 2;
+  }
+
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay]
+    [data-public-header-menu],
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay]
+    .container-page
+    :is(a, button) {
+    position: relative;
+    z-index: 3;
+  }
+
+  html:not([data-public-page-scrolled])
+    [data-public-header][data-header-overlay]
+    [data-public-header-menu] {
+    color: #fff !important;
+  }
+
+  /* ההירו נמשך מתחת להדר השקוף (פס ההטבה נשאר למעלה). */
+  .hero-bleed-top {
+    margin-top: -4rem;
+  }
+
+  /**
+   * התמונה ושכבת ההכהיה מגיעות לאפס באותה נקודה בדיוק (תחתית התיבה), ולכן
+   * מתחתיהן נשאר רק גרדיאנט ההירו עצמו ואין קצה גלוי. הערכים מדורגים כדי
+   * שהדעיכה תיראה רכה — מעבר לינארי יוצר קו נראה באמצע.
+   */
+  .mobile-hero-image {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 1) 58%,
+      rgba(0, 0, 0, 0.96) 66%,
+      rgba(0, 0, 0, 0.88) 73%,
+      rgba(0, 0, 0, 0.72) 80%,
+      rgba(0, 0, 0, 0.5) 86%,
+      rgba(0, 0, 0, 0.28) 91%,
+      rgba(0, 0, 0, 0.12) 95%,
+      rgba(0, 0, 0, 0.04) 98%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 1) 0%,
+      rgba(0, 0, 0, 1) 58%,
+      rgba(0, 0, 0, 0.96) 66%,
+      rgba(0, 0, 0, 0.88) 73%,
+      rgba(0, 0, 0, 0.72) 80%,
+      rgba(0, 0, 0, 0.5) 86%,
+      rgba(0, 0, 0, 0.28) 91%,
+      rgba(0, 0, 0, 0.12) 95%,
+      rgba(0, 0, 0, 0.04) 98%,
+      rgba(0, 0, 0, 0) 100%
+    );
+  }
+
+  .mobile-hero-scrim {
+    background-image: linear-gradient(
+      180deg,
+      rgba(6, 49, 79, 0.02) 0%,
+      rgba(6, 49, 79, 0.1) 24%,
+      rgba(6, 49, 79, 0.24) 40%,
+      rgba(6, 49, 79, 0.42) 52%,
+      rgba(6, 49, 79, 0.62) 62%,
+      rgba(6, 49, 79, 0.78) 71%,
+      rgba(6, 49, 79, 0.84) 79%,
+      rgba(6, 49, 79, 0.76) 87%,
+      rgba(6, 49, 79, 0.54) 92%,
+      rgba(6, 49, 79, 0.3) 96%,
+      rgba(6, 49, 79, 0.12) 98.5%,
+      rgba(6, 49, 79, 0) 100%
+    );
   }
 
   /* מונע זום אוטומטי של iOS בכל שדות המערכת בלי לחסום זום ידני. */
@@ -228,5 +351,127 @@
     transform: none !important;
     opacity: 1 !important;
     transition: none !important;
+  }
+}
+
+/* משוב מיידי ואחיד ללחיצה, בלי לדרוס transform או transition קיימים. */
+@keyframes button-press-feedback {
+  from {
+    scale: 1;
+  }
+
+  to {
+    scale: 0.97;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(
+      button:not(:disabled),
+      a.ah-btn:not([aria-disabled="true"]),
+      [role="button"]:not([aria-disabled="true"]),
+      input[type="button"]:not(:disabled),
+      input[type="submit"]:not(:disabled),
+      input[type="reset"]:not(:disabled)
+    ):active {
+    animation: button-press-feedback 110ms ease-out both;
+  }
+}
+
+/* דפדפני מובייל נותנים לשדות date/time רוחב פנימי שעלול לחרוג מכרטיס צר. */
+.schedule-input-shell {
+  contain: inline-size;
+  inline-size: 100%;
+}
+
+.schedule-native-input {
+  display: block !important;
+  box-sizing: border-box !important;
+  inline-size: 100% !important;
+  width: 100% !important;
+  min-inline-size: 0 !important;
+  min-width: 0 !important;
+  max-inline-size: 100% !important;
+  max-width: 100% !important;
+}
+
+@keyframes admin-route-progress {
+  0% {
+    width: 18%;
+    transform: translateX(120%);
+  }
+
+  55% {
+    width: 48%;
+  }
+
+  100% {
+    width: 22%;
+    transform: translateX(-460%);
+  }
+}
+
+.admin-route-progress {
+  animation: admin-route-progress 1.1s ease-in-out infinite;
+  will-change: width, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-route-progress {
+    width: 65%;
+    animation: none;
+  }
+}
+
+/* במובייל כרטיסי נתונים הופכים לגריד קומפקטי, בדומה לפרטי החוג. */
+@media (max-width: 639px) {
+  .grid:has(> [data-stat-card]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1px !important;
+    overflow: hidden;
+    border: 1px solid var(--ink-100);
+    border-radius: 1rem;
+    background: var(--ink-100);
+  }
+
+  .grid:has(> [data-stat-card])
+    > [data-stat-card]:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  [data-stat-card] {
+    min-height: 7rem;
+    padding: 0.75rem !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  [data-stat-card] > .relative {
+    gap: 0.5rem;
+  }
+
+  [data-stat-label] {
+    font-size: 0.75rem !important;
+    line-height: 1.2;
+  }
+
+  [data-stat-value] {
+    margin-top: 0.35rem !important;
+    font-size: 1.25rem !important;
+    line-height: 1.15;
+  }
+
+  [data-stat-hint] {
+    margin-top: 0.3rem !important;
+    font-size: 0.6875rem !important;
+    line-height: 1.3;
+  }
+
+  [data-stat-icon] {
+    width: 2rem !important;
+    height: 2rem !important;
+    border-radius: 0.625rem !important;
+    font-size: 0.95rem !important;
   }
 }

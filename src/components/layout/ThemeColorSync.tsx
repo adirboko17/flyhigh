@@ -17,14 +17,22 @@ export function ThemeColorSync() {
       'meta[name="theme-color"]:not([media])'
     );
 
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.name = "theme-color";
-      document.head.appendChild(meta);
-    }
-
     let applied = "";
     let frame = 0;
+
+    const ensureMeta = () => {
+      if (meta?.isConnected) return meta;
+
+      meta = document.querySelector<HTMLMetaElement>(
+        'meta[name="theme-color"]:not([media])'
+      );
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.name = "theme-color";
+        document.head.appendChild(meta);
+      }
+      return meta;
+    };
 
     const resolveColor = () => {
       // מצבי ניגודיות גבוהה צובעים את כל העמוד, ולכן גוברים על הכול.
@@ -60,7 +68,15 @@ export function ThemeColorSync() {
       if (color === applied) return;
 
       applied = color;
-      meta.content = color;
+      if (color === THEME_COLOR.transparent) {
+        // התג נוצר ומנוהל גם על ידי Next; אין להסיר אותו מה-DOM ידנית,
+        // אחרת React עלול לנסות להסיר שוב את אותו node במעבר עמוד.
+        ensureMeta().removeAttribute("content");
+        document.documentElement.style.backgroundColor = "transparent";
+        return;
+      }
+
+      ensureMeta().content = color;
       document.documentElement.style.backgroundColor = color;
     };
 

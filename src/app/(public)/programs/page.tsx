@@ -12,6 +12,7 @@ import {
   POOL_PASS_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
 } from "@/lib/program-cards";
+import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/utils/format";
 
@@ -21,11 +22,8 @@ export const metadata = {
 };
 
 export default async function ProgramsPage() {
-  const supabase = await createClient();
-
-  const [{ data: programs }, { data: poolPasses }, profile] = await Promise.all([
-    supabase.from("programs").select("*").eq("status", "active"),
-    supabase.from("pool_passes").select("*").eq("status", "active"),
+  const [{ programs, poolPasses }, profile] = await Promise.all([
+    getPublicPlans(),
     getSessionProfile(),
   ]);
 
@@ -35,6 +33,7 @@ export default async function ProgramsPage() {
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
   } else if (profile) {
+    const supabase = await createClient();
     const { data: kids } = await supabase
       .from("children")
       .select("id, full_name")
@@ -67,9 +66,9 @@ export default async function ProgramsPage() {
           />
         </ScrollReveal>
 
-        {(programs ?? []).length > 0 ? (
+        {programs.length > 0 ? (
           <div className="grid gap-6 lg:grid-cols-2">
-            {(programs ?? []).map((program, index) => {
+            {programs.map((program, index) => {
               const template =
                 PROGRAM_CARD_TEMPLATES[index % PROGRAM_CARD_TEMPLATES.length];
 
@@ -121,9 +120,9 @@ export default async function ProgramsPage() {
           />
         </ScrollReveal>
 
-        {(poolPasses ?? []).length > 0 ? (
+        {poolPasses.length > 0 ? (
           <div className="grid gap-6 lg:grid-cols-2">
-            {(poolPasses ?? []).map((pass, index) => {
+            {poolPasses.map((pass, index) => {
               const template =
                 POOL_PASS_CARD_TEMPLATES[index % POOL_PASS_CARD_TEMPLATES.length];
 

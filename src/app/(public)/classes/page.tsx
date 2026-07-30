@@ -1,8 +1,7 @@
 ﻿import { ClassCard } from "@/components/classes/ClassCard";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
-import { createClient } from "@/lib/supabase/server";
-import type { PublicClass } from "@/types";
+import { getPublicClasses } from "@/lib/public-data";
 
 export const metadata = {
   title: "חוגים",
@@ -10,9 +9,7 @@ export const metadata = {
 };
 
 export default async function ClassesPage() {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("list_public_classes");
-  const classes = (data as PublicClass[]) ?? [];
+  const classes = await getPublicClasses();
 
   return (
     <div className="bg-ink-50">

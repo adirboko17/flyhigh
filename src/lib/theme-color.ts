@@ -6,6 +6,8 @@
  * שנמצא כרגע בראש החלון — סקשן מסמן את הצבע שלו עם data-theme-color.
  */
 export const THEME_COLOR = {
+  /** מאפשר לסרגל הדפדפן התחתון להציג את התוכן שמתחתיו. */
+  transparent: "transparent",
   /** משטח לבן, למשל פס הודעה עליון */
   surface: "#ffffff",
   /** רקע העמוד הרגיל (ink-50) */

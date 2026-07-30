@@ -31,6 +31,27 @@
   box-shadow: var(--shadow-soft), var(--shadow-card);
 }
 
+@keyframes hero-ring-float {
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(50%) rotate(22deg);
+  }
+  50% {
+    transform: translateY(calc(-50% - 5px)) translateX(calc(50% + 2px)) rotate(25deg);
+  }
+}
+
+.hero-mobile-ring {
+  animation: hero-ring-float 5.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-mobile-ring {
+    animation: none;
+  }
+}
+
 @keyframes orb-drift-a {
   0%,
   100% {

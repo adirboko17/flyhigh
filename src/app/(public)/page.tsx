@@ -6,28 +6,25 @@ import { SectionHead } from "@/components/home/SectionHead";
 import type { PlanViewer } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { getPublicClasses, getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
-import type { PublicClass } from "@/types";
 
 export default async function HomePage() {
-  const supabase = await createClient();
+  const [classes, { programs, poolPasses }, profile] = await Promise.all([
+    getPublicClasses(),
+    getPublicPlans(),
+    getSessionProfile(),
+  ]);
 
-  const [{ data: classes }, { data: programs }, { data: poolPasses }, profile] =
-    await Promise.all([
-      supabase.rpc("list_public_classes"),
-      supabase.from("programs").select("*").eq("status", "active"),
-      supabase.from("pool_passes").select("*").eq("status", "active"),
-      getSessionProfile(),
-    ]);
-
-  const featured = ((classes as PublicClass[]) ?? []).slice(0, 3);
-  const hasPlans = (programs?.length ?? 0) + (poolPasses?.length ?? 0) > 0;
+  const featured = classes.slice(0, 3);
+  const hasPlans = programs.length + poolPasses.length > 0;
 
   let viewer: PlanViewer = { kind: "guest" };
 
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
   } else if (profile) {
+    const supabase = await createClient();
     const { data: kids } = await supabase
       .from("children")
       .select("id, full_name")
@@ -86,8 +83,8 @@ export default async function HomePage() {
 
         {hasPlans ? (
           <HomePlansGrid
-            programs={programs ?? []}
-            poolPasses={poolPasses ?? []}
+            programs={programs}
+            poolPasses={poolPasses}
             viewer={viewer}
           />
         ) : (

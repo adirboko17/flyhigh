@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { PUBLIC_NAV } from "@/lib/navigation";
@@ -13,6 +13,7 @@ import { LogoutButton } from "./LogoutButton";
 interface PublicHeaderProps {
   user: { full_name: string; home: string } | null;
   overlayAtTop?: boolean;
+  withAnnouncementOffset?: boolean;
 }
 
 const SCROLL_THRESHOLD = 24;
@@ -32,8 +33,13 @@ function AuthEntryLink({ className }: { className?: string }) {
   );
 }
 
-export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) {
+export function PublicHeader({
+  user,
+  overlayAtTop = false,
+  withAnnouncementOffset = true,
+}: PublicHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -48,6 +54,18 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
   }, [pathname]);
 
   useEffect(() => setOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 639px)").matches) return;
+
+    const timer = window.setTimeout(() => {
+      PUBLIC_NAV.forEach(({ href }) => {
+        if (href !== pathname) router.prefetch(href);
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [pathname, router]);
 
   useEffect(() => {
     // התפריט מכסה את המסך בלבן, ולכן שורות המערכת צריכות להתעדכן מיד.
@@ -115,8 +133,19 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
     <>
       <header
         data-public-header
+        data-theme-color={
+          withAnnouncementOffset
+            ? THEME_COLOR.surface
+            : THEME_COLOR.transparent
+        }
+        data-header-overlay={
+          overlayHeader && !glass && !open ? "" : undefined
+        }
         className={cn(
-          "sticky top-[calc(2.25rem+env(safe-area-inset-top,0px))] z-50 w-full transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300 sm:top-0",
+          "sticky z-[100] w-full transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300 sm:top-0 sm:z-50",
+          withAnnouncementOffset
+            ? "top-[calc(2.25rem+env(safe-area-inset-top,0px))]"
+            : "top-0 pt-[env(safe-area-inset-top,0px)]",
           // בלי pointer-events-none ההדר השקוף היה חוסם קליקים על ראש התפריט (הוא ב-z גבוה יותר).
           open
             ? "pointer-events-none border-b border-transparent bg-transparent shadow-none backdrop-blur-none md:pointer-events-auto md:border-ink-100/80 md:bg-white/95 md:pt-[env(safe-area-inset-top,0px)] md:shadow-sm md:backdrop-blur-md"
@@ -128,7 +157,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
         {/* כשהתפריט פתוח הוא מציג כותרת וכפתור סגירה משלו, ולכן שורת ההדר נעלמת במובייל. */}
         <div
           className={cn(
-            "container-page relative flex h-16 items-center justify-between gap-2 transition-opacity duration-200 md:gap-4",
+            "container-page relative flex h-16 w-full items-center justify-between max-md:px-4 transition-opacity duration-200 md:gap-4",
             open &&
               "pointer-events-none opacity-0 md:pointer-events-auto md:opacity-100"
           )}
@@ -136,9 +165,12 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
           <button
             type="button"
             data-public-header-menu
-            onClick={() => setOpen(true)}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(true);
+            }}
             className={cn(
-              "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center transition-colors md:hidden",
+              "relative z-40 flex h-11 w-11 shrink-0 items-center justify-center transition-colors md:hidden",
               glass ? "text-ink-700" : "text-white"
             )}
             aria-label="פתיחת תפריט"
@@ -148,8 +180,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
             <Icon name="menu" size={24} />
           </button>
 
-          {/* במובייל הלוגו ממורכז ביחס לרוחב המסך, ולכן ממוקם אבסולוטית ולא בתוך ה-flex. */}
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center md:static md:translate-x-0">
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center md:static md:z-auto md:translate-y-0">
             <span className="pointer-events-auto md:hidden">
               <BrandLogo height={38} light={overlayHeader && !glass} />
             </span>
@@ -173,19 +204,21 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
             ))}
           </nav>
 
-          <div className="relative z-10 flex shrink-0 items-center gap-2">
+          <div className="relative z-40 flex shrink-0 items-center gap-2">
             {authControls}
           </div>
         </div>
       </header>
 
       {/* מחוץ ל-header כי backdrop-filter שלו יוצר containing block ושובר position:fixed. */}
-      <MobileMenu
-        open={open}
-        user={user}
-        isNavActive={isNavActive}
-        onClose={() => setOpen(false)}
-      />
+      {open ? (
+        <MobileMenu
+          open={open}
+          user={user}
+          isNavActive={isNavActive}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </>
   );
 }
@@ -211,7 +244,9 @@ function MobileMenu({
       data-theme-color-overlay={open ? THEME_COLOR.page : undefined}
       className={cn(
         "fixed inset-0 z-[70] transition-[opacity,visibility] duration-300 ease-out motion-reduce:transition-none md:hidden",
-        open ? "visible opacity-100" : "invisible opacity-0"
+        open
+          ? "visible opacity-100"
+          : "invisible pointer-events-none opacity-0"
       )}
       aria-hidden={!open}
     >

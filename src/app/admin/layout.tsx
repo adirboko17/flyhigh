@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ADMIN_NAV } from "@/lib/navigation";
 import { requireRole } from "@/lib/auth";
+import { THEME_COLOR } from "@/lib/theme-color";
 
 export default async function AdminLayout({
   children,
@@ -10,7 +11,11 @@ export default async function AdminLayout({
   const profile = await requireRole("admin");
 
   return (
-    <div className="flex min-h-screen flex-col bg-ink-50 lg:flex-row">
+    <div
+      data-dashboard-layout
+      data-theme-color={THEME_COLOR.transparent}
+      className="flex min-h-[100dvh] flex-col bg-ink-50 lg:flex-row"
+    >
       <Sidebar
         items={ADMIN_NAV}
         profile={profile}

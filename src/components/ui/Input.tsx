@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import { cn } from "@/utils/cn";
 
 const fieldBase =
-  "w-full rounded-xl border border-ink-200 bg-white px-4 text-sm text-ink-900 placeholder:text-ink-400 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-ink-50 disabled:text-ink-400";
+  "box-border min-w-0 max-w-full w-full rounded-xl border border-ink-200 bg-white px-4 text-sm text-ink-900 placeholder:text-ink-400 transition-colors focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-ink-50 disabled:text-ink-400";
 
 const dsInput = "ah-input";
 const dsSelect = "ah-select";
@@ -86,7 +86,7 @@ export function Field({
   }
 
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("min-w-0 space-y-1.5", className)}>
       <label
         htmlFor={htmlFor}
         className="block text-sm font-semibold text-ink-800"

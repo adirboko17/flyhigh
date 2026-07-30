@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
-import { createClient } from "@/lib/supabase/server";
 import { dayLabel } from "@/lib/constants";
+import {
+  getPublicClasses,
+  getPublicClassSessions,
+} from "@/lib/public-data";
 import { formatTime, formatDate } from "@/utils/format";
-import type { PublicClass } from "@/types";
 
 export default async function ClassDetailPage({
   params,
@@ -14,19 +16,17 @@ export default async function ClassDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  const [{ data }, { data: allSessions }] = await Promise.all([
-    supabase.rpc("list_public_classes"),
-    // דרך RPC כדי שגם הורים יראו את שם המדריכה המחליפה, בלי לחשוף את טבלת המדריכות.
-    supabase.rpc("list_public_class_sessions", { p_class_id: id }),
+  const [classes, allSessions] = await Promise.all([
+    getPublicClasses(),
+    getPublicClassSessions(id),
   ]);
 
-  const sessions = (allSessions ?? []).filter(
+  const sessions = allSessions.filter(
     (session) => session.status === "scheduled"
   );
 
-  const cls = ((data as PublicClass[]) ?? []).find((c) => c.id === id);
+  const cls = classes.find((candidate) => candidate.id === id);
 
   if (!cls) notFound();
 

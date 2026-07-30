@@ -270,19 +270,32 @@ export function ClassForm({
   }
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
-      <form onSubmit={submit} className="space-y-6">
+    <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
+      <form onSubmit={submit} className="min-w-0 space-y-6">
         <Card>
           <CardContent className="space-y-5">
             <Field label="שם החוג" required>
-              <Input value={form.title} onChange={set("title")} required />
+              <Input
+                value={form.title}
+                onChange={set("title")}
+                placeholder="למשל: שחייה למתחילים"
+                required
+              />
             </Field>
             <Field label="תיאור">
-              <Textarea value={form.description} onChange={set("description")} />
+              <Textarea
+                value={form.description}
+                onChange={set("description")}
+                placeholder="כתבו תיאור קצר על החוג"
+              />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="קטגוריה">
-                <Input value={form.category} onChange={set("category")} />
+                <Input
+                  value={form.category}
+                  onChange={set("category")}
+                  placeholder="למשל: שחייה"
+                />
               </Field>
               <Field label="רמה">
                 <Input
@@ -304,6 +317,7 @@ export function ClassForm({
                   min={0}
                   value={form.age_min}
                   onChange={set("age_min")}
+                  placeholder="למשל: 4"
                 />
               </Field>
               <Field label="גיל מקסימום">
@@ -312,6 +326,7 @@ export function ClassForm({
                   min={0}
                   value={form.age_max}
                   onChange={set("age_max")}
+                  placeholder="למשל: 8"
                 />
               </Field>
               <Field label="מכסת משתתפים" required className="col-span-2 lg:col-span-1">
@@ -320,6 +335,7 @@ export function ClassForm({
                   min={1}
                   value={form.capacity}
                   onChange={set("capacity")}
+                  placeholder="למשל: 10"
                   required
                 />
               </Field>
@@ -332,6 +348,7 @@ export function ClassForm({
                   step="1"
                   value={form.price}
                   onChange={set("price")}
+                  placeholder="למשל: 320"
                   required
                 />
               </Field>

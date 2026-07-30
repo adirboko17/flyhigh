@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/icons/Icon";
 import { Field, Input } from "@/components/ui/Input";
 import { DAYS_OF_WEEK } from "@/lib/constants";
 import {
@@ -96,7 +97,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 max-w-full space-y-5 overflow-hidden">
       <Field label="סוג לוח זמנים">
         <div className="grid gap-3 sm:grid-cols-2">
           <ScheduleTypeOption
@@ -144,18 +145,20 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
           </Field>
 
           {value.weeklySlots.length > 0 && (
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2">
               <Field label="שעת התחלה (לכל הימים)">
-                <Input
+                <ScheduleInput
                   type="time"
+                  placeholder="בחרו שעת התחלה"
                   value={value.weeklySlots[0]?.startTime ?? ""}
                   onChange={(e) => setSharedTime("startTime", e.target.value)}
                   disabled={disabled}
                 />
               </Field>
               <Field label="שעת סיום (לכל הימים)">
-                <Input
+                <ScheduleInput
                   type="time"
+                  placeholder="בחרו שעת סיום"
                   value={value.weeklySlots[0]?.endTime ?? ""}
                   onChange={(e) => setSharedTime("endTime", e.target.value)}
                   disabled={disabled}
@@ -164,10 +167,11 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
             </div>
           )}
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2">
             <Field label="תאריך התחלה (טווח)">
-              <Input
+              <ScheduleInput
                 type="date"
+                placeholder="בחרו תאריך התחלה"
                 value={value.rangeStart}
                 onChange={(e) =>
                   onChange({ ...value, rangeStart: e.target.value })
@@ -176,8 +180,9 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
               />
             </Field>
             <Field label="תאריך סיום (טווח)">
-              <Input
+              <ScheduleInput
                 type="date"
+                placeholder="בחרו תאריך סיום"
                 value={value.rangeEnd}
                 onChange={(e) =>
                   onChange({ ...value, rangeEnd: e.target.value })
@@ -255,6 +260,56 @@ function ScheduleTypeOption({
   );
 }
 
+function ScheduleInput({
+  className,
+  placeholder,
+  type,
+  value,
+  ...props
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  type: "date" | "time";
+}) {
+  const empty = value === "" || value == null;
+  const displayValue = empty
+    ? placeholder
+    : type === "date"
+      ? formatDate(String(value))
+      : formatTime(String(value));
+
+  return (
+    <div
+      className={`schedule-input-shell group relative h-11 w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-ink-200 bg-white transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200 ${
+        className ?? ""
+      }`}
+    >
+      <Input
+        {...props}
+        type={type}
+        dir="ltr"
+        value={value}
+        className="schedule-native-input block !h-full !w-full min-w-0 max-w-full appearance-none !border-0 !bg-transparent !px-4 !text-transparent !shadow-none !outline-none !ring-0 [-webkit-text-fill-color:transparent]"
+      />
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 flex items-center justify-between gap-3 px-4 ${
+          empty
+            ? "text-ink-400 group-focus-within:hidden"
+            : "font-medium text-ink-800"
+        }`}
+      >
+        <span className="min-w-0 truncate" dir="rtl">
+          {displayValue}
+        </span>
+        <Icon
+          name={type === "date" ? "calendar" : "clock"}
+          size={18}
+          className="shrink-0 text-brand-500"
+        />
+      </span>
+    </div>
+  );
+}
+
 function SessionList({
   sessions,
   scheduleType,
@@ -306,23 +361,26 @@ function SessionList({
             }`}
           >
             <div className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_auto_auto_auto] md:gap-3">
-              <Input
+              <ScheduleInput
                 className="col-span-2 md:col-span-1"
                 type="date"
+                placeholder="תאריך המפגש"
                 value={session.sessionDate}
                 onChange={(e) =>
                   onUpdate(index, { sessionDate: e.target.value })
                 }
                 disabled={disabled || session.status === "cancelled"}
               />
-              <Input
+              <ScheduleInput
                 type="time"
+                placeholder="שעת התחלה"
                 value={session.startTime}
                 onChange={(e) => onUpdate(index, { startTime: e.target.value })}
                 disabled={disabled || session.status === "cancelled"}
               />
-              <Input
+              <ScheduleInput
                 type="time"
+                placeholder="שעת סיום"
                 value={session.endTime}
                 onChange={(e) => onUpdate(index, { endTime: e.target.value })}
                 disabled={disabled || session.status === "cancelled"}

@@ -27,7 +27,10 @@ export function StatCard({
   hint,
 }: StatCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-ink-100 bg-white p-4 shadow-card sm:p-5">
+    <div
+      data-stat-card
+      className="relative overflow-hidden rounded-2xl border border-ink-100 bg-white p-4 shadow-card sm:p-5"
+    >
       <div
         className={cn(
           "pointer-events-none absolute inset-0 bg-gradient-to-bl",
@@ -36,14 +39,27 @@ export function StatCard({
       />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-ink-500">{label}</p>
-          <p className="mt-1.5 break-words font-display text-2xl font-extrabold text-ink-900 sm:mt-2 sm:text-3xl">
+          <p data-stat-label className="text-sm font-medium text-ink-500">
+            {label}
+          </p>
+          <p
+            data-stat-value
+            className="mt-1.5 break-words font-display text-2xl font-extrabold text-ink-900 sm:mt-2 sm:text-3xl"
+          >
             {value}
           </p>
-          {hint && <p className="mt-1 line-clamp-2 text-xs text-ink-400">{hint}</p>}
+          {hint && (
+            <p
+              data-stat-hint
+              className="mt-1 line-clamp-2 text-xs text-ink-400"
+            >
+              {hint}
+            </p>
+          )}
         </div>
         {icon && (
           <div
+            data-stat-icon
             className={cn(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg sm:h-11 sm:w-11 sm:text-xl",
               tones[tone].icon
