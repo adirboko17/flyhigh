@@ -207,7 +207,7 @@ export async function completeClassEnrollmentPayment(input: {
     .from("enrollments")
     .select("id", { count: "exact", head: true })
     .eq("class_id", classId)
-    .eq("status", "active");
+    .in("status", ["active", "pending"]);
 
   const available = cls.capacity - (takenCount ?? 0);
   if (uniqueChildIds.length > available) {

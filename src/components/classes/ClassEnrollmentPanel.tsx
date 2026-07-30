@@ -50,7 +50,7 @@ export async function ClassEnrollmentPanel({
           supabase
             .from("enrollments")
             .select(
-              "id, child_id, status, payment_status, children(full_name), payments(payment_method)"
+              "id, child_id, status, payment_status, children(full_name), payments(payment_method, status)"
             )
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)
@@ -69,6 +69,7 @@ export async function ClassEnrollmentPanel({
           classTitle={cls.title}
           classPrice={Number(cls.price)}
           soldOut={soldOut}
+          availableSpots={cls.available}
           kids={children ?? []}
           enrollments={enrollments ?? []}
           waitlist={waitlist ?? []}

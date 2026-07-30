@@ -52,7 +52,10 @@ export function RegisterForm() {
     birth: "",
     city: "",
     address: "",
+    receiptName: "",
+    receiptIdNumber: "",
   });
+  const [wantsDifferentReceipt, setWantsDifferentReceipt] = useState(false);
   const [wantsChildren, setWantsChildren] = useState<boolean | null>(null);
   const [children, setChildren] = useState<ChildDraft[]>([newChild()]);
   const [credentials, setCredentials] = useState({
@@ -125,6 +128,12 @@ export function RegisterForm() {
       if (birthError) return setError(birthError);
       if (!details.city.trim()) return setError("נא למלא עיר.");
       if (!details.address.trim()) return setError("נא למלא כתובת.");
+      if (wantsDifferentReceipt) {
+        if (!details.receiptName.trim())
+          return setError("נא למלא שם על הקבלה.");
+        if (!details.receiptIdNumber.trim())
+          return setError("נא למלא מספר ח.פ / ת.ז.");
+      }
       setStep(2);
       return;
     }
@@ -147,6 +156,16 @@ export function RegisterForm() {
   async function completeRegistration(userId: string) {
     const supabase = createClient();
     await supabase.auth.updateUser({ data: { pending_children: null } });
+
+    await supabase
+      .from("profiles")
+      .update({
+        receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
+        receipt_id_number: wantsDifferentReceipt
+          ? details.receiptIdNumber.trim()
+          : null,
+      })
+      .eq("id", userId);
 
     if (classId) {
       const { data: created } = await supabase
@@ -209,6 +228,10 @@ export function RegisterForm() {
           city: details.city.trim(),
           address: details.address.trim(),
           role: "parent",
+          receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
+          receipt_id_number: wantsDifferentReceipt
+            ? details.receiptIdNumber.trim()
+            : null,
           pending_children: namedChildren.map((c) => ({
             full_name: c.name.trim(),
             birth_date: c.birth || null,
@@ -416,6 +439,63 @@ export function RegisterForm() {
               onChange={setDetailsField("address")}
             />
           </Field>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3 transition-colors hover:border-ink-200">
+            <input
+              type="checkbox"
+              checked={wantsDifferentReceipt}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setWantsDifferentReceipt(checked);
+                if (!checked) {
+                  setDetails((current) => ({
+                    ...current,
+                    receiptName: "",
+                    receiptIdNumber: "",
+                  }));
+                }
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-400"
+            />
+            <span className="text-sm font-medium text-ink-800">
+              צריכים פרטים שונים לקבלה?
+            </span>
+          </label>
+
+          {wantsDifferentReceipt && (
+            <div className="flex flex-col gap-4 rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
+              <Field
+                label="שם על הקבלה"
+                htmlFor="receiptName"
+                required
+                variant="ds"
+              >
+                <Input
+                  id="receiptName"
+                  variant="ds"
+                  placeholder="שם החברה או שם מלא"
+                  value={details.receiptName}
+                  onChange={setDetailsField("receiptName")}
+                />
+              </Field>
+              <Field
+                label="מספר ח.פ / ת.ז"
+                htmlFor="receiptIdNumber"
+                required
+                variant="ds"
+              >
+                <Input
+                  id="receiptIdNumber"
+                  variant="ds"
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="123456789"
+                  value={details.receiptIdNumber}
+                  onChange={setDetailsField("receiptIdNumber")}
+                />
+              </Field>
+            </div>
+          )}
         </div>
       )}
 

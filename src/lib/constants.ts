@@ -91,7 +91,7 @@ export const ENROLLMENT_PAYMENT_STATUS: Record<
 
 /** תווית ללקוח כשהתשלום לא בוצע בכרטיס אשראי — נגבה/מאושר מול המשרד. */
 export const PARENT_PENDING_MANAGER_APPROVAL = {
-  label: "ממתין לאישור מנהל",
+  label: "ממתין לאישור",
   tone: "warning" as const satisfies BadgeTone,
 };
 
@@ -113,6 +113,34 @@ export function parentEnrollmentPaymentBadge(
     return PARENT_PENDING_MANAGER_APPROVAL;
   }
   return ENROLLMENT_PAYMENT_STATUS[paymentStatus];
+}
+
+/** תצוגת סטטוס הרשמה יחידה ללקוח — פעיל (אשראי/מאושר) או ממתין לאישור (מזומן/עמית וכו'). */
+export function parentEnrollmentDisplayBadge(
+  paymentStatus: Enums<"enrollment_payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined,
+  options?: {
+    enrollmentStatus?: Enums<"enrollment_status">;
+    chargeStatus?: Enums<"payment_status"> | null;
+  }
+): { label: string; tone: BadgeTone } {
+  if (paymentStatus === "paid") {
+    return ENROLLMENT_STATUS.active;
+  }
+
+  if (paymentStatus === "unpaid" || paymentStatus === "partial") {
+    if (options?.enrollmentStatus === "active") {
+      return PARENT_PENDING_MANAGER_APPROVAL;
+    }
+    if (isNonImmediatePaymentMethod(paymentMethod)) {
+      return PARENT_PENDING_MANAGER_APPROVAL;
+    }
+    if (options?.chargeStatus === "pending") {
+      return PARENT_PENDING_MANAGER_APPROVAL;
+    }
+  }
+
+  return parentEnrollmentPaymentBadge(paymentStatus, paymentMethod);
 }
 
 export const PAYMENT_STATUS: Record<
