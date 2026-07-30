@@ -56,9 +56,9 @@ export default async function ClassDetailPage({
       />
 
       <div className="container-page relative z-[3] grid gap-8 pb-16 pt-8 lg:grid-cols-[1.4fr_1fr]">
-        {/* במובייל כרטיס ההרשמה עולה לראש העמוד כדי שהמחיר וההרשמה יהיו מעל הקיפול. */}
-        <div className="order-2 lg:order-1">
-          <div className="relative h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
+        {/* display:contents במובייל מפרק את העמודה לפריטי גריד, כך שהתמונה עולה מעל כרטיס ההרשמה ושאר הפרטים יורדים מתחתיו. */}
+        <div className="contents lg:order-1 lg:block">
+          <div className="relative order-1 h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
             {cls.image_url ? (
               <Image
                 src={cls.image_url}
@@ -75,70 +75,72 @@ export default async function ClassDetailPage({
             )}
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            <Badge tone={status.tone}>{status.label}</Badge>
-            {cls.category && <Badge tone="brand">{cls.category}</Badge>}
-            {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
-            {cls.session_count != null && cls.session_count > 0 && (
-              <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
+          <div className="order-3 lg:mt-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={status.tone}>{status.label}</Badge>
+              {cls.category && <Badge tone="brand">{cls.category}</Badge>}
+              {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
+              {cls.session_count != null && cls.session_count > 0 && (
+                <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
+              )}
+            </div>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "-"} />
+              <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
+              <DetailRow
+                icon="🕒"
+                label="שעות"
+                value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
+              />
+              <DetailRow
+                icon="🎂"
+                label="גילאים"
+                value={cls.age_min || cls.age_max ? `${cls.age_min}–${cls.age_max}` : "כל הגילאים"}
+              />
+              <DetailRow icon="🗓️" label="תאריך התחלה" value={formatDate(cls.start_date)} />
+              <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />
+            </div>
+
+            {sessions.length > 0 && (
+              <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
+                <h2 className="font-display text-lg font-bold text-ink-900">
+                  מפגשים מתוכננים
+                </h2>
+                <p className="mt-1 text-sm text-ink-500">
+                  {cls.schedule_type === "custom"
+                    ? "תאריכים מותאמים לחוג זה"
+                    : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
+                </p>
+                <ul className="mt-4 divide-y divide-ink-100">
+                  {sessions.map((session) => (
+                    <li
+                      key={session.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
+                    >
+                      <span className="font-semibold text-ink-900">
+                        {formatDate(session.session_date)}
+                      </span>
+                      <span className="text-ink-600">
+                        {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                      </span>
+                      {session.substitute_instructor_name && (
+                        <Badge tone="warning" className="w-full justify-center sm:w-auto">
+                          מדריכה מחליפה: {session.substitute_instructor_name}
+                        </Badge>
+                      )}
+                      {session.notes && (
+                        <span className="w-full text-xs text-ink-400">{session.notes}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "-"} />
-            <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
-            <DetailRow
-              icon="🕒"
-              label="שעות"
-              value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
-            />
-            <DetailRow
-              icon="🎂"
-              label="גילאים"
-              value={cls.age_min || cls.age_max ? `${cls.age_min}–${cls.age_max}` : "כל הגילאים"}
-            />
-            <DetailRow icon="🗓️" label="תאריך התחלה" value={formatDate(cls.start_date)} />
-            <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />
-          </div>
-
-          {sessions.length > 0 && (
-            <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
-              <h2 className="font-display text-lg font-bold text-ink-900">
-                מפגשים מתוכננים
-              </h2>
-              <p className="mt-1 text-sm text-ink-500">
-                {cls.schedule_type === "custom"
-                  ? "תאריכים מותאמים לחוג זה"
-                  : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
-              </p>
-              <ul className="mt-4 divide-y divide-ink-100">
-                {sessions.map((session) => (
-                  <li
-                    key={session.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
-                  >
-                    <span className="font-semibold text-ink-900">
-                      {formatDate(session.session_date)}
-                    </span>
-                    <span className="text-ink-600">
-                      {formatTime(session.start_time)}–{formatTime(session.end_time)}
-                    </span>
-                    {session.substitute_instructor_name && (
-                      <Badge tone="warning" className="w-full justify-center sm:w-auto">
-                        מדריכה מחליפה: {session.substitute_instructor_name}
-                      </Badge>
-                    )}
-                    {session.notes && (
-                      <span className="w-full text-xs text-ink-400">{session.notes}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
 
-        <div className="order-1 lg:order-2">
+        <div className="order-2">
           <ClassEnrollmentPanel cls={cls} soldOut={soldOut} />
         </div>
       </div>

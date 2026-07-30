@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
@@ -119,6 +119,73 @@ export function PlanPurchaseButton({
         parentName={viewer.parentName}
         kids={viewer.children}
       />
+    </>
+  );
+}
+
+interface PlanPurchaseTriggerProps {
+  planKind: PlanKind;
+  planId: string;
+  planTitle: string;
+  price: number;
+  entriesCount?: number | null;
+  viewer: PlanViewer;
+  children: ReactNode;
+  className?: string;
+}
+
+/** עוטף כרטיס לחיץ שפותח את אותו דיאלוג רכישה כמו PlanPurchaseButton. */
+export function PlanPurchaseTrigger({
+  planKind,
+  planId,
+  planTitle,
+  price,
+  entriesCount,
+  viewer,
+  children,
+  className,
+}: PlanPurchaseTriggerProps) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+
+  function handleClick() {
+    if (viewer.kind === "guest") {
+      router.push("/login?redirect=%2Fprograms");
+      return;
+    }
+    if (viewer.kind === "other") {
+      router.push(viewer.homeHref);
+      return;
+    }
+    setOpen(true);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        className={cn(
+          "w-full cursor-pointer text-start transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2",
+          className
+        )}
+      >
+        {children}
+      </button>
+
+      {viewer.kind === "parent" && (
+        <PlanCheckoutDialog
+          open={open}
+          onClose={() => setOpen(false)}
+          planKind={planKind}
+          planId={planId}
+          planTitle={planTitle}
+          price={price}
+          entriesCount={entriesCount}
+          parentName={viewer.parentName}
+          kids={viewer.children}
+        />
+      )}
     </>
   );
 }

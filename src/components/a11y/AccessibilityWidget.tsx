@@ -159,7 +159,7 @@ export function AccessibilityWidget() {
           role="dialog"
           aria-label="הגדרות נגישות"
           tabIndex={-1}
-          className="fixed bottom-[84px] left-4 z-[120] w-[min(340px,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-ink-200 bg-white shadow-[0_24px_60px_-18px_rgba(15,23,42,0.45)] focus:outline-none sm:bottom-[96px] sm:left-6"
+          className="fixed bottom-[calc(84px+env(safe-area-inset-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-[120] w-[min(340px,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-ink-200 bg-white shadow-[0_24px_60px_-18px_rgba(15,23,42,0.45)] focus:outline-none sm:bottom-[calc(96px+env(safe-area-inset-bottom,0px))] sm:left-[max(1.5rem,env(safe-area-inset-left,0px))]"
         >
           <div className="flex items-center justify-between gap-2 bg-[linear-gradient(95deg,var(--logo-magenta)_0%,var(--brand-500)_100%)] px-4 py-3.5 text-white">
             <div className="flex items-center gap-2.5">
@@ -323,7 +323,7 @@ export function AccessibilityWidget() {
         aria-controls="a11y-panel"
         aria-label="תפריט נגישות"
         title="תפריט נגישות"
-        className="fixed bottom-4 left-4 z-[120] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--logo-magenta)_0%,var(--brand-500)_100%)] text-white shadow-[0_14px_34px_-10px_rgba(236,0,140,0.55)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:bottom-6 sm:left-6 sm:h-14 sm:w-14"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-[120] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--logo-magenta)_0%,var(--brand-500)_100%)] text-white shadow-[0_14px_34px_-10px_rgba(236,0,140,0.55)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:left-[max(1.5rem,env(safe-area-inset-left,0px))] sm:h-14 sm:w-14"
       >
         <span className="sm:hidden">
           <Glyph name="accessibility" size={26} />

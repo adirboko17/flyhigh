@@ -1,7 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Heebo, Assistant } from "next/font/google";
 import { AccessibilityWidget } from "@/components/a11y/AccessibilityWidget";
 import { A11Y_INIT_SCRIPT } from "@/components/a11y/a11ySettings";
+import { ThemeColorSync } from "@/components/layout/ThemeColorSync";
+import { THEME_COLOR } from "@/lib/theme-color";
 import "./globals.css";
 
 const heebo = Heebo({
@@ -25,6 +27,14 @@ export const metadata: Metadata = {
     "מערכת ההרשמה והניהול של 'על הגובה' - חוגי שחייה, מסלולים וכניסות לבריכה. הרשמה קלה, ניהול חכם וחוויה מושלמת להורים ולצוות.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // מאפשר לתוכן להיפרס גם מתחת ל-notch, ומפעיל את משתני env(safe-area-inset-*).
+  viewportFit: "cover",
+  themeColor: THEME_COLOR.page,
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -40,6 +50,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         {/* מחיל העדפות נגישות שמורות לפני הצביעה הראשונה, כדי למנוע הבהוב. */}
         <script dangerouslySetInnerHTML={{ __html: A11Y_INIT_SCRIPT }} />
+        <ThemeColorSync />
         {children}
         <AccessibilityWidget />
       </body>

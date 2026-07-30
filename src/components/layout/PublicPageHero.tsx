@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
 import { Orb } from "@/components/home/Orb";
 import type { IconName } from "@/components/icons/paths";
+import { THEME_COLOR } from "@/lib/theme-color";
 import { cn } from "@/utils/cn";
 
 const MAG = "var(--logo-magenta)";
@@ -46,7 +47,10 @@ export function PublicPageHero({
   ) : null;
 
   return (
-    <section className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_48%,#0072b8_100%)]">
+    <section
+      data-theme-color={THEME_COLOR.hero}
+      className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_48%,#0072b8_100%)]"
+    >
       <Orb color={MAG} size={340} top={-120} right={-60} blur={90} opacity={0.32} motion="drift-a" />
       <Orb color={CYN} size={300} bottom={-40} left={-50} blur={90} opacity={0.36} motion="drift-c" />
       <Orb

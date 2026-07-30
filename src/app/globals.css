@@ -25,6 +25,9 @@
     scroll-behavior: smooth;
     /* רשת ביטחון: אלמנטים דקורטיביים או שורות רחבות לא יגררו גלילה אופקית של כל העמוד. */
     overflow-x: clip;
+    /* צובע את אזור ה-overscroll ואת השטח שמאחורי שורות הדפדפן. ThemeColorSync
+       מעדכן אותו בזמן אמת לפי הסקשן שבראש החלון. */
+    background-color: var(--ink-50);
   }
 
   body {
@@ -55,7 +58,24 @@
 
 @layer components {
   .container-page {
-    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-7xl;
+    /* עם viewport-fit=cover התוכן עלול לרוץ מתחת ל-notch בסיבוב לרוחב. */
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .container-page {
+      padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container-page {
+      padding-left: max(2rem, env(safe-area-inset-left, 0px));
+      padding-right: max(2rem, env(safe-area-inset-right, 0px));
+    }
   }
 
   /* גרדיאנט מותג לרקעים */

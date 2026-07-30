@@ -9,16 +9,15 @@ export default async function ParentLayout({
   children: React.ReactNode;
 }) {
   const profile = await requireRole(["parent", "admin"]);
+  const user = { full_name: profile.full_name, home: homeForRole(profile.role) };
 
   return (
     <div className="flex min-h-screen flex-col bg-ink-50">
       <Suspense fallback={<div className="h-16" aria-hidden />}>
-        <PublicHeader
-          user={{ full_name: profile.full_name, home: homeForRole(profile.role) }}
-        />
+        <PublicHeader user={user} />
       </Suspense>
       <main className="container-page w-full py-6">{children}</main>
-      <PublicFooter />
+      <PublicFooter user={user} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
 import { Orb } from "@/components/home/Orb";
 import { BRAND, HERO_POOL_IMAGE } from "@/lib/constants";
+import { THEME_COLOR } from "@/lib/theme-color";
 
 const MAG = "var(--logo-magenta)";
 const CYN = "var(--logo-cyan)";
@@ -21,7 +22,10 @@ interface HeroSectionProps {
 export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
   const heroImage = imageUrl || HERO_POOL_IMAGE;
   return (
-    <section className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_44%,#0072b8_80%,#0c97cc_100%)]">
+    <section
+      data-theme-color={THEME_COLOR.hero}
+      className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_44%,#0072b8_80%,#0c97cc_100%)]"
+    >
       <Orb color={MAG} size={420} top={-120} left={-80} blur={90} opacity={0.35} motion="drift-a" />
       <Orb color={CYN} size={360} bottom={-40} right={-60} blur={90} opacity={0.4} motion="drift-c" />
       <Orb
@@ -117,12 +121,19 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
       </div>
 
       <div className="absolute inset-x-0 bottom-[-1px] leading-none">
+        {/* preserveAspectRatio="none" דוחס את הגל לרוחב המסך, ולכן במובייל משתמשים בעקומה שטוחה יותר. */}
         <svg
           viewBox="0 0 1440 110"
           preserveAspectRatio="none"
-          className="block h-[90px] w-full"
+          className="block h-[70px] w-full sm:h-[90px]"
         >
           <path
+            className="sm:hidden"
+            d="M0,52 C280,102 540,102 790,74 C1030,48 1240,42 1440,62 L1440,110 L0,110 Z"
+            fill="var(--ink-50)"
+          />
+          <path
+            className="hidden sm:block"
             d="M0,40 C240,110 480,110 720,70 C960,30 1200,20 1440,60 L1440,110 L0,110 Z"
             fill="var(--ink-50)"
           />

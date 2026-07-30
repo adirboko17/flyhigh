@@ -40,15 +40,22 @@ export function SectionHead({
       {link && linkHref && (
         <Link
           href={linkHref}
-          className="inline-flex shrink-0 items-center rounded-full border px-4 py-2 text-sm font-bold underline decoration-2 underline-offset-[5px] transition-colors hover:opacity-90"
-          style={{
-            color: accent,
-            borderColor: `color-mix(in srgb, ${accent} 28%, white)`,
-            backgroundColor: `color-mix(in srgb, ${accent} 10%, white)`,
-            textDecorationColor: `color-mix(in srgb, ${accent} 45%, white)`,
-          }}
+          className="group inline-flex shrink-0 items-center gap-1.5 text-sm font-bold transition-opacity hover:opacity-80"
+          style={{ color: accent }}
         >
           {link}
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </Link>
       )}
     </div>

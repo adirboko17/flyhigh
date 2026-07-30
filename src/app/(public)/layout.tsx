@@ -25,7 +25,7 @@ export default async function PublicLayout({
       <main id="main-content" className="flex-1">
         {children}
       </main>
-      <PublicFooter />
+      <PublicFooter user={user} />
     </div>
   );
 }

@@ -1,23 +1,45 @@
 import { ClassCard } from "@/components/classes/ClassCard";
 import { FeaturesSection } from "@/components/home/FeaturesSection";
 import { HeroSection } from "@/components/home/HeroSection";
+import { HomePlansGrid } from "@/components/home/HomePlansGrid";
 import { SectionHead } from "@/components/home/SectionHead";
+import type { PlanViewer } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import { getSessionProfile, homeForRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency } from "@/utils/format";
 import type { PublicClass } from "@/types";
 
 export default async function HomePage() {
   const supabase = await createClient();
 
-  const [{ data: classes }, { data: programs }, { data: poolPasses }] =
+  const [{ data: classes }, { data: programs }, { data: poolPasses }, profile] =
     await Promise.all([
       supabase.rpc("list_public_classes"),
       supabase.from("programs").select("*").eq("status", "active"),
       supabase.from("pool_passes").select("*").eq("status", "active"),
+      getSessionProfile(),
     ]);
 
   const featured = ((classes as PublicClass[]) ?? []).slice(0, 3);
+  const hasPlans = (programs?.length ?? 0) + (poolPasses?.length ?? 0) > 0;
+
+  let viewer: PlanViewer = { kind: "guest" };
+
+  if (profile && profile.role !== "parent") {
+    viewer = { kind: "other", homeHref: homeForRole(profile.role) };
+  } else if (profile) {
+    const { data: kids } = await supabase
+      .from("children")
+      .select("id, full_name")
+      .eq("parent_id", profile.id)
+      .order("created_at");
+
+    viewer = {
+      kind: "parent",
+      parentName: profile.full_name,
+      children: kids ?? [],
+    };
+  }
 
   return (
     <>
@@ -29,7 +51,7 @@ export default async function HomePage() {
           <SectionHead
             eyebrow="החוגים שלנו"
             title="חוגים מובילים"
-            sub="הצטרפו לחוגים הפופולריים שלנו"
+            sub="הצטרפו לחוגים הפופולריים שלנו — כל החוגים מועברים על ידי מדריכות ומדריכים מוסמכים."
             link="לכל החוגים"
             linkHref="/classes"
           />
@@ -51,85 +73,28 @@ export default async function HomePage() {
       </section>
 
       <section id="programs" className="container-page py-16">
-        <div className="grid gap-10 lg:grid-cols-2">
-          <div>
-            <ScrollReveal>
-              <SectionHead
-                eyebrow="מנויים"
-                title="מסלולים חודשיים"
-                accent="var(--logo-magenta)"
-                link="לכל המסלולים"
-                linkHref="/programs"
-              />
-            </ScrollReveal>
-            <div className="space-y-3">
-              {(programs ?? []).map((p, index) => (
-                <ScrollReveal key={p.id} delay={Math.min(index * 70, 280)}>
-                  <PriceRow
-                    title={p.title}
-                    desc={p.description}
-                    price={formatCurrency(p.price)}
-                  />
-                </ScrollReveal>
-              ))}
-              {(!programs || programs.length === 0) && (
-                <EmptyMini text="אין מסלולים פעילים כרגע" />
-              )}
-            </div>
-          </div>
-          <div>
-            <ScrollReveal delay={80}>
-              <SectionHead
-                eyebrow="גמיש"
-                title="כניסות לבריכה"
-                accent="var(--logo-cyan)"
-              />
-            </ScrollReveal>
-            <div className="space-y-3">
-              {(poolPasses ?? []).map((p, index) => (
-                <ScrollReveal
-                  key={p.id}
-                  delay={Math.min(index * 70 + 80, 360)}
-                >
-                  <PriceRow
-                    title={p.title}
-                    desc={p.description}
-                    price={formatCurrency(p.price)}
-                  />
-                </ScrollReveal>
-              ))}
-              {(!poolPasses || poolPasses.length === 0) && (
-                <EmptyMini text="אין כניסות פעילות כרגע" />
-              )}
-            </div>
-          </div>
-        </div>
+        <ScrollReveal>
+          <SectionHead
+            eyebrow="מנויים וכניסות"
+            title="מסלולים חודשיים וכניסות לבריכה"
+            sub="בלי התחייבות ארוכה — בוחרים את המסלול שמתאים לקצב המשפחה."
+            accent="var(--logo-cyan)"
+            link="לכל המסלולים"
+            linkHref="/programs"
+          />
+        </ScrollReveal>
+
+        {hasPlans ? (
+          <HomePlansGrid
+            programs={programs ?? []}
+            poolPasses={poolPasses ?? []}
+            viewer={viewer}
+          />
+        ) : (
+          <EmptyMini text="אין מסלולים או כניסות פעילים כרגע" />
+        )}
       </section>
     </>
-  );
-}
-
-function PriceRow({
-  title,
-  desc,
-  price,
-}: {
-  title: string;
-  desc: string | null;
-  price: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-[20px] border border-ink-100 bg-white p-4 shadow-card">
-      <div className="min-w-0 flex-1">
-        <p className="break-words font-semibold text-ink-900">{title}</p>
-        {desc && (
-          <p className="mt-0.5 line-clamp-2 text-sm text-ink-500">{desc}</p>
-        )}
-      </div>
-      <span className="shrink-0 font-display text-lg font-extrabold text-brand-700">
-        {price}
-      </span>
-    </div>
   );
 }
 
