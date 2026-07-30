@@ -10,6 +10,15 @@ import {
 } from "@/lib/public-data";
 import { formatTime, formatDate } from "@/utils/format";
 
+export const revalidate = 60;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  const classes = await getPublicClasses();
+
+  return classes.map((cls) => ({ id: cls.id }));
+}
+
 export default async function ClassDetailPage({
   params,
 }: {

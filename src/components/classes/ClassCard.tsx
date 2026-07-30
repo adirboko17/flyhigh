@@ -32,6 +32,7 @@ export function ClassCard({
   const lastSpot = !soldOut && cls.available === 1;
   const isBlob = cls.image_url?.startsWith("blob:") ?? false;
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
+  const href = `/classes/${cls.id}`;
 
   const cardClass =
     "group flex h-full flex-col overflow-hidden rounded-[22px] border border-ink-100 bg-white shadow-card transition-all duration-300" +
@@ -43,7 +44,7 @@ export function ClassCard({
       ? "תאריכים מותאמים"
       : `יום ${dayLabel(cls.day_of_week)}`;
 
-  const inner = (
+  const media = (
     <>
       <span
         aria-hidden
@@ -96,16 +97,31 @@ export function ClassCard({
           </span>
         )}
       </div>
+    </>
+  );
 
-      <div className="flex flex-1 flex-col p-5">
+  const content = (
+    <div className="flex flex-1 flex-col p-5">
+      {preview ? (
         <h3 className="break-words font-display text-[19px] font-extrabold leading-snug text-ink-900">
           {cls.title}
         </h3>
-        {cls.description && (
-          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-500">
-            {cls.description}
-          </p>
-        )}
+      ) : (
+        <h3 className="break-words font-display text-[19px] font-extrabold leading-snug text-ink-900">
+          <Link
+            href={href}
+            prefetch
+            className="transition-colors hover:text-[var(--logo-cyan)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--logo-cyan)]"
+          >
+            {cls.title}
+          </Link>
+        </h3>
+      )}
+      {cls.description && (
+        <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-500">
+          {cls.description}
+        </p>
+      )}
 
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-600">
           {cls.instructor_name && (
@@ -150,24 +166,42 @@ export function ClassCard({
           <span className="shrink-0 font-display text-xl font-extrabold text-ink-900">
             {formatCurrency(cls.price)}
           </span>
-          <span
-            className="min-w-0 truncate rounded-full px-4 py-2 text-sm font-bold text-white transition-opacity group-hover:opacity-90"
-            style={{ background: accent }}
-          >
-            לפרטים והרשמה
-          </span>
+          {preview ? (
+            <span
+              className="min-w-0 truncate rounded-full px-4 py-2 text-sm font-bold text-white"
+              style={{ background: accent }}
+            >
+              לפרטים והרשמה
+            </span>
+          ) : (
+            <Link
+              href={href}
+              prefetch
+              className="min-w-0 truncate rounded-full px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--logo-cyan)] focus-visible:ring-offset-2"
+              style={{ background: accent }}
+            >
+              לפרטים והרשמה
+            </Link>
+          )}
         </div>
       </div>
-    </>
   );
 
-  if (preview) {
-    return <div className={cardClass}>{inner}</div>;
-  }
-
   return (
-    <Link href={`/classes/${cls.id}`} className={cardClass}>
-      {inner}
-    </Link>
+    <div className={cardClass}>
+      {preview ? (
+        media
+      ) : (
+        <Link
+          href={href}
+          prefetch
+          aria-label={`לפרטים והרשמה לחוג ${cls.title}`}
+          className="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--logo-cyan)]"
+        >
+          {media}
+        </Link>
+      )}
+      {content}
+    </div>
   );
 }

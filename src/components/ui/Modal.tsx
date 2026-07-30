@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/icons/Icon";
+import { refreshThemeColor, THEME_COLOR } from "@/lib/theme-color";
 import { cn } from "@/utils/cn";
 
 interface ModalProps {
@@ -41,6 +42,7 @@ export function Modal({
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    refreshThemeColor();
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCloseRef.current();
@@ -52,6 +54,7 @@ export function Modal({
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
+      refreshThemeColor();
     };
   }, [open, mounted]);
 
@@ -61,10 +64,13 @@ export function Modal({
   // הגלילה של הכרטיסים) הופך למסגרת המיקום של fixed והחלון נחתך בתוך הכרטיס.
   // ה-z גבוה מתפריט הנגישות הצף (120) כדי שלא יצוף מעל החלון.
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div
+      data-theme-color-overlay={THEME_COLOR.modalOverlay}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+    >
       <button
         type="button"
-        className="absolute inset-0 bg-ink-950/50 backdrop-blur-[2px]"
+        className="absolute inset-x-0 bottom-[calc(-1*env(safe-area-inset-bottom))] top-[calc(-1*env(safe-area-inset-top))] bg-ink-950/50 backdrop-blur-[2px]"
         aria-label="סגירת חלון"
         onClick={onClose}
       />
@@ -76,8 +82,8 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          // במובייל החלון נפתח כגלישה מלמטה (bottom sheet) ומדפדפן רגיל כחלון ממורכז.
-          "relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-ink-100 bg-white shadow-card animate-fade-in sm:max-h-[85dvh] sm:rounded-3xl",
+          // חלון ממורכז ומרווח בכל המסכים; התוכן הפנימי נשאר גליל בטפסים ורשימות ארוכות.
+          "relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-card animate-fade-in sm:max-h-[85dvh]",
           className
         )}
       >

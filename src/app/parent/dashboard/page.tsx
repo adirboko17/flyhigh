@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
 import { ChildrenPanel, type ParentChild } from "@/components/parent/ChildrenPanel";
+import {
+  UpcomingSessionsList,
+  type AgendaSession,
+} from "@/components/parent/UpcomingSessionsList";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import {
@@ -55,7 +59,10 @@ export default async function ParentDashboard() {
     { data: receipts },
     { data: waitlist },
   ] = await Promise.all([
-    supabase.from("children").select("*").order("created_at"),
+    supabase
+      .from("children")
+      .select("*")
+      .order("created_at", { ascending: false }),
     supabase
       .from("enrollments")
       .select(
@@ -72,7 +79,7 @@ export default async function ParentDashboard() {
       .order("created_at", { ascending: false }),
     supabase
       .from("waitlist")
-      .select("id, classes(title), children(full_name)")
+      .select("id, child_id, classes(title), children(full_name)")
       .eq("status", "waiting"),
   ]);
 
@@ -136,14 +143,25 @@ export default async function ParentDashboard() {
     activitiesByChild.set(enrollment.child_id, current);
   }
 
-  const kids: ParentChild[] = allChildren.map((child) => ({
-    id: child.id,
-    full_name: child.full_name,
-    birth_date: child.birth_date,
-    gender: child.gender,
-    notes: child.notes,
-    activities: activitiesByChild.get(child.id) ?? [],
-  }));
+  const kids: ParentChild[] = allChildren.map((child) => {
+    const enrollmentCount = allEnrollments.filter(
+      (enrollment) => enrollment.child_id === child.id
+    ).length;
+    const waitlistCount = waitingList.filter(
+      (entry) => entry.child_id === child.id
+    ).length;
+
+    return {
+      id: child.id,
+      full_name: child.full_name,
+      birth_date: child.birth_date,
+      gender: child.gender,
+      notes: child.notes,
+      activities: activitiesByChild.get(child.id) ?? [],
+      linkedRecords: enrollmentCount + waitlistCount,
+      canDelete: enrollmentCount === 0 && waitlistCount === 0,
+    };
+  });
   const enrolledChildren = kids.filter((kid) => kid.activities.length > 0).length;
 
   // מפגשים נשלפים רק לחוגים שההרשמה אליהם עדיין חיה (לא בוטלה ולא הסתיימה).
@@ -163,7 +181,7 @@ export default async function ParentDashboard() {
       ? await supabase
           .from("class_sessions")
           .select(
-            `id, class_id, session_date, start_time, end_time, status,
+            `id, class_id, session_date, start_time, end_time, status, notes,
             substitute:instructors!class_sessions_substitute_instructor_id_fkey(full_name),
             classes(title, instructors(full_name))`
           )
@@ -192,12 +210,16 @@ export default async function ParentDashboard() {
 
       return {
         id: session.id,
+        classId: session.class_id,
         date: session.session_date,
         startTime: session.start_time,
         endTime: session.end_time,
         status: session.status,
         title: session.classes?.title ?? "חוג",
         attendees: attendeesByClass.get(session.class_id) ?? [],
+        notes: session.notes,
+        regularInstructorName: instructor,
+        substituteInstructorName: substitute,
         instructorName: substitute ?? instructor,
         isSubstitute: Boolean(substitute),
       };
@@ -311,19 +333,19 @@ export default async function ParentDashboard() {
           <div className="flex shrink-0 flex-wrap gap-2">
             <Link
               href="/classes"
-              className="ah-btn ah-btn--md flex-1 bg-white text-brand-700 hover:bg-white/90 sm:flex-none"
+              className="ah-btn ah-btn--md flex-1 bg-white px-2 text-[11px] text-brand-700 hover:bg-white/90 sm:flex-none sm:px-5 sm:text-sm"
             >
               הרשמה לחוג חדש
             </Link>
             <Link
               href="/programs"
-              className="ah-btn ah-btn--md flex-1 bg-white/15 text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none"
+              className="ah-btn ah-btn--md flex-1 bg-white/15 px-2 text-[11px] text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none sm:px-5 sm:text-sm"
             >
               מסלולים וכניסות
             </Link>
             <Link
               href="#children"
-              className="ah-btn ah-btn--md flex-1 bg-white/15 text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none"
+              className="ah-btn ah-btn--md flex-1 bg-white/15 px-2 text-[11px] text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none sm:px-5 sm:text-sm"
             >
               הילדים שלי
             </Link>
@@ -388,24 +410,20 @@ export default async function ParentDashboard() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-        <Card id="schedule" className="scroll-mt-24">
-          <CardHeader>
-            <CardTitle>המפגשים הקרובים</CardTitle>
+      <div className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[1.5fr_1fr]">
+        <Card id="schedule" className="min-w-0 scroll-mt-24 rounded-xl sm:rounded-2xl">
+          <CardHeader className="px-3 py-3 sm:px-5 sm:py-4">
+            <CardTitle className="break-words">המפגשים הקרובים</CardTitle>
             <ViewAllDialog
               title="לוח המפגשים"
               description={`כל המפגשים ב-${AGENDA_HORIZON_DAYS} הימים הקרובים`}
               count={upcomingSessions.length}
               disabled={upcomingSessions.length <= AGENDA_LIMIT}
             >
-              <ul className="space-y-3">
-                {upcomingSessions.map((session) => (
-                  <SessionRow key={session.id} session={session} today={today} />
-                ))}
-              </ul>
+              <UpcomingSessionsList sessions={upcomingSessions} today={today} />
             </ViewAllDialog>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-5">
             {upcomingSessions.length === 0 ? (
               <EmptyState
                 icon="📅"
@@ -425,21 +443,17 @@ export default async function ParentDashboard() {
                 className="border-0 bg-transparent py-8"
               />
             ) : (
-              <ul className="space-y-3">
-                {previewSessions.map((session) => (
-                  <SessionRow key={session.id} session={session} today={today} />
-                ))}
-              </ul>
+              <UpcomingSessionsList sessions={previewSessions} today={today} />
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>מה כדאי לעשות</CardTitle>
+        <Card className="min-w-0 rounded-xl sm:rounded-2xl">
+          <CardHeader className="px-3 py-3 sm:px-5 sm:py-4">
+            <CardTitle className="break-words">מה כדאי לעשות</CardTitle>
             {tasks.length > 0 && <Badge tone="warning">{tasks.length}</Badge>}
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-5">
             {tasks.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-aqua-100 text-2xl">
@@ -458,21 +472,21 @@ export default async function ParentDashboard() {
                   <li key={task.title}>
                     <Link
                       href={task.href}
-                      className="flex items-start gap-3 rounded-xl border border-ink-100 px-3.5 py-3 transition-colors hover:border-ink-200 hover:bg-ink-50"
+                      className="flex min-w-0 items-start gap-2.5 rounded-lg border border-ink-100 px-3 py-2.5 transition-colors hover:border-ink-200 hover:bg-ink-50 sm:gap-3 sm:rounded-xl sm:px-3.5 sm:py-3"
                     >
                       <span
                         className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base",
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm sm:h-9 sm:w-9 sm:text-base",
                           TASK_TONES[task.tone]
                         )}
                       >
                         {task.icon}
                       </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold text-ink-900">
                           {task.title}
                         </span>
-                        <span className="block text-xs text-ink-500">
+                        <span className="block break-words text-xs text-ink-500">
                           {task.detail}
                         </span>
                       </span>
@@ -546,10 +560,10 @@ export default async function ParentDashboard() {
         </Card>
       </div>
 
-      <Card id="plans" className="scroll-mt-24">
-        <CardHeader>
-          <CardTitle>המסלולים והכניסות שלי</CardTitle>
-          <div className="flex items-center gap-2">
+      <Card id="plans" className="min-w-0 scroll-mt-24 rounded-xl sm:rounded-2xl">
+        <CardHeader className="px-3 py-3 sm:px-5 sm:py-4">
+          <CardTitle className="break-words">המסלולים והכניסות שלי</CardTitle>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {activePlans.length > 0 && (
               <Badge tone="brand">{activePlans.length} פעילים</Badge>
             )}
@@ -572,7 +586,7 @@ export default async function ParentDashboard() {
             </ViewAllDialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-5">
           {planEnrollments.length === 0 ? (
             <EmptyState
               icon="🎫"
@@ -586,7 +600,7 @@ export default async function ParentDashboard() {
               className="border-0 bg-transparent py-8"
             />
           ) : (
-            <ul className="grid gap-3 sm:grid-cols-2">
+            <ul className="grid min-w-0 gap-2 sm:grid-cols-2 sm:gap-3">
               {planEnrollments.slice(0, PLANS_LIMIT).map((enrollment) => (
                 <PlanRow
                   key={enrollment.id}
@@ -599,7 +613,7 @@ export default async function ParentDashboard() {
           )}
         </CardContent>
         {planEnrollments.length > 0 && (
-          <CardFooter className="flex flex-wrap items-center justify-between gap-3 bg-ink-50/60">
+          <CardFooter className="flex flex-wrap items-center justify-between gap-2 bg-ink-50/60 px-3 py-3 sm:gap-3 sm:px-5 sm:py-4">
             <span className="text-sm text-ink-600">
               רוצים להוסיף מסלול או כרטיסייה נוספת?
             </span>
@@ -727,18 +741,6 @@ export default async function ParentDashboard() {
   );
 }
 
-type AgendaSession = {
-  id: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  status: Enums<"class_session_status">;
-  title: string;
-  attendees: string[];
-  instructorName: string | null;
-  isSubstitute: boolean;
-};
-
 type EnrollmentRowData = {
   id: string;
   type: Enums<"enrollment_type">;
@@ -783,129 +785,6 @@ const TASK_TONES: Record<TaskTone, string> = {
   violet: "bg-violet-100 text-violet-700",
   slate: "bg-ink-100 text-ink-600",
 };
-
-function SessionRow({
-  session,
-  today,
-}: {
-  session: AgendaSession;
-  today: string;
-}) {
-  const cancelled = session.status === "cancelled";
-  const isToday = session.date === today;
-  const chip = dateChip(session.date);
-
-  return (
-    <li
-      className={cn(
-        "flex items-center gap-3 rounded-2xl border p-3 transition-colors sm:gap-4 sm:p-3.5",
-        cancelled
-          ? "border-ink-100 bg-ink-50/60"
-          : isToday
-            ? "border-brand-200 bg-brand-50/60"
-            : "border-ink-100 bg-white hover:border-ink-200"
-      )}
-    >
-      <div
-        className={cn(
-          "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl sm:h-14 sm:w-14",
-          isToday && !cancelled
-            ? "bg-brand-gradient text-white"
-            : "bg-white text-ink-700 ring-1 ring-inset ring-ink-100"
-        )}
-      >
-        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
-          {chip.month}
-        </span>
-        <span className="font-display text-lg font-extrabold leading-none sm:text-xl">
-          {chip.day}
-        </span>
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <p
-            className={cn(
-              "min-w-0 flex-1 truncate font-display font-bold text-ink-900",
-              cancelled && "text-ink-400 line-through decoration-ink-300"
-            )}
-          >
-            {session.title}
-          </p>
-          {isToday && !cancelled && (
-            <Badge tone="brand" className="shrink-0">
-              היום
-            </Badge>
-          )}
-          {cancelled && (
-            <Badge tone="danger" className="shrink-0">
-              בוטל
-            </Badge>
-          )}
-        </div>
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-500">
-          <span className="inline-flex items-center gap-1.5">
-            <Icon name="clock" size={15} className="shrink-0 text-ink-400" />
-            <span dir="ltr" className="tabular-nums">
-              {formatTime(session.startTime)}–{formatTime(session.endTime)}
-            </span>
-          </span>
-          {session.attendees.length > 0 && (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <Icon name="child" size={15} className="shrink-0 text-ink-400" />
-              <span className="truncate">{session.attendees.join(", ")}</span>
-            </span>
-          )}
-          {/* במובייל שם המדריכה נכנס לשורת המטא כדי לא לדחוס את השורה לשלוש עמודות. */}
-          <span className="inline-flex min-w-0 items-center gap-1.5 sm:hidden">
-            <Icon name="teacher" size={15} className="shrink-0 text-ink-400" />
-            <span className="truncate">
-              {session.instructorName ?? "ללא מדריכה"}
-              {session.isSubstitute && " (מחליפה)"}
-            </span>
-          </span>
-        </div>
-      </div>
-
-      <div className="hidden shrink-0 items-center gap-1.5 self-start text-end sm:flex">
-        <Icon
-          name="teacher"
-          size={15}
-          className={cn(
-            "shrink-0",
-            session.instructorName ? "text-ink-400" : "text-ink-300"
-          )}
-        />
-        <span
-          className={cn(
-            "max-w-[8rem] truncate text-sm font-medium",
-            session.instructorName ? "text-ink-700" : "text-ink-400"
-          )}
-        >
-          {session.instructorName ?? "ללא מדריכה"}
-        </span>
-        {session.isSubstitute && (
-          <Badge tone="warning" className="shrink-0">
-            מחליפה
-          </Badge>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/** יום ושם חודש מקוצר לתצוגת "עלה בקלנדר" — למשל 5 · אוג. */
-function dateChip(date: string): { day: number; month: string } {
-  const d = new Date(`${date}T00:00:00Z`);
-  return {
-    day: d.getUTCDate(),
-    month: new Intl.DateTimeFormat("he-IL", {
-      month: "short",
-      timeZone: "UTC",
-    }).format(d),
-  };
-}
 
 function EnrollmentRow({
   enrollment,
@@ -980,10 +859,10 @@ function PlanRow({
   );
 
   return (
-    <li className="flex items-start gap-3 rounded-2xl border border-ink-100 bg-white p-3.5 transition-colors hover:border-ink-200">
+    <li className="flex min-w-0 flex-wrap items-start gap-2.5 rounded-xl border border-ink-100 bg-white p-2.5 transition-colors hover:border-ink-200 sm:flex-nowrap sm:gap-3 sm:rounded-2xl sm:p-3.5">
       <span
         className={cn(
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base sm:h-11 sm:w-11 sm:rounded-xl sm:text-lg",
           isPass ? "bg-aqua-100 text-aqua-700" : "bg-brand-100 text-brand-700"
         )}
       >
@@ -991,10 +870,10 @@ function PlanRow({
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate font-display font-bold text-ink-900">
+        <p className="truncate font-display text-sm font-bold text-ink-900 sm:text-base">
           {enrollmentTitle(enrollment)}
         </p>
-        <p className="truncate text-sm text-ink-500">
+        <p className="truncate text-xs text-ink-500 sm:text-sm">
           {enrollment.children?.full_name ?? parentName}
           {" · "}
           {ENROLLMENT_TYPE[enrollment.type]}
@@ -1005,7 +884,7 @@ function PlanRow({
         </p>
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-1">
+      <div className="flex basis-full flex-row flex-wrap items-center justify-end gap-1 sm:basis-auto sm:shrink-0 sm:flex-col sm:items-end">
         <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
           {ENROLLMENT_STATUS[enrollment.status].label}
         </Badge>
