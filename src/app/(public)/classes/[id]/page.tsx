@@ -1,10 +1,10 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Badge } from "@/components/ui/Badge";
 import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
+import { Badge } from "@/components/ui/Badge";
 import { createClient } from "@/lib/supabase/server";
-import { CLASS_STATUS, dayLabel } from "@/lib/constants";
+import { dayLabel } from "@/lib/constants";
 import { formatTime, formatDate } from "@/utils/format";
 import type { PublicClass } from "@/types";
 
@@ -30,7 +30,6 @@ export default async function ClassDetailPage({
 
   if (!cls) notFound();
 
-  const status = CLASS_STATUS[cls.status];
   const soldOut = cls.available <= 0 || cls.status === "full";
   const scheduleLabel = cls.schedule_days
     ? `ימים ${cls.schedule_days}`
@@ -59,6 +58,12 @@ export default async function ClassDetailPage({
         {/* display:contents במובייל מפרק את העמודה לפריטי גריד, כך שהתמונה עולה מעל כרטיס ההרשמה ושאר הפרטים יורדים מתחתיו. */}
         <div className="contents lg:order-1 lg:block">
           <div className="relative order-1 h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
+            <Badge
+              tone={soldOut ? "warning" : "success"}
+              className="absolute end-3 top-3 z-10 px-3 py-1 text-sm shadow-sm sm:end-4 sm:top-4"
+            >
+              {soldOut ? "מלא" : "יש מקום"}
+            </Badge>
             {cls.image_url ? (
               <Image
                 src={cls.image_url}
@@ -76,16 +81,7 @@ export default async function ClassDetailPage({
           </div>
 
           <div className="order-3 lg:mt-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={status.tone}>{status.label}</Badge>
-              {cls.category && <Badge tone="brand">{cls.category}</Badge>}
-              {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
-              {cls.session_count != null && cls.session_count > 0 && (
-                <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
-              )}
-            </div>
-
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:gap-4 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
               <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "-"} />
               <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
               <DetailRow
@@ -158,11 +154,13 @@ function DetailRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-ink-100 bg-white p-4">
-      <span className="text-xl">{icon}</span>
-      <div>
-        <p className="text-xs text-ink-400">{label}</p>
-        <p className="font-semibold text-ink-900">{value}</p>
+    <div className="flex min-w-0 items-center gap-2 bg-white p-3 sm:gap-3 sm:rounded-2xl sm:border sm:border-ink-100 sm:p-4">
+      <span className="shrink-0 text-lg sm:text-xl">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[11px] leading-tight text-ink-400 sm:text-xs">{label}</p>
+        <p className="mt-0.5 break-words text-sm font-semibold leading-tight text-ink-900 sm:mt-0 sm:text-base sm:leading-normal">
+          {value}
+        </p>
       </div>
     </div>
   );

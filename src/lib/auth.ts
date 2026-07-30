@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
 
@@ -6,8 +7,9 @@ export type Profile = Tables<"profiles">;
 
 /**
  * מחזיר את המשתמש המחובר ואת הפרופיל שלו, או null אם לא מחובר.
+ * cache מונע קריאה כפולה באותה בקשה כאשר גם ה-layout וגם העמוד צריכים פרופיל.
  */
-export async function getSessionProfile(): Promise<Profile | null> {
+export const getSessionProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   const userId = await currentUserId(supabase);
 
@@ -20,7 +22,7 @@ export async function getSessionProfile(): Promise<Profile | null> {
     .single();
 
   return profile ?? null;
-}
+});
 
 /**
  * מזהה המשתמש המחובר לפי ה־JWT. getClaims מאמת את החתימה מקומית מול ה־JWKS

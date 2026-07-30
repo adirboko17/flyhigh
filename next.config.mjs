@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // מסתיר את כפתור ה-N של כלי הפיתוח, שיכול להיראות כמו צל בתחתית המובייל.
+  devIndicators: false,
   images: {
     remotePatterns: [
       {

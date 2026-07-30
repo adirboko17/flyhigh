@@ -15,7 +15,9 @@ export function ScrollReveal({
   delay = 0,
 }: ScrollRevealProps) {
   const elementRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  // התוכן גלוי ב-HTML הראשוני. כך רשת איטית או hydration מאוחר לעולם לא
+  // משאירים אזורים ריקים; האנימציה מופעלת רק לאלמנטים שעדיין מתחת למסך.
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     const element = elementRef.current;
@@ -24,11 +26,23 @@ export function ScrollReveal({
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     );
+    const mobileViewport = window.matchMedia("(max-width: 639px)");
 
-    if (reducedMotion.matches || !("IntersectionObserver" in window)) {
+    if (
+      mobileViewport.matches ||
+      reducedMotion.matches ||
+      !("IntersectionObserver" in window)
+    ) {
       setIsVisible(true);
       return;
     }
+
+    const rect = element.getBoundingClientRect();
+    if (rect.top <= window.innerHeight * 0.92) {
+      return;
+    }
+
+    setIsVisible(false);
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -48,7 +62,7 @@ export function ScrollReveal({
     <div
       ref={elementRef}
       className={cn(
-        "transition-[opacity,transform] duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:opacity-100 motion-reduce:transition-none",
+        "scroll-reveal transition-[opacity,transform] duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:opacity-100 motion-reduce:transition-none",
         isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         className,
       )}

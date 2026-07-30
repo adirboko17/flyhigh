@@ -16,7 +16,6 @@ export default function ForgotPasswordPage() {
       <div className="relative flex items-start justify-center overflow-hidden px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[calc(5rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-12 sm:pt-[calc(6rem+env(safe-area-inset-top,0px))] lg:items-center lg:py-12">
         {/* רקע מותגי עדין — במובייל בלבד, שם פאנל המותג לא מוצג. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 lg:hidden">
-          <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand-50 via-brand-50/40 to-transparent" />
           <Orb
             color="var(--logo-cyan)"
             size={260}
@@ -33,6 +32,9 @@ export default function ForgotPasswordPage() {
             blur={80}
             opacity={0.14}
           />
+          {/* מכסה את קצה ה-Orb בצבע אחיד כדי להתחבר ל-safe area בלי תפר צדדי. */}
+          <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand-50 via-brand-50/50 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent via-brand-50/70 to-brand-50" />
         </div>
 
         {/* במובייל הכפתור נעוץ לראש העמוד, ומיושר לרוחב עמודת התוכן. */}
@@ -47,12 +49,11 @@ export default function ForgotPasswordPage() {
             <AuthHomeLink />
           </div>
 
-          <div className="flex justify-center lg:hidden">
-            <BrandLogo href="" height={54} />
-          </div>
-
-          {/* במובייל הטופס יושב בכרטיס; בדסקטופ העטיפה נעלמת (contents) והפריסה נשמרת. */}
-          <div className="mt-6 rounded-3xl border border-ink-100 bg-white/95 p-5 shadow-card backdrop-blur-sm sm:p-6 lg:contents">
+          {/* במובייל הלוגו מחובר לכרטיס וחצי ממנו בולט מעל הקצה העליון. */}
+          <div className="relative mt-12 rounded-3xl border border-ink-100 bg-white/95 px-5 pb-5 pt-16 shadow-card backdrop-blur-sm sm:px-6 sm:pb-6 sm:pt-16 lg:contents">
+            <div className="auth-logo-badge absolute left-1/2 top-0 flex h-[92px] w-[92px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white sm:h-24 sm:w-24 lg:hidden">
+              <BrandLogo href="" height={38} />
+            </div>
             <div className="text-right lg:mt-8">
               <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-[32px]">
                 שכחתם סיסמה? 🔑

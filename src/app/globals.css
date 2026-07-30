@@ -34,15 +34,22 @@
     scroll-behavior: smooth;
     /* רשת ביטחון: אלמנטים דקורטיביים או שורות רחבות לא יגררו גלילה אופקית של כל העמוד. */
     overflow-x: clip;
-    /* צובע את אזור ה-overscroll ואת השטח שמאחורי שורות הדפדפן. ThemeColorSync
-       מעדכן אותו בזמן אמת לפי הסקשן שבראש החלון. */
-    background-color: var(--ink-50);
+    /* שכבת הבסיס של ה-safe area לבנה. ThemeColorSync מעדכן אותה בזמן אמת
+       לפי הסקשן שבראש החלון לאחר טעינת העמוד. */
+    background-color: #ffffff;
   }
 
   body {
-    @apply bg-ink-50 text-ink-900 font-sans antialiased;
+    /* הרקע נשלט על ידי מעטפת העמוד וה-html, כדי שה-safe areas יקבלו אותו צבע. */
+    @apply bg-transparent text-ink-900 font-sans antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: clip;
+  }
+
+  /* בסיס אחיד לעמודי אימות, כולל הקנבס שמאחורי שני ה-safe areas במובייל. */
+  html:has([data-auth-layout]),
+  body:has([data-auth-layout]) {
+    background-color: var(--brand-50);
   }
 
   ::selection {
@@ -71,11 +78,10 @@
    * כדי שהגרדיאנט יגיע עד שורת הסטטוס ולא יישאר פס לבן. ה-padding מחזיר את
    * התוכן עצמו אל מתחת לשורת הסטטוס.
    *
-   * החישוב: גובה ההדר במצב שקוף הוא 5rem + safe-area-inset-top.
+   * החישוב: גובה ההדר במצב שקוף הוא 5rem. ה-safe area שייך לפס ההטבה שמעליו.
    */
   .hero-bleed-top {
-    margin-top: calc(-5rem - env(safe-area-inset-top, 0px));
-    padding-top: env(safe-area-inset-top, 0px);
+    margin-top: -5rem;
   }
 
   .container-page {
@@ -106,5 +112,121 @@
 
   .text-gradient {
     @apply bg-gradient-to-l from-brand-600 to-aqua-500 bg-clip-text text-transparent;
+  }
+
+  .announcement-marquee {
+    overflow: hidden;
+    direction: ltr;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 4%,
+      black 96%,
+      transparent
+    );
+  }
+
+  .announcement-marquee__track {
+    display: flex;
+    width: max-content;
+    margin-right: auto;
+    margin-left: 0;
+    animation: announcement-marquee 24s linear infinite;
+    will-change: transform;
+  }
+
+  .announcement-marquee__group {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 1.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .announcement-marquee__item {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .announcement-marquee__item svg {
+    @apply text-brand-600;
+  }
+
+  .announcement-marquee__item strong {
+    @apply font-extrabold text-brand-700;
+  }
+
+  /**
+   * גיבוי קל משקל לפני ש-React נטען: סקריפט inline מעדכן את המאפיין על html
+   * מיד בגלילה, ולכן ההדר לעולם לא נשאר שקוף על תוכן בהיר במכשיר איטי.
+   */
+  html[data-public-page-scrolled] [data-public-header] {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    border-bottom-color: rgb(236 238 242 / 0.8) !important;
+    background-color: rgb(255 255 255 / 0.95) !important;
+    box-shadow: 0 1px 3px rgb(31 36 51 / 0.08) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+
+  html[data-public-page-scrolled] [data-public-header] img {
+    filter: none !important;
+  }
+
+  html[data-public-page-scrolled] [data-public-header] nav a,
+  html[data-public-page-scrolled] [data-public-header-menu] {
+    color: var(--ink-600) !important;
+  }
+
+  /* מסגרת רק בחצי העליון של תג הלוגו; החצי התחתון נטמע בכרטיס הטופס. */
+  .auth-logo-badge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--brand-100);
+    border-radius: inherit;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 72%);
+  }
+}
+
+@keyframes announcement-marquee {
+  to {
+    transform: translate3d(-33.333333%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .announcement-marquee__track {
+    animation: none;
+  }
+
+  .announcement-marquee__group:not(:first-child),
+  .announcement-marquee__group:first-child
+    .announcement-marquee__item:not(:first-child) {
+    display: none;
+  }
+}
+
+/* במובייל התוכן תמיד גלוי; אנימציות חשיפה עלולות להמתין ל-hydration ברשת איטית. */
+@media (max-width: 639px) {
+  html[data-public-page-scrolled] [data-public-header] {
+    padding-top: 0 !important;
+  }
+
+  /* מונע זום אוטומטי של iOS בכל שדות המערכת בלי לחסום זום ידני. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .scroll-reveal {
+    transform: none !important;
+    opacity: 1 !important;
+    transition: none !important;
   }
 }

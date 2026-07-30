@@ -57,6 +57,9 @@
 /* --------------------------------------------------------------- Inputs --- */
 .ah-input, .ah-textarea, .ah-select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--ink-900);
@@ -89,7 +92,7 @@
 .ah-input.is-success, .ah-select.is-success { border-color: var(--aqua-500); }
 
 /* Field wrapper */
-.ah-field { display: flex; flex-direction: column; gap: 6px; }
+.ah-field { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .ah-field__label { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--ink-800); }
 .ah-field__req { color: var(--red-500); margin-inline-start: 2px; }
 .ah-field__hint { font-size: var(--text-xs); color: var(--ink-500); }

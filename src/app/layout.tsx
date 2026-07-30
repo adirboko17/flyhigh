@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // מאפשר לתוכן להיפרס גם מתחת ל-notch, ומפעיל את משתני env(safe-area-inset-*).
+  // מאפשר לרקע העמוד להמשיך לתוך ה-safe areas העליון והתחתון.
   viewportFit: "cover",
   // בלי זה דפדפנים במצב כהה מוסיפים גוון אפור משלהם לשורות המערכת ולרקע.
   colorScheme: "light",

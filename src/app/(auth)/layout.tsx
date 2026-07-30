@@ -12,7 +12,11 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div data-theme-color={THEME_COLOR.auth} className="min-h-screen bg-white">
+    <div
+      data-auth-layout
+      data-theme-color={THEME_COLOR.auth}
+      className="min-h-[100dvh] bg-brand-50 lg:bg-white"
+    >
       {children}
     </div>
   );

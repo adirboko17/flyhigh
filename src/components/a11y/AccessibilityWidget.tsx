@@ -323,7 +323,7 @@ export function AccessibilityWidget() {
         aria-controls="a11y-panel"
         aria-label="תפריט נגישות"
         title="תפריט נגישות"
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-[120] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--logo-magenta)_0%,var(--brand-500)_100%)] text-white shadow-[0_14px_34px_-10px_rgba(236,0,140,0.55)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:left-[max(1.5rem,env(safe-area-inset-left,0px))] sm:h-14 sm:w-14"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-[120] flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--logo-magenta)_0%,var(--brand-500)_100%)] text-white shadow-none transition-transform hover:scale-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:left-[max(1.5rem,env(safe-area-inset-left,0px))] sm:h-14 sm:w-14 sm:shadow-[0_14px_34px_-10px_rgba(236,0,140,0.55)]"
       >
         <span className="sm:hidden">
           <Glyph name="accessibility" size={26} />

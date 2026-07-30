@@ -6,6 +6,7 @@ import {
 } from "@/lib/finance/siblingDiscount";
 import { formatCurrency } from "@/utils/format";
 import type { PublicClass } from "@/types";
+import { Badge } from "@/components/ui/Badge";
 import {
   ClassEnrollmentActions,
   GuestEnrollmentActions,
@@ -105,6 +106,14 @@ export async function ClassEnrollmentPanel({
               }}
             />
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {cls.category && <Badge tone="brand">{cls.category}</Badge>}
+          {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
+          {cls.session_count != null && cls.session_count > 0 && (
+            <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
+          )}
         </div>
 
         {enrollmentContent}

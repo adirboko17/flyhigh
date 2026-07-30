@@ -114,14 +114,15 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
   return (
     <>
       <header
+        data-public-header
         className={cn(
-          "sticky top-0 z-50 w-full pt-[env(safe-area-inset-top,0px)] transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300",
+          "sticky top-[calc(2.25rem+env(safe-area-inset-top,0px))] z-50 w-full transition-[background-color,border-color,box-shadow,backdrop-filter,padding] duration-300 sm:top-0",
           // בלי pointer-events-none ההדר השקוף היה חוסם קליקים על ראש התפריט (הוא ב-z גבוה יותר).
           open
-            ? "pointer-events-none border-b border-transparent bg-transparent shadow-none backdrop-blur-none md:pointer-events-auto md:border-ink-100/80 md:bg-white/95 md:shadow-sm md:backdrop-blur-md"
+            ? "pointer-events-none border-b border-transparent bg-transparent shadow-none backdrop-blur-none md:pointer-events-auto md:border-ink-100/80 md:bg-white/95 md:pt-[env(safe-area-inset-top,0px)] md:shadow-sm md:backdrop-blur-md"
             : glass
-              ? "border-b border-ink-100/80 bg-white/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
-              : "border-b border-transparent bg-transparent pb-0 pt-4 shadow-none backdrop-blur-none max-md:pt-[calc(1rem+env(safe-area-inset-top,0px))]"
+              ? "border-b border-ink-100/80 bg-white/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90 md:pt-[env(safe-area-inset-top,0px)]"
+              : "border-b border-transparent bg-transparent pb-0 pt-4 shadow-none backdrop-blur-none"
         )}
       >
         {/* כשהתפריט פתוח הוא מציג כותרת וכפתור סגירה משלו, ולכן שורת ההדר נעלמת במובייל. */}
@@ -134,6 +135,7 @@ export function PublicHeader({ user, overlayAtTop = false }: PublicHeaderProps) 
         >
           <button
             type="button"
+            data-public-header-menu
             onClick={() => setOpen(true)}
             className={cn(
               "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center transition-colors md:hidden",
@@ -208,7 +210,7 @@ function MobileMenu({
       id="mobile-menu"
       data-theme-color-overlay={open ? THEME_COLOR.page : undefined}
       className={cn(
-        "fixed inset-0 z-40 transition-[opacity,visibility] duration-300 ease-out motion-reduce:transition-none md:hidden",
+        "fixed inset-0 z-[70] transition-[opacity,visibility] duration-300 ease-out motion-reduce:transition-none md:hidden",
         open ? "visible opacity-100" : "invisible opacity-0"
       )}
       aria-hidden={!open}
