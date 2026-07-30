@@ -1,7 +1,17 @@
+import type { Viewport } from "next";
 import { Suspense } from "react";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { THEME_COLOR } from "@/lib/theme-color";
+
+/**
+ * כל עמודי האתר נפתחים עם הירו כהה בראש העמוד, ולכן זה הצבע ההתחלתי של
+ * שורות המערכת. ThemeColorSync מחליף אותו בזמן גלילה.
+ */
+export const viewport: Viewport = {
+  themeColor: THEME_COLOR.hero,
+};
 
 export default async function PublicLayout({
   children,

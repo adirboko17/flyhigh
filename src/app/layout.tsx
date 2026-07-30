@@ -32,6 +32,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   // מאפשר לתוכן להיפרס גם מתחת ל-notch, ומפעיל את משתני env(safe-area-inset-*).
   viewportFit: "cover",
+  // בלי זה דפדפנים במצב כהה מוסיפים גוון אפור משלהם לשורות המערכת ולרקע.
+  colorScheme: "light",
   themeColor: THEME_COLOR.page,
 };
 
