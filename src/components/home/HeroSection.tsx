@@ -24,7 +24,7 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
   return (
     <section
       data-theme-color={THEME_COLOR.hero}
-      className="relative -mt-20 overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_44%,#0072b8_80%,#0c97cc_100%)]"
+      className="hero-bleed-top relative overflow-hidden bg-[linear-gradient(155deg,#06314f_0%,#0a4a71_44%,#0072b8_80%,#0c97cc_100%)]"
     >
       <Orb color={MAG} size={420} top={-120} left={-80} blur={90} opacity={0.35} motion="drift-a" />
       <Orb color={CYN} size={360} bottom={-40} right={-60} blur={90} opacity={0.4} motion="drift-c" />

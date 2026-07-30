@@ -12,7 +12,7 @@ export const metadata = { title: "הרשמה" };
 export default function RegisterPage() {
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="relative flex items-start justify-center overflow-hidden px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-20 sm:px-6 sm:pb-14 sm:pt-24 lg:py-14">
+      <div className="relative flex items-start justify-center overflow-hidden px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[calc(5rem+env(safe-area-inset-top,0px))] sm:px-6 sm:pb-14 sm:pt-[calc(6rem+env(safe-area-inset-top,0px))] lg:py-14">
         {/* רקע מותגי עדין — במובייל בלבד, שם פאנל המותג לא מוצג. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 lg:hidden">
           <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-brand-50 via-brand-50/40 to-transparent" />
@@ -35,7 +35,7 @@ export default function RegisterPage() {
         </div>
 
         {/* במובייל הכפתור נעוץ לראש העמוד, ומיושר לרוחב עמודת התוכן. */}
-        <div className="pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center px-5 sm:top-6 sm:px-6 lg:hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(1rem+env(safe-area-inset-top,0px))] z-20 flex justify-center px-5 sm:top-[calc(1.5rem+env(safe-area-inset-top,0px))] sm:px-6 lg:hidden">
           <div className="pointer-events-auto flex w-full max-w-[440px] justify-start">
             <AuthHomeLink />
           </div>

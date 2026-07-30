@@ -21,6 +21,13 @@
     @apply border-ink-200;
   }
 
+  html,
+  body {
+    /* שום רווח סביב הדף — הגרדיאנט של ההירו צריך להגיע עד קצה המסך. */
+    margin: 0;
+    padding: 0;
+  }
+
   html {
     /* האתר בהיר בלבד — מונע מהדפדפן להחיל גוון כהה משלו על שורות המערכת. */
     color-scheme: light;
@@ -59,6 +66,18 @@
 }
 
 @layer components {
+  /**
+   * ההירו נמשך אל מתחת להדר השקוף ועד לקצה העליון של המסך, כולל אזור ה-notch,
+   * כדי שהגרדיאנט יגיע עד שורת הסטטוס ולא יישאר פס לבן. ה-padding מחזיר את
+   * התוכן עצמו אל מתחת לשורת הסטטוס.
+   *
+   * החישוב: גובה ההדר במצב שקוף הוא 5rem + safe-area-inset-top.
+   */
+  .hero-bleed-top {
+    margin-top: calc(-5rem - env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
   .container-page {
     @apply mx-auto w-full max-w-7xl;
     /* עם viewport-fit=cover התוכן עלול לרוץ מתחת ל-notch בסיבוב לרוחב. */
