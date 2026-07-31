@@ -10,6 +10,8 @@ const FOOTER_LOGO = "/images/alagova-logo-01.png";
 const FOOTER_TAGLINE =
   "בית ספר לשחייה ופעילויות מים. שחייה, ביטחון והנאה – בגובה העיניים.";
 
+const MOBILE_BRAND_TAGLINE = "שחייה, ביטחון והנאה בגובה העיניים";
+
 const NAV_LINKS = [
   { href: "/", label: "בית" },
   { href: "/classes", label: "חוגים" },
@@ -148,7 +150,30 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
       </section>
 
       <div className="container-page grid gap-4 pb-10 sm:grid-cols-2 sm:gap-10 sm:py-12 lg:grid-cols-4">
-        <div className="text-center sm:col-span-2 sm:text-start lg:col-span-1">
+        <div className="col-span-full flex items-center gap-3 sm:hidden">
+          <Link
+            href="/"
+            className="shrink-0 transition-opacity hover:opacity-90"
+          >
+            <Image
+              src={FOOTER_LOGO}
+              alt={BRAND.name}
+              width={72}
+              height={36}
+              className="h-9 w-auto object-contain brightness-0 invert"
+            />
+          </Link>
+          <div className="min-w-0 flex-1 text-right">
+            <p className="font-display text-2xl font-bold leading-tight tracking-tight text-white/95">
+              {BRAND.name}
+            </p>
+            <p className="mt-1 text-sm font-medium leading-snug text-white/65">
+              {MOBILE_BRAND_TAGLINE}
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden text-center sm:col-span-2 sm:block sm:text-start lg:col-span-1">
           <Link
             href="/"
             className="inline-block transition-opacity hover:opacity-90"

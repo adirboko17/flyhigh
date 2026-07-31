@@ -10,11 +10,16 @@ import {
   WAITLIST_STATUS,
 } from "@/lib/constants";
 import { joinClassWaitlist } from "@/lib/enrollment/actions";
+import {
+  formatAgeRange,
+  getAgeEligibility,
+  hasAgeRestriction,
+} from "@/lib/enrollment/ageValidation";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
 import type { Enums } from "@/types/database.types";
 
-type Child = { id: string; full_name: string };
+type Child = { id: string; full_name: string; birth_date: string | null };
 
 type ExistingEnrollment = {
   id: string;
@@ -36,6 +41,8 @@ interface ClassEnrollmentActionsProps {
   classId: string;
   classTitle: string;
   classPrice: number;
+  ageMin: number | null;
+  ageMax: number | null;
   soldOut: boolean;
   availableSpots: number;
   kids: Child[];
@@ -48,6 +55,8 @@ export function ClassEnrollmentActions({
   classId,
   classTitle,
   classPrice,
+  ageMin,
+  ageMax,
   soldOut,
   availableSpots,
   kids,
@@ -56,6 +65,17 @@ export function ClassEnrollmentActions({
   siblingTiers,
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
+  const ageRestricted = hasAgeRestriction(ageMin, ageMax);
+  const eligibilityByChildId = useMemo(
+    () =>
+      new Map(
+        kids.map((child) => [
+          child.id,
+          getAgeEligibility(child.birth_date, ageMin, ageMax, child.full_name),
+        ])
+      ),
+    [kids, ageMin, ageMax]
+  );
   const enrolledChildIds = useMemo(
     () =>
       new Set(
@@ -73,9 +93,23 @@ export function ClassEnrollmentActions({
   const availableChildren = useMemo(
     () =>
       kids.filter(
-        (c) => !enrolledChildIds.has(c.id) && !waitlistedChildIds.has(c.id)
+        (c) =>
+          !enrolledChildIds.has(c.id) &&
+          !waitlistedChildIds.has(c.id) &&
+          (eligibilityByChildId.get(c.id)?.eligible ?? true)
       ),
-    [kids, enrolledChildIds, waitlistedChildIds]
+    [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
+  );
+
+  const ineligibleChildren = useMemo(
+    () =>
+      kids.filter(
+        (c) =>
+          !enrolledChildIds.has(c.id) &&
+          !waitlistedChildIds.has(c.id) &&
+          !(eligibilityByChildId.get(c.id)?.eligible ?? true)
+      ),
+    [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
   );
 
   const maxSelectable = useMemo(
@@ -105,6 +139,12 @@ export function ClassEnrollmentActions({
   const atSelectionLimit = !soldOut && selectedIds.length >= maxSelectable;
 
   function toggleChild(childId: string) {
+    const eligibility = eligibilityByChildId.get(childId);
+    if (eligibility && !eligibility.eligible) {
+      setError(eligibility.reason ?? "הילד/ה אינו/אינה בטווח הגילאים של החוג.");
+      return;
+    }
+
     setSelectedIds((prev) => {
       if (prev.includes(childId)) {
         setError(null);
@@ -260,11 +300,17 @@ export function ClassEnrollmentActions({
           </div>
         )}
 
-        {availableChildren.length > 0 ? (
+        {availableChildren.length > 0 || ineligibleChildren.length > 0 ? (
           <div className="space-y-3">
-            {enrollments.length > 0 && (
+            {enrollments.length > 0 && availableChildren.length > 0 && (
               <p className="text-sm text-ink-600">
                 ניתן להירשם גם עבור ילד/ה נוסף/ת:
+              </p>
+            )}
+
+            {ageRestricted && (
+              <p className="rounded-2xl border border-ink-200 bg-ink-50 px-3.5 py-2.5 text-sm text-ink-700">
+                החוג מיועד ל{formatAgeRange(ageMin, ageMax)}.
               </p>
             )}
 
@@ -279,12 +325,14 @@ export function ClassEnrollmentActions({
             <CollapsibleSummaryCard
               id="class-children-list"
               tone="brand"
-              count={selectedIds.length}
+              count={availableChildren.length + ineligibleChildren.length}
               title="בחירת ילדים"
               subtitle={
-                maxSelectable < availableChildren.length
-                  ? `${selectedIds.length} מתוך ${maxSelectable} נבחרו`
-                  : `${selectedIds.length} מתוך ${availableChildren.length} נבחרו`
+                availableChildren.length === 0
+                  ? "אין ילדים מתאימים לטווח הגילאים"
+                  : maxSelectable < availableChildren.length
+                    ? `${selectedIds.length} מתוך ${maxSelectable} נבחרו`
+                    : `${selectedIds.length} מתוך ${availableChildren.length} נבחרו`
               }
               expanded={childrenExpanded}
               onToggle={() => setChildrenExpanded((open) => !open)}
@@ -308,6 +356,7 @@ export function ClassEnrollmentActions({
                 {availableChildren.map((child) => {
                   const checked = selectedIds.includes(child.id);
                   const disabled = atSelectionLimit && !checked;
+                  const eligibility = eligibilityByChildId.get(child.id);
                   return (
                     <li key={child.id}>
                       <label
@@ -327,10 +376,48 @@ export function ClassEnrollmentActions({
                           onChange={() => toggleChild(child.id)}
                           className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-400 disabled:cursor-not-allowed"
                         />
-                        <span className="font-medium text-ink-900">
+                        <span className="min-w-0 flex-1 font-medium text-ink-900">
                           {child.full_name}
+                          {eligibility?.age !== null && eligibility?.age !== undefined && (
+                            <span className="mr-1.5 text-xs font-normal text-ink-400">
+                              גיל {eligibility.age}
+                            </span>
+                          )}
                         </span>
                       </label>
+                    </li>
+                  );
+                })}
+                {ineligibleChildren.map((child) => {
+                  const eligibility = eligibilityByChildId.get(child.id);
+                  return (
+                    <li key={child.id}>
+                      <div
+                        className="flex items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 opacity-75"
+                        title={eligibility?.reason ?? undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          disabled
+                          className="mt-0.5 h-4 w-4 cursor-not-allowed rounded border-ink-300"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-ink-700">
+                            {child.full_name}
+                            {eligibility?.age !== null && eligibility?.age !== undefined && (
+                              <span className="mr-1.5 text-xs font-normal text-ink-400">
+                                גיל {eligibility.age}
+                              </span>
+                            )}
+                          </span>
+                          {eligibility?.reason && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              {eligibility.reason}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </li>
                   );
                 })}
@@ -363,7 +450,9 @@ export function ClassEnrollmentActions({
           enrollments.length === 0 &&
           waitlist.length === 0 && (
             <p className="text-sm text-ink-500">
-              כל הילדים כבר רשומים לחוג זה.
+              {ineligibleChildren.length > 0
+                ? "אף אחד מהילדים אינו בטווח הגילאים של החוג."
+                : "כל הילדים כבר רשומים לחוג זה."}
             </p>
           )
         )}

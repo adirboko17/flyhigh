@@ -18,6 +18,7 @@ import {
   splitAmount,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import { validateParticipantsAge } from "@/lib/enrollment/ageValidation";
 
 /** אמצעי התשלום שאפשר לבחור במסך ההרשמה. */
 export type CheckoutPaymentMethod = "credit_card" | DeferredPaymentMethod;
@@ -168,13 +169,13 @@ export async function completeClassEnrollmentPayment(input: {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, title, price, capacity, status")
+        .select("id, title, price, capacity, status, age_min, age_max")
         .eq("id", classId)
         .in("status", ["active", "full"])
         .maybeSingle(),
       supabase
         .from("children")
-        .select("id, full_name")
+        .select("id, full_name, birth_date")
         .eq("parent_id", profile.id)
         .in("id", uniqueChildIds),
       supabase
@@ -191,6 +192,18 @@ export async function completeClassEnrollmentPayment(input: {
 
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+
+  const ageError = validateParticipantsAge(
+    children.map((child) => ({
+      name: child.full_name,
+      birthDate: child.birth_date,
+    })),
+    cls.age_min,
+    cls.age_max
+  );
+  if (ageError) {
+    return { success: false, error: ageError };
   }
 
   const alreadyEnrolled = new Set(
@@ -372,22 +385,44 @@ export async function joinClassWaitlist(input: {
 
   const supabase = await createClient();
 
-  const [{ data: children }, { data: existingWaitlist }] = await Promise.all([
-    supabase
-      .from("children")
-      .select("id")
-      .eq("parent_id", profile.id)
-      .in("id", uniqueChildIds),
-    supabase
-      .from("waitlist")
-      .select("child_id")
-      .eq("class_id", input.classId)
-      .eq("parent_id", profile.id)
-      .neq("status", "cancelled"),
-  ]);
+  const [{ data: cls }, { data: children }, { data: existingWaitlist }] =
+    await Promise.all([
+      supabase
+        .from("classes")
+        .select("age_min, age_max")
+        .eq("id", input.classId)
+        .maybeSingle(),
+      supabase
+        .from("children")
+        .select("id, full_name, birth_date")
+        .eq("parent_id", profile.id)
+        .in("id", uniqueChildIds),
+      supabase
+        .from("waitlist")
+        .select("child_id")
+        .eq("class_id", input.classId)
+        .eq("parent_id", profile.id)
+        .neq("status", "cancelled"),
+    ]);
+
+  if (!cls) {
+    return { success: false, error: "החוג לא נמצא." };
+  }
 
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+
+  const ageError = validateParticipantsAge(
+    children.map((child) => ({
+      name: child.full_name,
+      birthDate: child.birth_date,
+    })),
+    cls.age_min,
+    cls.age_max
+  );
+  if (ageError) {
+    return { success: false, error: ageError };
   }
 
   const alreadyWaitlisted = new Set(

@@ -50,10 +50,10 @@ export function AnnouncementBar() {
           בהרשמה לשני בני משפחה
         </p>
         <Link
-          href="/programs"
+          href="/classes"
           className="whitespace-nowrap font-bold text-brand-600 underline decoration-brand-200 underline-offset-4 transition-colors hover:text-brand-800"
         >
-          לכל המסלולים
+          לכל החוגים
         </Link>
       </div>
     </aside>

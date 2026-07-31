@@ -44,7 +44,7 @@ export async function ClassEnrollmentPanel({
         await Promise.all([
           supabase
             .from("children")
-            .select("id, full_name")
+            .select("id, full_name, birth_date")
             .eq("parent_id", profile.id)
             .order("created_at"),
           supabase
@@ -68,6 +68,8 @@ export async function ClassEnrollmentPanel({
           classId={cls.id}
           classTitle={cls.title}
           classPrice={Number(cls.price)}
+          ageMin={cls.age_min}
+          ageMax={cls.age_max}
           soldOut={soldOut}
           availableSpots={cls.available}
           kids={children ?? []}
