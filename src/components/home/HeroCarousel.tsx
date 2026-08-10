@@ -10,10 +10,14 @@ import {
   type ReactNode,
   type TouchEvent,
 } from "react";
-import { HERO_CAROUSEL_IMAGES } from "@/lib/constants";
+import {
+  HERO_CAROUSEL_IMAGES_DESKTOP,
+  HERO_CAROUSEL_IMAGES_MOBILE,
+} from "@/lib/constants";
 
 const INTERVAL_MS = 4500;
 const TRANSITION_MS = 900;
+const DESKTOP_MQ = "(min-width: 1024px)";
 
 type CarouselCtx = {
   slides: readonly string[];
@@ -36,17 +40,27 @@ function useHeroCarousel() {
 }
 
 export function HeroCarouselProvider({
-  images = HERO_CAROUSEL_IMAGES,
+  images,
   children,
 }: {
   images?: readonly string[];
   children: ReactNode;
 }) {
-  const slides = images.length > 0 ? images : HERO_CAROUSEL_IMAGES;
+  const isDesktop = useMediaQuery(DESKTOP_MQ);
+  const slides =
+    images && images.length > 0
+      ? images
+      : isDesktop
+        ? HERO_CAROUSEL_IMAGES_DESKTOP
+        : HERO_CAROUSEL_IMAGES_MOBILE;
   const [index, setIndex] = useState(0);
   const reduceMotion = usePrefersReducedMotion();
   const touchStartX = useRef<number | null>(null);
   const slideCount = slides.length;
+
+  useEffect(() => {
+    setIndex((current) => (slideCount === 0 ? 0 : current % slideCount));
+  }, [slideCount]);
 
   function step(delta: number) {
     setIndex((current) => (((current + delta) % slideCount) + slideCount) % slideCount);
@@ -159,13 +173,17 @@ function SlideStack({
 }
 
 function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
+  return useMediaQuery("(prefers-reduced-motion: reduce)");
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
+    const mq = window.matchMedia(query);
+    setMatches(mq.matches);
+    const onChange = () => setMatches(mq.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
+  }, [query]);
+  return matches;
 }

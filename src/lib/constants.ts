@@ -37,6 +37,30 @@ export const HERO_CAROUSEL_IMAGES = [
   "/images/carousel/slide-10.jpg",
 ] as const;
 
+/**
+ * תמונות שלא מוצגות בהירו בדסקטופ
+ * (WhatsApp …08.21.18 (1) ו־…08.21.19 (4)).
+ */
+const HERO_CAROUSEL_DESKTOP_EXCLUDE = new Set<string>([
+  "/images/carousel/slide-01.jpg",
+  "/images/carousel/slide-02.jpg",
+]);
+
+/** תמונות שלא מוצגות בהירו במובייל (WhatsApp …08.21.19 (4)). */
+const HERO_CAROUSEL_MOBILE_EXCLUDE = new Set<string>([
+  "/images/carousel/slide-02.jpg",
+]);
+
+/** קרוסלת הירו לדסקטופ — בלי שתי התמונות שהוסרו. */
+export const HERO_CAROUSEL_IMAGES_DESKTOP = HERO_CAROUSEL_IMAGES.filter(
+  (src) => !HERO_CAROUSEL_DESKTOP_EXCLUDE.has(src)
+);
+
+/** קרוסלת הירו למובייל. */
+export const HERO_CAROUSEL_IMAGES_MOBILE = HERO_CAROUSEL_IMAGES.filter(
+  (src) => !HERO_CAROUSEL_MOBILE_EXCLUDE.has(src)
+);
+
 export const DAYS_OF_WEEK = [
   "ראשון",
   "שני",
