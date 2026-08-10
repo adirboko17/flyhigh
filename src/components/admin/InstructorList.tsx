@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
@@ -124,7 +125,10 @@ export function InstructorList({ instructors }: InstructorListProps) {
               {filtered.map((i) => (
                 <TR key={i.id}>
                   <TD>
-                    <div className="flex items-center gap-2.5">
+                    <Link
+                      href={`/admin/instructors/${i.id}`}
+                      className="flex items-center gap-2.5 rounded-lg outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-brand-300"
+                    >
                       <Avatar name={i.full_name} className="shrink-0" />
                       <div className="min-w-0 max-w-[10rem] sm:max-w-[14rem]">
                         <span className="block truncate font-semibold text-ink-900">
@@ -143,7 +147,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
                           </span>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   </TD>
                   <TD
                     dir="ltr"
@@ -162,6 +166,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
                   </TD>
                   <TD>
                     <AdminRowActions
+                      onView={() => router.push(`/admin/instructors/${i.id}`)}
                       onEdit={() => setEditing(i)}
                       itemLabel={i.full_name}
                       onDelete={async () => {

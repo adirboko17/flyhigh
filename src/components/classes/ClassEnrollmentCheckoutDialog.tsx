@@ -9,6 +9,7 @@ import {
   DemoCardFields,
   PaymentMethodPicker,
 } from "@/components/checkout/CheckoutFields";
+import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
 import {
   DEFERRED_PAYMENT_HINT,
   PAYMENT_METHOD,
@@ -19,6 +20,10 @@ import {
   calculateOrderTotal,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
+import {
+  EMPTY_RECEIPT_LABEL_CHOICE,
+  type ReceiptLabelChoice,
+} from "@/lib/receipt-labels";
 import { formatCurrency } from "@/utils/format";
 import {
   completeClassEnrollmentPayment,
@@ -61,6 +66,9 @@ export function ClassEnrollmentCheckoutDialog({
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [receiptLabel, setReceiptLabel] = useState<ReceiptLabelChoice>(
+    EMPTY_RECEIPT_LABEL_CHOICE
+  );
 
   const count = selectedChildren.length;
   const order = calculateOrderTotal(
@@ -84,6 +92,7 @@ export function ClassEnrollmentCheckoutDialog({
     setCouponInput("");
     setCoupon(null);
     setCouponError(null);
+    setReceiptLabel(EMPTY_RECEIPT_LABEL_CHOICE);
     onClose();
   }
 
@@ -117,6 +126,12 @@ export function ClassEnrollmentCheckoutDialog({
 
   async function handlePay() {
     setError(null);
+
+    if (receiptLabel.enabled && !receiptLabel.labelId) {
+      setError("נא לבחור מה לרשום על הקבלה, או לבטל את הבקשה לפרטים שונים.");
+      return;
+    }
+
     setLoading(true);
 
     // השהיה קצרה כדי לדמות סליקה; בתשלום מול המשרד אין למה להמתין.
@@ -129,6 +144,7 @@ export function ClassEnrollmentCheckoutDialog({
       childIds: selectedChildren.map((c) => c.id),
       paymentMethod: method,
       couponCode: coupon?.code ?? null,
+      receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
     });
 
     setLoading(false);
@@ -196,6 +212,12 @@ export function ClassEnrollmentCheckoutDialog({
             error={couponError}
             onApply={handleApplyCoupon}
             onRemove={handleRemoveCoupon}
+          />
+
+          <ReceiptLabelField
+            productTitle={classTitle}
+            value={receiptLabel}
+            onChange={setReceiptLabel}
           />
 
           <div className="space-y-2 border-t border-ink-100 pt-4 text-sm">

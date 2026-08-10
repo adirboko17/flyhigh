@@ -1,0 +1,196 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { cn } from "@/utils/cn";
+
+export type PrivateLessonFormData = {
+  id: string;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  price: number;
+  status: "draft" | "active" | "inactive";
+};
+
+const emptyForm = {
+  title: "",
+  description: "",
+  duration_minutes: "45",
+  price: "",
+  status: "active",
+};
+
+function toFormState(existing?: PrivateLessonFormData) {
+  if (!existing) return emptyForm;
+  return {
+    title: existing.title,
+    description: existing.description ?? "",
+    duration_minutes: existing.duration_minutes.toString(),
+    price: existing.price.toString(),
+    status: existing.status,
+  };
+}
+
+interface PrivateLessonFormProps {
+  existing?: PrivateLessonFormData;
+  onClose?: () => void;
+}
+
+export function PrivateLessonForm({
+  existing,
+  onClose,
+}: PrivateLessonFormProps) {
+  const router = useRouter();
+  const isEdit = Boolean(existing);
+  const inModal = Boolean(onClose);
+  const [form, setForm] = useState(() => toFormState(existing));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set =
+    (k: keyof typeof form) =>
+    (
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >
+    ) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const supabase = createClient();
+
+    const duration = Number(form.duration_minutes);
+    if (!Number.isFinite(duration) || duration < 1) {
+      setError("נא להזין משך שיעור תקין בדקות.");
+      setLoading(false);
+      return;
+    }
+
+    const payload = {
+      title: form.title,
+      description: form.description || null,
+      duration_minutes: duration,
+      price: Number(form.price) || 0,
+      status: isEdit
+        ? (form.status as "draft" | "active" | "inactive")
+        : "active",
+    };
+
+    const dbError = isEdit
+      ? (
+          await supabase
+            .from("private_lessons")
+            .update(payload)
+            .eq("id", existing!.id)
+        ).error
+      : (await supabase.from("private_lessons").insert(payload)).error;
+
+    if (dbError) {
+      setError("אירעה שגיאה בשמירת השיעור. בדקו את הפרטים ונסו שוב.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    router.refresh();
+
+    if (onClose) onClose();
+    else router.push("/admin/tracks#private-lessons");
+  }
+
+  const fields = (
+    <>
+      <Field label="שם" required>
+        <Input
+          value={form.title}
+          onChange={set("title")}
+          placeholder="לדוגמה: שיעור פרטי שחייה"
+          required
+          autoFocus={inModal}
+        />
+      </Field>
+      <Field label="תיאור">
+        <Textarea
+          value={form.description}
+          onChange={set("description")}
+          placeholder="תיאור קצר..."
+        />
+      </Field>
+      <div
+        className={cn("grid gap-5 sm:grid-cols-2", isEdit && "sm:grid-cols-3")}
+      >
+        <Field label="משך (דקות)" required>
+          <Input
+            type="number"
+            min={1}
+            value={form.duration_minutes}
+            onChange={set("duration_minutes")}
+            required
+          />
+        </Field>
+        <Field label="מחיר (₪)" required>
+          <Input
+            type="number"
+            min={0}
+            step="1"
+            value={form.price}
+            onChange={set("price")}
+            required
+          />
+        </Field>
+        {isEdit && (
+          <Field label="סטטוס">
+            <Select value={form.status} onChange={set("status")}>
+              <option value="draft">טיוטה</option>
+              <option value="active">פעיל</option>
+              <option value="inactive">לא פעיל</option>
+            </Select>
+          </Field>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <form onSubmit={submit} className={inModal ? "space-y-5" : "space-y-6"}>
+      {inModal ? (
+        <div className="space-y-5">{fields}</div>
+      ) : (
+        <Card>
+          <CardContent className="space-y-5">{fields}</CardContent>
+        </Card>
+      )}
+
+      {error && (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-3">
+        <Button type="submit" size={inModal ? "md" : "lg"} disabled={loading}>
+          {loading ? "שומר..." : isEdit ? "עדכון השיעור" : "שמירת השיעור"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size={inModal ? "md" : "lg"}
+          disabled={loading}
+          onClick={() =>
+            onClose ? onClose() : router.push("/admin/tracks#private-lessons")
+          }
+        >
+          ביטול
+        </Button>
+      </div>
+    </form>
+  );
+}

@@ -1,9 +1,52 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import {
+  createAdminClient,
+  isAdminClientConfigured,
+} from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
 
 export type Profile = Tables<"profiles">;
+
+/** עמודות שנדרשות לניווט והרשאות — בלי select("*") בכל מעבר עמוד. */
+const PROFILE_COLUMNS =
+  "id, full_name, role, email, phone, is_primary_admin, created_at, address, birth_date, city, receipt_id_number, receipt_name" as const;
+
+async function fetchProfileById(
+  userId: string,
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<Profile | null> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLUMNS)
+    .eq("id", userId)
+    .single();
+
+  return profile ?? null;
+}
+
+/**
+ * פרופיל לפי מזהה — נשמר בזיכרון שרת ל־60 שניות כדי שלא נפגע ב־DB
+ * בכל מעבר בין עמודי ניהול. משתמש ב־service role כי unstable_cache
+ * לא יכול לגשת ל־cookies של המשתמש.
+ */
+function getCachedProfileById(userId: string) {
+  return unstable_cache(
+    async () => {
+      const admin = createAdminClient();
+      const { data: profile } = await admin
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        .eq("id", userId)
+        .single();
+      return profile ?? null;
+    },
+    ["session-profile", userId],
+    { revalidate: 60, tags: [`profile:${userId}`] }
+  )();
+}
 
 /**
  * מחזיר את המשתמש המחובר ואת הפרופיל שלו, או null אם לא מחובר.
@@ -15,13 +58,11 @@ export const getSessionProfile = cache(async (): Promise<Profile | null> => {
 
   if (!userId) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+  if (isAdminClientConfigured()) {
+    return getCachedProfileById(userId);
+  }
 
-  return profile ?? null;
+  return fetchProfileById(userId, supabase);
 });
 
 /**

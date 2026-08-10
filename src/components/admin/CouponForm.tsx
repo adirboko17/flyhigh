@@ -24,6 +24,7 @@ export type CouponFormData = {
   class_id: string | null;
   program_id: string | null;
   pool_pass_id: string | null;
+  private_lesson_id: string | null;
   starts_on: string | null;
   ends_on: string | null;
   max_uses: number | null;
@@ -38,6 +39,7 @@ export type CouponOptions = {
   classes: CouponOption[];
   programs: CouponOption[];
   poolPasses: CouponOption[];
+  privateLessons: CouponOption[];
 };
 
 /** הפריט שעליו חל הקופון מקודד כמחרוזת אחת, כי הוא נבחר מרשימה מאוחדת. */
@@ -50,6 +52,8 @@ function toSubjectValue(coupon?: CouponFormData): SubjectValue {
   if (coupon.class_id) return `class:${coupon.class_id}`;
   if (coupon.program_id) return `program:${coupon.program_id}`;
   if (coupon.pool_pass_id) return `pool_pass:${coupon.pool_pass_id}`;
+  if (coupon.private_lesson_id)
+    return `private_lesson:${coupon.private_lesson_id}`;
   return ALL_SUBJECTS;
 }
 
@@ -59,6 +63,7 @@ function fromSubjectValue(value: SubjectValue) {
     class_id: kind === "class" ? id : null,
     program_id: kind === "program" ? id : null,
     pool_pass_id: kind === "pool_pass" ? id : null,
+    private_lesson_id: kind === "private_lesson" ? id : null,
   };
 }
 
@@ -325,6 +330,15 @@ export function CouponForm({ existing, options, onClose }: CouponFormProps) {
             <optgroup label="כניסות לבריכה">
               {options.poolPasses.map((item) => (
                 <option key={item.id} value={`pool_pass:${item.id}`}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {options.privateLessons.length > 0 && (
+            <optgroup label="שיעורים פרטיים">
+              {options.privateLessons.map((item) => (
+                <option key={item.id} value={`private_lesson:${item.id}`}>
                   {item.label}
                 </option>
               ))}

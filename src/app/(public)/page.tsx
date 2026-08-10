@@ -1,7 +1,6 @@
 import { ClassCard } from "@/components/classes/ClassCard";
-import { AboutSection } from "@/components/home/AboutSection";
-import { FeaturesSection } from "@/components/home/FeaturesSection";
 import { HeroSection } from "@/components/home/HeroSection";
+import { HomeIntroBand } from "@/components/home/HomeIntroBand";
 import { HomePlansGrid } from "@/components/home/HomePlansGrid";
 import { SectionHead } from "@/components/home/SectionHead";
 import type { PlanViewer } from "@/components/programs/PlanPurchase";
@@ -11,14 +10,16 @@ import { getPublicClasses, getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
-  const [classes, { programs, poolPasses }, profile] = await Promise.all([
-    getPublicClasses(),
-    getPublicPlans(),
-    getSessionProfile(),
-  ]);
+  const [classes, { programs, poolPasses, privateLessons }, profile] =
+    await Promise.all([
+      getPublicClasses(),
+      getPublicPlans(),
+      getSessionProfile(),
+    ]);
 
   const featured = classes.slice(0, 3);
-  const hasPlans = programs.length + poolPasses.length > 0;
+  const hasPlans =
+    programs.length + poolPasses.length + privateLessons.length > 0;
 
   let viewer: PlanViewer = { kind: "guest" };
 
@@ -41,9 +42,10 @@ export default async function HomePage() {
 
   return (
     <>
-      <HeroSection />
-      <FeaturesSection />
-      <AboutSection />
+      <HeroSection
+        accountHref={profile ? homeForRole(profile.role) : undefined}
+      />
+      <HomeIntroBand />
 
       <section className="container-page pb-2 pt-14">
         <ScrollReveal>
@@ -72,25 +74,15 @@ export default async function HomePage() {
       </section>
 
       <section id="programs" className="container-page py-16">
-        <ScrollReveal>
-          <SectionHead
-            eyebrow="מנויים וכניסות"
-            title="מסלולים חודשיים וכניסות לבריכה"
-            sub="בלי התחייבות ארוכה — בוחרים את המסלול שמתאים לקצב המשפחה."
-            accent="var(--logo-cyan)"
-            link="לבריכה"
-            linkHref="/programs"
-          />
-        </ScrollReveal>
-
         {hasPlans ? (
           <HomePlansGrid
             programs={programs}
             poolPasses={poolPasses}
+            privateLessons={privateLessons}
             viewer={viewer}
           />
         ) : (
-          <EmptyMini text="אין מסלולים או כניסות פעילים כרגע" />
+          <EmptyMini text="אין מסלולים, כניסות או שיעורים פרטיים פעילים כרגע" />
         )}
       </section>
     </>

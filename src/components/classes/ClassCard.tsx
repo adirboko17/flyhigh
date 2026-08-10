@@ -1,8 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { Icon } from "@/components/icons/Icon";
+import type { IconName } from "@/components/icons/paths";
 import { formatClassAudience } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
+import { cn } from "@/utils/cn";
 import { formatCurrency, formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
 
@@ -35,54 +38,81 @@ export function ClassCard({
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
   const href = `/classes/${cls.id}`;
 
-  const cardClass =
-    "group flex h-full flex-col overflow-hidden rounded-[22px] border border-ink-100 bg-white shadow-card transition-all duration-300" +
-    (preview ? "" : " hover:-translate-y-1 hover:shadow-soft");
-
   const scheduleLabel = cls.schedule_days
     ? `ימים ${cls.schedule_days}`
     : cls.schedule_type === "custom"
       ? "תאריכים מותאמים"
       : `יום ${dayLabel(cls.day_of_week)}`;
 
-  const media = (
-    <>
-      <span
-        aria-hidden
-        className="block h-1.5 w-full shrink-0"
-        style={{ background: accent }}
-      />
+  const audienceLabel =
+    cls.audience_type === "grade"
+      ? cls.grade_min != null || cls.grade_max != null
+        ? formatClassAudience(cls)
+        : null
+      : cls.age_min != null || cls.age_max != null
+        ? formatClassAudience(cls)
+        : null;
 
-      <div className="relative h-44 w-full overflow-hidden bg-ink-100">
+  const genderLabel =
+    cls.gender_policy && cls.gender_policy !== "mixed"
+      ? cls.gender_policy === "male"
+        ? "זכר"
+        : "נקבה"
+      : null;
+
+  const availability = soldOut
+    ? { text: "אין מקומות פנויים", tone: "danger" as const }
+    : lastSpot
+      ? { text: "מקום אחרון פנוי", tone: "accent" as const }
+      : { text: `${cls.available} מקומות פנויים`, tone: "muted" as const };
+
+  const card = (
+    <article
+      className={cn(
+        "class-card group relative flex h-full flex-col overflow-hidden",
+        !preview && "hover:-translate-y-1"
+      )}
+    >
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-ink-100">
         {cls.image_url ? (
           isBlob ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={cls.image_url}
-              alt={cls.title}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              alt=""
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             />
           ) : (
             <Image
               src={cls.image_url}
-              alt={cls.title}
+              alt=""
               fill
               sizes="(max-width: 768px) 100vw, 33vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
               unoptimized={preview}
             />
           )
         ) : (
-          <div className="flex h-full items-center justify-center bg-brand-gradient text-4xl text-white">
-            🏊
+          <div
+            className="flex h-full items-center justify-center"
+            style={{
+              background: `linear-gradient(148deg, #073552 0%, ${accent} 100%)`,
+            }}
+          >
+            <Icon name="waves" size={42} className="text-white/85" />
           </div>
         )}
 
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(7,30,48,0.08)_0%,rgba(7,30,48,0.0)_42%,rgba(7,30,48,0.55)_100%)]"
+        />
+
         {(soldOut || lastSpot) && (
           <span
-            className="absolute end-3 top-3 rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm"
+            className="absolute end-3 top-3 rounded-lg px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-sm"
             style={{
-              background: soldOut ? "var(--red-600)" : "var(--logo-magenta)",
+              background: soldOut ? "#c0364a" : "var(--logo-magenta)",
             }}
           >
             {soldOut ? "מלא" : "מקום אחרון"}
@@ -90,126 +120,141 @@ export function ClassCard({
         )}
 
         {cls.category && (
-          <span
-            className="absolute bottom-3 start-3 max-w-[65%] truncate rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm"
-            style={{ background: accent }}
-          >
+          <span className="absolute bottom-3 start-3 inline-flex max-w-[70%] items-center gap-1.5 truncate rounded-lg bg-white/92 px-2.5 py-1 text-[11px] font-bold text-ink-800 shadow-sm backdrop-blur-sm">
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 shrink-0 rounded-sm"
+              style={{ background: accent }}
+            />
             {cls.category}
           </span>
         )}
       </div>
-    </>
-  );
 
-  const content = (
-    <div className="flex flex-1 flex-col p-5">
-      {preview ? (
-        <h3 className="break-words font-display text-[19px] font-extrabold leading-snug text-ink-900">
+      <div className="relative flex flex-1 flex-col bg-[#fbfcfe] p-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px"
+          style={{
+            background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+          }}
+        />
+
+        <h3 className="break-words font-display text-[19px] font-extrabold leading-snug text-ink-900 sm:text-[20px]">
           {cls.title}
         </h3>
-      ) : (
-        <h3 className="break-words font-display text-[19px] font-extrabold leading-snug text-ink-900">
-          <Link
-            href={href}
-            prefetch
-            className="transition-colors hover:text-[var(--logo-cyan)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--logo-cyan)]"
-          >
-            {cls.title}
-          </Link>
-        </h3>
-      )}
-      {cls.description && (
-        <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-500">
-          {cls.description}
-        </p>
-      )}
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-600">
+        {cls.description && (
+          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-500">
+            {cls.description}
+          </p>
+        )}
+
+        <ul className="mt-4 space-y-2">
           {cls.instructor_name && (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <Icon name="user" size={15} className="shrink-0 text-ink-400" />
-              <span className="truncate">{cls.instructor_name}</span>
-            </span>
+            <MetaRow icon="user" accent={accent} text={cls.instructor_name} />
           )}
-          <span className="flex items-center gap-1.5">
-            <Icon name="calendar" size={15} className="shrink-0 text-ink-400" />
-            {scheduleLabel}
-          </span>
+          <MetaRow icon="calendar" accent={accent} text={scheduleLabel} />
           {cls.start_time && (
-            <span className="flex items-center gap-1.5 tabular-nums">
-              <Icon name="clock" size={15} className="shrink-0 text-ink-400" />
-              {formatTime(cls.start_time)}
-            </span>
+            <MetaRow
+              icon="clock"
+              accent={accent}
+              text={formatTime(cls.start_time)}
+            />
           )}
-        </div>
+        </ul>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-          {cls.gender_policy && cls.gender_policy !== "mixed" && (
-            <span className="rounded-full bg-ink-50 px-2.5 py-1 text-xs font-semibold text-ink-600">
-              {cls.gender_policy === "male" ? "זכר" : "נקבה"}
-            </span>
-          )}
-          {(cls.audience_type === "grade"
-            ? cls.grade_min != null || cls.grade_max != null
-            : cls.age_min != null || cls.age_max != null) && (
-            <span className="rounded-full bg-ink-50 px-2.5 py-1 text-xs font-semibold text-ink-600">
-              {formatClassAudience(cls)}
-            </span>
-          )}
-          {soldOut ? (
-            <span className="font-semibold text-red-600">אין מקומות פנויים</span>
-          ) : lastSpot ? (
-            <span
-              className="font-semibold"
-              style={{ color: "var(--logo-magenta)" }}
-            >
-              מקום אחרון פנוי
-            </span>
-          ) : (
-            <span className="text-ink-500">{cls.available} מקומות פנויים</span>
-          )}
-        </div>
-
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-ink-100 pt-4">
-          <span className="shrink-0 font-display text-xl font-extrabold text-ink-900">
-            {formatCurrency(cls.price)}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {genderLabel && <InfoChip>{genderLabel}</InfoChip>}
+          {audienceLabel && <InfoChip>{audienceLabel}</InfoChip>}
+          <span
+            className={cn(
+              "text-sm font-semibold",
+              availability.tone === "danger" && "text-red-600",
+              availability.tone === "muted" && "text-ink-500"
+            )}
+            style={
+              availability.tone === "accent"
+                ? { color: "var(--logo-magenta)" }
+                : undefined
+            }
+          >
+            {availability.text}
           </span>
-          {preview ? (
-            <span
-              className="min-w-0 truncate rounded-full px-4 py-2 text-sm font-bold text-white"
-              style={{ background: accent }}
+        </div>
+
+        <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">
+              מחיר
+            </p>
+            <p
+              className="mt-0.5 font-display text-[26px] font-extrabold leading-none tabular-nums"
+              style={{ color: soldOut ? undefined : "var(--brand-700)" }}
             >
-              לפרטים והרשמה
-            </span>
-          ) : (
-            <Link
-              href={href}
-              prefetch
-              className="min-w-0 truncate rounded-full px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--logo-cyan)] focus-visible:ring-offset-2"
-              style={{ background: accent }}
-            >
-              לפרטים והרשמה
-            </Link>
-          )}
+              <span className={soldOut ? "text-ink-400" : undefined}>
+                {formatCurrency(cls.price)}
+              </span>
+            </p>
+          </div>
+
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-bold tracking-wide transition-colors",
+              soldOut
+                ? "bg-ink-100 text-ink-500"
+                : "text-white shadow-sm group-hover:brightness-110"
+            )}
+            style={soldOut ? undefined : { background: accent }}
+          >
+            {soldOut ? "לפרטים" : "לפרטים והרשמה"}
+            {!soldOut && <Icon name="arrow" size={13} className="opacity-80" />}
+          </span>
         </div>
       </div>
+    </article>
   );
 
+  if (preview) return card;
+
   return (
-    <div className={cardClass}>
-      {preview ? (
-        media
-      ) : (
-        <Link
-          href={href}
-          prefetch
-          aria-label={`לפרטים והרשמה לחוג ${cls.title}`}
-          className="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--logo-cyan)]"
-        >
-          {media}
-        </Link>
-      )}
-      {content}
-    </div>
+    <Link
+      href={href}
+      prefetch
+      aria-label={`לפרטים והרשמה לחוג ${cls.title}`}
+      className="block h-full rounded-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
+    >
+      {card}
+    </Link>
+  );
+}
+
+function MetaRow({
+  icon,
+  accent,
+  text,
+}: {
+  icon: IconName;
+  accent: string;
+  text: string;
+}) {
+  return (
+    <li className="flex min-w-0 items-center gap-2.5 text-sm text-ink-700">
+      <span
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
+        style={{ background: accent }}
+      >
+        <Icon name={icon} size={14} />
+      </span>
+      <span className="truncate font-medium">{text}</span>
+    </li>
+  );
+}
+
+function InfoChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-lg bg-ink-50 px-2.5 py-1 text-xs font-semibold text-ink-600">
+      {children}
+    </span>
   );
 }

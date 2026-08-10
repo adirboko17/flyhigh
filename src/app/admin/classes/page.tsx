@@ -1,4 +1,4 @@
-import {
+﻿import {
   ClassList,
   type AdminClassAttendance,
   type AdminClassEnrollment,
@@ -24,48 +24,45 @@ function groupByClass<T extends { class_id: string | null }>(rows: T[] | null) {
 export default async function AdminClassesPage() {
   const supabase = await createClient();
 
-  const [
-    { data: classes },
-    { data: enrollments },
-    { data: waitlist },
-    { data: attendance },
-  ] = await Promise.all([
-    supabase
-      .from("classes")
-      .select(
-        "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, instructors(full_name)"
-      )
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("enrollments")
-      .select(
-        "id, class_id, parent_id, child_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)"
-      )
-      .eq("type", "class")
-      .not("class_id", "is", null)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("waitlist")
-      .select(
-        "id, class_id, parent_id, child_id, status, created_at, children(full_name), profiles(full_name, phone)"
-      )
-      .order("created_at"),
-    supabase
-      .from("attendance")
-      .select("id, class_id, date, status, children(full_name), instructors(full_name)")
-      .order("date", { ascending: false })
-      .limit(1000),
-  ]);
+  // רשימת החוגים + נרשמים/המתנה בלבד. נוכחות נטענת בפאנל (חוסך אלפי שורות בכל כניסה).
+  const [{ data: classes }, { data: enrollments }, { data: waitlist }] =
+    await Promise.all([
+      supabase
+        .from("classes")
+        .select(
+          "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, instructors(full_name)"
+        )
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("enrollments")
+        .select(
+          "id, class_id, parent_id, child_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)"
+        )
+        .eq("type", "class")
+        .not("class_id", "is", null)
+        .in("status", ["active", "pending", "cancelled"])
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("waitlist")
+        .select(
+          "id, class_id, parent_id, child_id, status, created_at, children(full_name), profiles(full_name, phone)"
+        )
+        .in("status", ["waiting", "offered"])
+        .order("created_at"),
+    ]);
 
-  const enrollmentsByClass = groupByClass<AdminClassEnrollment>(enrollments);
-  const waitlistByClass = groupByClass<AdminClassWaitlistEntry>(waitlist);
-  const attendanceByClass = groupByClass<AdminClassAttendance>(attendance);
+  const enrollmentsByClass = groupByClass<AdminClassEnrollment>(
+    enrollments as AdminClassEnrollment[] | null
+  );
+  const waitlistByClass = groupByClass<AdminClassWaitlistEntry>(
+    waitlist as AdminClassWaitlistEntry[] | null
+  );
 
   const rows: AdminClassRow[] = (classes ?? []).map((cls) => ({
     ...cls,
     enrollments: enrollmentsByClass.get(cls.id) ?? [],
     waitlist: waitlistByClass.get(cls.id) ?? [],
-    attendance: attendanceByClass.get(cls.id) ?? [],
+    attendance: [] as AdminClassAttendance[],
   }));
 
   return <ClassList classes={rows} />;

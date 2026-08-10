@@ -71,6 +71,11 @@ const TYPE_STYLE: Record<
     dot: "bg-sky-100 text-sky-700",
     chip: "bg-sky-100 text-sky-700",
   },
+  private_lesson: {
+    icon: "🎯",
+    dot: "bg-violet-100 text-violet-700",
+    chip: "bg-violet-100 text-violet-700",
+  },
 };
 
 type Filter = "all" | EnrollmentType;
@@ -80,6 +85,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "class", label: "חוגים" },
   { id: "program", label: "מסלולים" },
   { id: "pool_pass", label: "כניסות" },
+  { id: "private_lesson", label: "פרטיים" },
 ];
 
 function groupEntriesByParentDay(entries: ActivityEntry[]): ActivityParentGroup[] {
@@ -132,6 +138,7 @@ export function ActivityFeed({ entries, todayKey }: ActivityFeedProps) {
       class: 0,
       program: 0,
       pool_pass: 0,
+      private_lesson: 0,
     };
     for (const entry of entries) byType[entry.type] += 1;
     return byType;

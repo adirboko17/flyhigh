@@ -20,7 +20,12 @@ import {
   payrollTotal,
   type PayrollSession,
 } from "@/lib/finance/payroll";
-import { subjectLabel } from "@/lib/finance/subject";
+import {
+  SUBJECT_KIND_LABEL,
+  subjectClassCategory,
+  subjectKind,
+  subjectLabel,
+} from "@/lib/finance/subject";
 import {
   israelDateOf,
   listMonths,
@@ -53,6 +58,26 @@ const METHOD_COLORS: Record<string, string> = {
   external: "text-ink-400",
 };
 
+/** צבעים לפילוח לפי סוג מוצר. */
+const KIND_COLORS: Record<string, string> = {
+  class: "text-brand-500",
+  program: "text-aqua-500",
+  pool_pass: "text-violet-500",
+  private_lesson: "text-rose-500",
+  other: "text-ink-400",
+};
+
+const CATEGORY_BAR_COLORS = [
+  "bg-brand-500",
+  "bg-aqua-500",
+  "bg-violet-400",
+  "bg-amber-500",
+  "bg-rose-400",
+  "bg-sky-500",
+  "bg-emerald-500",
+  "bg-indigo-400",
+];
+
 function addToMap(map: Map<string, number>, key: string, amount: number) {
   map.set(key, (map.get(key) ?? 0) + amount);
 }
@@ -69,7 +94,7 @@ export default async function AdminFinancePage({
 
   const trendMonths = listMonths(month, TREND_MONTHS);
   const trendStart = monthRange(trendMonths[0]).start;
-  const { end: monthEnd } = monthRange(month);
+  const { start: monthStart, end: monthEnd } = monthRange(month);
 
   const supabase = await createClient();
 
@@ -77,17 +102,18 @@ export default async function AdminFinancePage({
     { data: payments },
     { data: sessions },
     { data: instructors },
-    { data: enrollments },
+    { count: newEnrollmentsCount },
+    { count: takenSeatsCount },
     { data: classes },
   ] = await Promise.all([
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, profiles(full_name), enrollments(type, classes(title), programs(title), pool_passes(title))"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
       )
-      // חלון המגמה, ובנוסף כל חוב פתוח בלי תלות בתאריך.
+      // חלון המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
       .or(
-        `created_at.gte.${trendStart},paid_at.gte.${trendStart},status.eq.pending`
+        `created_at.gte.${trendStart},paid_at.gte.${trendStart},status.eq.pending,status.eq.partial`
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -98,7 +124,15 @@ export default async function AdminFinancePage({
       .gte("session_date", trendStart)
       .lte("session_date", monthEnd),
     supabase.from("instructors").select("id, full_name, hourly_rate, status"),
-    supabase.from("enrollments").select("status, created_at"),
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", `${monthStart}T00:00:00`)
+      .lte("created_at", `${monthEnd}T23:59:59`),
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
     supabase.from("classes").select("capacity, status"),
   ]);
 
@@ -145,20 +179,39 @@ export default async function AdminFinancePage({
   const monthRevenue = revenueByMonth.get(month) ?? 0;
   const netProfit = monthRevenue - monthPayroll;
 
-  const openCharges = allPayments.filter((p) => p.status === "pending");
-  const openTotal = openCharges.reduce((sum, p) => sum + Number(p.amount), 0);
+  const openCharges = allPayments.filter(
+    (p) => p.status === "pending" || p.status === "partial"
+  );
+  const openTotal = openCharges.reduce((sum, p) => {
+    const paid = (p.payment_receipts ?? []).reduce(
+      (acc, receipt) => acc + Number(receipt.amount),
+      0
+    );
+    return sum + Math.max(0, Number(p.amount) - paid);
+  }, 0);
 
   const monthPayments = allPayments.filter((p) => paymentMonth(p) === month);
   const monthPaid = monthPayments.filter((p) => p.status === "paid");
 
   const methodTotals = new Map<string, number>();
+  const kindTotals = new Map<string, number>();
+  const categoryTotals = new Map<string, number>();
   const subjectTotals = new Map<string, number>();
-  const customerTotals = new Map<string, { name: string; amount: number; charges: number }>();
+  const customerTotals = new Map<
+    string,
+    { name: string; amount: number; charges: number }
+  >();
 
   for (const payment of monthPaid) {
     const amount = Number(payment.amount);
     addToMap(methodTotals, payment.payment_method ?? "external", amount);
     addToMap(subjectTotals, subjectLabel(payment.enrollments), amount);
+
+    const kind = subjectKind(payment.enrollments);
+    addToMap(kindTotals, kind ?? "other", amount);
+
+    const category = subjectClassCategory(payment.enrollments);
+    if (category) addToMap(categoryTotals, category, amount);
 
     const customer = customerTotals.get(payment.parent_id);
     if (customer) {
@@ -182,6 +235,19 @@ export default async function AdminFinancePage({
       className: METHOD_COLORS[method] ?? "text-ink-400",
     }));
 
+  const kindSlices: DonutSlice[] = [...kindTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kind, value]) => ({
+      key: kind,
+      label:
+        kind === "other"
+          ? "אחר"
+          : (SUBJECT_KIND_LABEL[kind as keyof typeof SUBJECT_KIND_LABEL] ??
+            kind),
+      value,
+      className: KIND_COLORS[kind] ?? "text-ink-400",
+    }));
+
   const topCustomers: RankItem[] = [...customerTotals.values()]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 8)
@@ -191,6 +257,15 @@ export default async function AdminFinancePage({
       sublabel: `${customer.charges} חיובים`,
       value: customer.amount,
       barClassName: "bg-aqua-500",
+    }));
+
+  const revenueByCategory: RankItem[] = [...categoryTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value], index) => ({
+      key: label,
+      label,
+      value,
+      barClassName: CATEGORY_BAR_COLORS[index % CATEGORY_BAR_COLORS.length],
     }));
 
   const revenueBySubject: RankItem[] = [...subjectTotals.entries()]
@@ -203,13 +278,11 @@ export default async function AdminFinancePage({
       barClassName: "bg-brand-500",
     }));
 
-  const newEnrollments = (enrollments ?? []).filter(
-    (e) => israelDateOf(e.created_at).slice(0, 7) === month
-  ).length;
+  const newEnrollments = newEnrollmentsCount ?? 0;
 
   const activeClasses = (classes ?? []).filter((c) => c.status === "active");
   const totalCapacity = activeClasses.reduce((sum, c) => sum + c.capacity, 0);
-  const takenSeats = (enrollments ?? []).filter((e) => e.status === "active").length;
+  const takenSeats = takenSeatsCount ?? 0;
   const occupancy =
     totalCapacity > 0 ? Math.round((takenSeats / totalCapacity) * 100) : 0;
 
@@ -347,6 +420,36 @@ export default async function AdminFinancePage({
         </Card>
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>הכנסות לפי סוג · {monthTitle}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              slices={kindSlices}
+              formatValue={formatCurrency}
+              centerValue={formatCurrency(monthRevenue)}
+              centerLabel="נגבה החודש"
+              emptyLabel="אין הכנסות רשומות בחודש זה"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>הכנסות לפי קטגוריית חוג · {monthTitle}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RankBars
+              items={revenueByCategory}
+              formatValue={formatCurrency}
+              emptyLabel="אין הכנסות מחוגים בחודש זה"
+            />
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>דוח שכר מדריכות · {monthTitle}</CardTitle>
@@ -429,7 +532,7 @@ export default async function AdminFinancePage({
 
         <Card>
           <CardHeader>
-            <CardTitle>הכנסות לפי חוג · {monthTitle}</CardTitle>
+            <CardTitle>הכנסות לפי פריט · {monthTitle}</CardTitle>
           </CardHeader>
           <CardContent>
             <RankBars

@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { PoolPassList, type AdminPoolPassRow } from "@/components/admin/PoolPassList";
+import {
+  PrivateLessonList,
+  type AdminPrivateLessonRow,
+} from "@/components/admin/PrivateLessonList";
 import { ProgramList, type AdminProgramRow } from "@/components/admin/ProgramList";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -9,9 +13,14 @@ import { Input } from "@/components/ui/Input";
 interface TracksManagerProps {
   programs: AdminProgramRow[];
   passes: AdminPoolPassRow[];
+  privateLessons: AdminPrivateLessonRow[];
 }
 
-export function TracksManager({ programs, passes }: TracksManagerProps) {
+export function TracksManager({
+  programs,
+  passes,
+  privateLessons,
+}: TracksManagerProps) {
   const [query, setQuery] = useState("");
 
   return (
@@ -19,6 +28,7 @@ export function TracksManager({ programs, passes }: TracksManagerProps) {
       <TracksSearchBar query={query} onQueryChange={setQuery} />
       <ProgramList programs={programs} query={query} />
       <PoolPassList passes={passes} query={query} />
+      <PrivateLessonList lessons={privateLessons} query={query} />
     </div>
   );
 }
@@ -35,9 +45,11 @@ function TracksSearchBar({
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
-        <p className="text-sm font-medium text-ink-600">חיפוש מסלולים וכניסות</p>
+        <p className="text-sm font-medium text-ink-600">
+          חיפוש מסלולים, כניסות ושיעורים פרטיים
+        </p>
         <p className="mt-0.5 text-xs text-ink-400">
-          לפי שם או תיאור — מסנן את שתי הרשימות יחד
+          לפי שם או תיאור — מסנן את כל הרשימות יחד
         </p>
       </div>
       <div className="p-4">
@@ -49,7 +61,7 @@ function TracksSearchBar({
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="הקלידו שם או תיאור..."
             className="h-12 border-ink-100 bg-ink-50/50 ps-11 pe-11 shadow-soft focus:bg-white"
-            aria-label="חיפוש מסלולים וכניסות לבריכה"
+            aria-label="חיפוש מסלולים, כניסות ושיעורים פרטיים"
           />
           {isSearching && (
             <button

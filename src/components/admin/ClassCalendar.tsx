@@ -11,6 +11,8 @@ import { cn } from "@/utils/cn";
 
 export type CalendarSession = {
   id: string;
+  /** חוג רגיל או שיעור פרטי מתוזמן. */
+  kind: "class" | "private_lesson";
   classId: string;
   title: string;
   category: string | null;
@@ -29,7 +31,11 @@ export type CalendarSession = {
   notes: string | null;
   capacity: number;
   registered: number;
+  /** לקוח/ילד בשיעור פרטי. */
+  clientLabel?: string | null;
 };
+
+export const PRIVATE_LESSON_CALENDAR_GROUP = "private-lessons";
 
 type ClassColor = {
   chip: string;
@@ -101,9 +107,11 @@ export function ClassCalendar({
   const classes = useMemo(() => {
     const map = new Map<string, { id: string; title: string; count: number }>();
     for (const session of sessions) {
+      const title =
+        session.kind === "private_lesson" ? "שיעורים פרטיים" : session.title;
       const existing = map.get(session.classId);
       if (existing) existing.count += 1;
-      else map.set(session.classId, { id: session.classId, title: session.title, count: 1 });
+      else map.set(session.classId, { id: session.classId, title, count: 1 });
     }
     return [...map.values()]
       .sort((a, b) => a.title.localeCompare(b.title, "he"))
@@ -294,7 +302,7 @@ export function ClassCalendar({
         />
       )}
 
-      {substituteFor && (
+      {substituteFor && substituteFor.kind === "class" && (
         <SessionSubstituteDialog
           open
           onClose={() => setSubstituteFor(null)}
@@ -312,9 +320,11 @@ function upcomingSessionsOfClass(
   sessions: CalendarSession[],
   session: CalendarSession
 ): CalendarSession[] {
+  if (session.kind !== "class") return [];
   return sessions
     .filter(
       (other) =>
+        other.kind === "class" &&
         other.classId === session.classId &&
         other.id !== session.id &&
         other.status !== "cancelled" &&
@@ -503,6 +513,7 @@ function SessionCard({
 }) {
   const status = CLASS_SESSION_STATUS[session.status];
   const cancelled = session.status === "cancelled";
+  const isPrivate = session.kind === "private_lesson";
 
   return (
     <Card className="overflow-hidden">
@@ -528,7 +539,11 @@ function SessionCard({
             </span>
           </div>
 
-          {session.substituteInstructor ? (
+          {isPrivate ? (
+            <p className="mt-1 text-sm text-ink-500">
+              {session.clientLabel ?? "לקוח"}
+            </p>
+          ) : session.substituteInstructor ? (
             <p className="mt-1 text-sm text-ink-500">
               <span className="font-semibold text-amber-700">
                 {session.substituteInstructor}
@@ -545,11 +560,18 @@ function SessionCard({
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone={status.tone}>{status.label}</Badge>
-            {session.substituteInstructor && <Badge tone="warning">החלפה</Badge>}
-            {session.category && <Badge tone="brand">{session.category}</Badge>}
-            <Badge tone="neutral">
-              {session.registered} / {session.capacity} נרשמים
-            </Badge>
+            {isPrivate && <Badge tone="brand">שיעור פרטי</Badge>}
+            {!isPrivate && session.substituteInstructor && (
+              <Badge tone="warning">החלפה</Badge>
+            )}
+            {!isPrivate && session.category && (
+              <Badge tone="brand">{session.category}</Badge>
+            )}
+            {!isPrivate && (
+              <Badge tone="neutral">
+                {session.registered} / {session.capacity} נרשמים
+              </Badge>
+            )}
           </div>
 
           {session.notes && (
@@ -559,7 +581,7 @@ function SessionCard({
           )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {!cancelled && (
+            {!isPrivate && !cancelled && (
               <button
                 type="button"
                 onClick={onSubstitute}
@@ -569,10 +591,14 @@ function SessionCard({
               </button>
             )}
             <Link
-              href={`/admin/classes/${session.classId}/edit`}
+              href={
+                isPrivate
+                  ? "/admin/private-lessons"
+                  : `/admin/classes/${session.classId}/edit`
+              }
               className="text-sm font-semibold text-brand-600 transition-colors hover:text-brand-700"
             >
-              לעמוד החוג ←
+              {isPrivate ? "לשיעורים פרטיים ←" : "לעמוד החוג ←"}
             </Link>
           </div>
         </div>

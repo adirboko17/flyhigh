@@ -28,8 +28,8 @@ const accents = [CYN, MAG, ORG];
 
 export function FeaturesSection() {
   return (
-    <section className="container-page relative z-[3] mt-14 sm:mt-16">
-      <div className="grid gap-6 pt-6 md:grid-cols-3">
+    <section className="container-page relative z-[1] mt-10 sm:mt-12">
+      <div className="grid gap-6 pt-8 md:grid-cols-3">
         {features.map((f, i) => {
           const accent = accents[i % 3];
           return (

@@ -26,7 +26,7 @@ export default async function AdminActivityPage() {
   const { data: enrollments } = await supabase
     .from("enrollments")
     .select(
-      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), children(full_name), profiles(full_name, phone)"
+      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name, phone)"
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -49,6 +49,7 @@ export default async function AdminActivityPage() {
         e.classes?.title ??
         e.programs?.title ??
         e.pool_passes?.title ??
+        e.private_lessons?.title ??
         ENROLLMENT_TYPE[e.type],
       parentName: e.profiles?.full_name ?? null,
       parentPhone: e.profiles?.phone ?? null,
@@ -63,7 +64,7 @@ export default async function AdminActivityPage() {
     <div className="space-y-6">
       <PageHeader
         title="פעילות אחרונה"
-        description="כל ההרשמות לחוגים, מסלולים וכניסות — מהחדשה לישנה"
+        description="כל ההרשמות לחוגים, מסלולים, כניסות ושיעורים פרטיים — מהחדשה לישנה"
       />
       <ActivityFeed entries={entries} todayKey={todayKey} />
     </div>

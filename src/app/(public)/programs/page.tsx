@@ -2,13 +2,14 @@ import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { SectionHead } from "@/components/home/SectionHead";
 import { PlanTicketCard } from "@/components/programs/PlanTicketCard";
 import {
-  PlanPurchaseButton,
+  PlanPurchaseTrigger,
   type PlanViewer,
 } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
   POOL_PASS_CARD_TEMPLATES,
+  PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   programStubMonths,
 } from "@/lib/program-cards";
@@ -22,7 +23,7 @@ export const metadata = {
 };
 
 export default async function ProgramsPage() {
-  const [{ programs, poolPasses }, profile] = await Promise.all([
+  const [{ programs, poolPasses, privateLessons }, profile] = await Promise.all([
     getPublicPlans(),
     getSessionProfile(),
   ]);
@@ -56,7 +57,10 @@ export default async function ProgramsPage() {
         description="מנויים חודשיים לשחייה חופשית וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
       />
 
-      <section className="container-page relative z-[3] pb-0 pt-8">
+      <section
+        id="memberships"
+        className="container-page relative z-[3] scroll-mt-28 pb-0 pt-8"
+      >
         <ScrollReveal>
           <SectionHead
             eyebrow="מנויים"
@@ -67,7 +71,7 @@ export default async function ProgramsPage() {
         </ScrollReveal>
 
         {programs.length > 0 ? (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {programs.map((program, index) => {
               const template =
                 PROGRAM_CARD_TEMPLATES[index % PROGRAM_CARD_TEMPLATES.length];
@@ -78,31 +82,31 @@ export default async function ProgramsPage() {
                   delay={Math.min((index % 2) * 90, 90)}
                   className="h-full"
                 >
-                  <PlanTicketCard
-                    name={program.title}
-                    desc={program.description}
-                    price={formatCurrency(program.price)}
-                    period={template.period}
-                    stub={{
-                      kind: "months",
-                      count: programStubMonths(template.period, index),
-                    }}
-                    features={template.features}
-                    icon={template.icon}
-                    accent={template.accent}
-                    featured={template.featured}
-                    badge={template.badge}
-                    cta={
-                      <PlanPurchaseButton
-                        planKind="program"
-                        planId={program.id}
-                        planTitle={program.title}
-                        price={program.price}
-                        featured={template.featured}
-                        viewer={viewer}
-                      />
-                    }
-                  />
+                  <PlanPurchaseTrigger
+                    planKind="program"
+                    planId={program.id}
+                    planTitle={program.title}
+                    price={program.price}
+                    viewer={viewer}
+                    className="h-full hover:translate-y-0 hover:shadow-none"
+                  >
+                    <PlanTicketCard
+                      compact
+                      name={program.title}
+                      desc={program.description}
+                      price={formatCurrency(program.price)}
+                      period={template.period}
+                      stub={{
+                        kind: "months",
+                        count: programStubMonths(template.period, index),
+                      }}
+                      features={template.features}
+                      icon={template.icon}
+                      accent={template.accent}
+                      featured={template.featured}
+                      badge={template.badge}
+                    />
+                  </PlanPurchaseTrigger>
                 </ScrollReveal>
               );
             })}
@@ -114,7 +118,10 @@ export default async function ProgramsPage() {
         )}
       </section>
 
-      <section className="container-page py-14 pb-16">
+      <section
+        id="pool-passes"
+        className="container-page scroll-mt-28 py-14 pb-16"
+      >
         <ScrollReveal>
           <SectionHead
             eyebrow="גמיש"
@@ -125,7 +132,7 @@ export default async function ProgramsPage() {
         </ScrollReveal>
 
         {poolPasses.length > 0 ? (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {poolPasses.map((pass, index) => {
               const template =
                 POOL_PASS_CARD_TEMPLATES[index % POOL_PASS_CARD_TEMPLATES.length];
@@ -136,28 +143,28 @@ export default async function ProgramsPage() {
                   delay={Math.min((index % 2) * 90, 90)}
                   className="h-full"
                 >
-                  <PlanTicketCard
-                    name={pass.title}
-                    desc={pass.description}
-                    price={formatCurrency(pass.price)}
-                    stub={{ kind: "entries", count: pass.entries_count }}
-                    features={template.features}
-                    icon={template.icon}
-                    accent={template.accent}
-                    featured={template.featured}
-                    badge={template.badge}
-                    cta={
-                      <PlanPurchaseButton
-                        planKind="pool_pass"
-                        planId={pass.id}
-                        planTitle={pass.title}
-                        price={pass.price}
-                        entriesCount={pass.entries_count}
-                        featured={template.featured}
-                        viewer={viewer}
-                      />
-                    }
-                  />
+                  <PlanPurchaseTrigger
+                    planKind="pool_pass"
+                    planId={pass.id}
+                    planTitle={pass.title}
+                    price={pass.price}
+                    entriesCount={pass.entries_count}
+                    viewer={viewer}
+                    className="h-full hover:translate-y-0 hover:shadow-none"
+                  >
+                    <PlanTicketCard
+                      compact
+                      name={pass.title}
+                      desc={pass.description}
+                      price={formatCurrency(pass.price)}
+                      stub={{ kind: "entries", count: pass.entries_count }}
+                      features={template.features}
+                      icon={template.icon}
+                      accent={template.accent}
+                      featured={template.featured}
+                      badge={template.badge}
+                    />
+                  </PlanPurchaseTrigger>
                 </ScrollReveal>
               );
             })}
@@ -165,6 +172,69 @@ export default async function ProgramsPage() {
         ) : (
           <p className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-ink-500">
             אין כניסות פעילות כרגע.
+          </p>
+        )}
+      </section>
+
+      <section
+        id="private-lessons"
+        className="container-page scroll-mt-28 pb-16 pt-4"
+      >
+        <ScrollReveal>
+          <SectionHead
+            eyebrow="אישי"
+            title="שיעורים פרטיים"
+            sub="שיעור אחד־על־אחד — ניצור קשר לתיאום מועד"
+            accent="var(--logo-magenta)"
+          />
+        </ScrollReveal>
+
+        {privateLessons.length > 0 ? (
+          <div className="grid gap-5 sm:grid-cols-2">
+            {privateLessons.map((lesson, index) => {
+              const template =
+                PRIVATE_LESSON_CARD_TEMPLATES[
+                  index % PRIVATE_LESSON_CARD_TEMPLATES.length
+                ];
+
+              return (
+                <ScrollReveal
+                  key={lesson.id}
+                  delay={Math.min((index % 2) * 90, 90)}
+                  className="h-full"
+                >
+                  <PlanPurchaseTrigger
+                    planKind="private_lesson"
+                    planId={lesson.id}
+                    planTitle={lesson.title}
+                    price={lesson.price}
+                    durationMinutes={lesson.duration_minutes}
+                    viewer={viewer}
+                    className="h-full hover:translate-y-0 hover:shadow-none"
+                  >
+                    <PlanTicketCard
+                      compact
+                      name={lesson.title}
+                      desc={lesson.description}
+                      price={formatCurrency(lesson.price)}
+                      stub={{
+                        kind: "minutes",
+                        count: lesson.duration_minutes,
+                      }}
+                      features={template.features}
+                      icon={template.icon}
+                      accent={template.accent}
+                      featured={template.featured}
+                      badge={template.badge}
+                    />
+                  </PlanPurchaseTrigger>
+                </ScrollReveal>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-ink-500">
+            אין שיעורים פרטיים פעילים כרגע.
           </p>
         )}
       </section>

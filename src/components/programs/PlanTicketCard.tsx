@@ -4,7 +4,8 @@ import { cn } from "@/utils/cn";
 
 export type PlanTicketStub =
   | { kind: "entries"; count: number }
-  | { kind: "months"; count: number };
+  | { kind: "months"; count: number }
+  | { kind: "minutes"; count: number };
 
 interface PlanTicketCardProps {
   name: string;
@@ -19,6 +20,10 @@ interface PlanTicketCardProps {
   featured?: boolean;
   badge?: string;
   cta?: React.ReactNode;
+  /**
+   * גרסה קומפקטית לדף הבית — אותו טיקט בלי רשימת יתרונות ובלי גובה מינימלי גדול.
+   */
+  compact?: boolean;
 }
 
 /** כרטיס מנוי/כניסה בסגנון טיקט — גוף ראשי, ניקוב וקצה תלישה. */
@@ -34,6 +39,7 @@ export function PlanTicketCard({
   featured = false,
   badge,
   cta,
+  compact = false,
 }: PlanTicketCardProps) {
   const stubMeta =
     stub.kind === "entries"
@@ -42,23 +48,42 @@ export function PlanTicketCard({
           value: String(stub.count),
           unit: null as string | null,
         }
-      : {
-          eyebrow: "מנוי",
-          value: String(stub.count),
-          unit: stub.count === 1 ? "חודש" : "חודשים",
-        };
+      : stub.kind === "minutes"
+        ? {
+            eyebrow: "משך",
+            value: String(stub.count),
+            unit: "דק׳",
+          }
+        : {
+            eyebrow: "מנוי",
+            value: String(stub.count),
+            unit: stub.count === 1 ? "חודש" : "חודשים",
+          };
 
   return (
-    <article className="plan-ticket-shadow group relative h-full hover:-translate-y-1">
+    <article
+      className={cn(
+        "plan-ticket-shadow group relative h-full",
+        compact
+          ? "plan-ticket-shadow--compact hover:-translate-y-0.5"
+          : "hover:-translate-y-1"
+      )}
+    >
       <div
         className={cn(
-          "plan-ticket relative flex h-full min-h-[300px] flex-col overflow-hidden sm:flex-row",
+          "plan-ticket relative flex h-full flex-col overflow-hidden sm:flex-row",
+          compact ? "plan-ticket--compact" : "min-h-[300px]",
           featured
             ? "bg-[linear-gradient(148deg,#073552_0%,#0a5f96_52%,#0ea0c4_100%)] text-white"
             : "border border-ink-100 bg-[#fbfcfe] text-ink-900"
         )}
       >
-        <div className="relative flex min-w-0 flex-1 flex-col p-5 sm:p-6">
+        <div
+          className={cn(
+            "relative flex min-w-0 flex-1 flex-col",
+            compact ? "p-4 sm:p-5" : "p-5 sm:p-6"
+          )}
+        >
           {featured && (
             <>
               <div
@@ -75,12 +100,13 @@ export function PlanTicketCard({
           <div className="relative flex items-start justify-between gap-3">
             <div
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-xl text-white",
+                "flex items-center justify-center rounded-xl text-white",
+                compact ? "h-9 w-9" : "h-11 w-11",
                 featured ? "bg-white/15 ring-1 ring-white/25" : "shadow-soft"
               )}
               style={featured ? undefined : { background: accent }}
             >
-              <Icon name={icon} size={20} />
+              <Icon name={icon} size={compact ? 17 : 20} />
             </div>
 
             {badge && (
@@ -99,7 +125,10 @@ export function PlanTicketCard({
 
           <h3
             className={cn(
-              "relative mt-4 break-words font-display text-[20px] font-extrabold leading-snug sm:text-[22px]",
+              "relative break-words font-display font-extrabold leading-snug",
+              compact
+                ? "mt-3 text-[17px] sm:text-[19px]"
+                : "mt-4 text-[20px] sm:text-[22px]",
               featured ? "text-white" : "text-ink-900"
             )}
           >
@@ -109,7 +138,10 @@ export function PlanTicketCard({
           {desc && (
             <p
               className={cn(
-                "relative mt-1.5 text-sm leading-relaxed",
+                "relative mt-1.5 leading-relaxed",
+                compact
+                  ? "line-clamp-2 text-[13px] sm:text-sm"
+                  : "text-sm",
                 featured ? "text-white/80" : "text-ink-500"
               )}
             >
@@ -117,56 +149,91 @@ export function PlanTicketCard({
             </p>
           )}
 
-          <div className="relative mt-4 flex flex-wrap items-baseline gap-x-1.5">
-            <p
-              className={cn(
-                "font-display text-[34px] font-extrabold leading-none tabular-nums sm:text-[38px]",
-                featured ? "text-white" : "text-brand-700"
-              )}
-            >
-              {price}
-            </p>
-            {period && (
-              <span
+          <div
+            className={cn(
+              "relative mt-auto flex items-end justify-between gap-3",
+              compact ? "pt-4" : "mt-4"
+            )}
+          >
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+              <p
                 className={cn(
-                  "text-sm font-semibold",
-                  featured ? "text-white/75" : "text-ink-400"
+                  "font-display font-extrabold leading-none tabular-nums",
+                  compact
+                    ? "text-[26px] sm:text-[28px]"
+                    : "text-[34px] sm:text-[38px]",
+                  featured ? "text-white" : "text-brand-700"
                 )}
               >
-                {period}
+                {price}
+              </p>
+              {period && (
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    featured ? "text-white/75" : "text-ink-400"
+                  )}
+                >
+                  {period}
+                </span>
+              )}
+            </div>
+
+            {compact && !cta && (
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold tracking-wide transition-colors",
+                  featured
+                    ? "bg-white/15 text-white ring-1 ring-white/30 group-hover:bg-white/25"
+                    : "bg-ink-50 text-brand-700 ring-1 ring-ink-100 group-hover:bg-brand-50 group-hover:ring-brand-200"
+                )}
+              >
+                לחץ כאן
+                <Icon name="arrow" size={13} className="opacity-70" />
               </span>
             )}
           </div>
 
-          <ul className="relative mt-5 flex flex-1 flex-col gap-2.5">
-            {features.map((feature) => (
-              <li
-                key={feature}
-                className={cn(
-                  "flex items-start gap-2 text-[13.5px] leading-snug sm:text-sm",
-                  featured ? "text-white/90" : "text-ink-700"
-                )}
-              >
-                <span
-                  className="mt-0.5 shrink-0"
-                  style={{
-                    color: featured ? "rgba(255,255,255,0.95)" : accent,
-                  }}
+          {!compact && (
+            <ul className="relative mt-5 flex flex-1 flex-col gap-2.5">
+              {features.map((feature) => (
+                <li
+                  key={feature}
+                  className={cn(
+                    "flex items-start gap-2 text-[13.5px] leading-snug sm:text-sm",
+                    featured ? "text-white/90" : "text-ink-700"
+                  )}
                 >
-                  <Icon name="check" size={16} />
-                </span>
-                {feature}
-              </li>
-            ))}
-          </ul>
+                  <span
+                    className="mt-0.5 shrink-0"
+                    style={{
+                      color: featured ? "rgba(255,255,255,0.95)" : accent,
+                    }}
+                  >
+                    <Icon name="check" size={16} />
+                  </span>
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          )}
 
-          {cta && <div className="relative mt-6">{cta}</div>}
+          {cta && (
+            <div className={cn("relative", compact ? "mt-4" : "mt-6")}>
+              {cta}
+            </div>
+          )}
         </div>
 
         {/* ניקוב — קו מקווקו בלבד; החריצים נחתכים ב־mask של .plan-ticket */}
         <div
           aria-hidden
-          className="relative h-4 shrink-0 sm:h-auto sm:w-4"
+          className={cn(
+            "relative shrink-0",
+            compact
+              ? "h-3 sm:h-auto sm:w-3"
+              : "h-4 sm:h-auto sm:w-4"
+          )}
         >
           <div
             className={cn(
@@ -180,14 +247,17 @@ export function PlanTicketCard({
 
         <div
           className={cn(
-            "relative flex h-[5.5rem] shrink-0 flex-row items-center justify-between gap-4 px-5",
-            "sm:h-auto sm:w-[7.5rem] sm:flex-col sm:justify-between sm:px-3 sm:py-6",
+            "relative flex shrink-0 flex-row items-center justify-between gap-4",
+            compact
+              ? "h-[4.25rem] px-4 sm:h-auto sm:w-[5.75rem] sm:flex-col sm:justify-between sm:px-2.5 sm:py-4"
+              : "h-[5.5rem] px-5 sm:h-auto sm:w-[7.5rem] sm:flex-col sm:justify-between sm:px-3 sm:py-6",
             featured ? "bg-black/20" : "bg-[#e8f0f6]"
           )}
         >
           <p
             className={cn(
-              "text-[10px] font-bold tracking-[0.14em]",
+              "font-bold tracking-[0.14em]",
+              compact ? "text-[9px]" : "text-[10px]",
               featured ? "text-white/55" : "text-ink-400"
             )}
           >
@@ -197,7 +267,8 @@ export function PlanTicketCard({
           <div className="text-center">
             <p
               className={cn(
-                "text-[10px] font-bold uppercase tracking-[0.16em]",
+                "font-bold uppercase tracking-[0.16em]",
+                compact ? "text-[9px]" : "text-[10px]",
                 featured ? "text-white/55" : "text-ink-400"
               )}
             >
@@ -205,7 +276,10 @@ export function PlanTicketCard({
             </p>
             <p
               className={cn(
-                "mt-0.5 font-display text-4xl font-extrabold tabular-nums leading-none sm:text-[44px]",
+                "mt-0.5 font-display font-extrabold tabular-nums leading-none",
+                compact
+                  ? "text-[28px] sm:text-[32px]"
+                  : "text-4xl sm:text-[44px]",
                 featured ? "text-white" : ""
               )}
               style={!featured ? { color: accent } : undefined}
@@ -215,7 +289,8 @@ export function PlanTicketCard({
             {stubMeta.unit && (
               <p
                 className={cn(
-                  "mt-0.5 text-[11px] font-bold",
+                  "mt-0.5 font-bold",
+                  compact ? "text-[10px]" : "text-[11px]",
                   featured ? "text-white/70" : "text-ink-500"
                 )}
               >
@@ -226,7 +301,12 @@ export function PlanTicketCard({
 
           <div
             aria-hidden
-            className="flex h-7 items-end gap-[2px] sm:h-auto sm:w-7 sm:flex-col sm:items-stretch sm:justify-center sm:gap-[2px]"
+            className={cn(
+              "flex items-end gap-[2px] sm:flex-col sm:items-stretch sm:justify-center sm:gap-[2px]",
+              compact
+                ? "h-5 sm:h-auto sm:w-5"
+                : "h-7 sm:h-auto sm:w-7"
+            )}
           >
             {[3, 1, 2, 1, 3, 2, 1, 1, 3, 1, 2, 3, 1, 2, 1].map((w, i) => (
               <span

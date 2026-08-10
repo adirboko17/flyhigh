@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createPublicClient } from "@/lib/supabase/public";
-import type { PublicClass, PoolPass, Program } from "@/types";
+import type { PublicClass, PoolPass, Program, PrivateLesson } from "@/types";
 
 const PUBLIC_DATA_REVALIDATE_SECONDS = 60;
 
@@ -20,20 +20,42 @@ export const getPublicClasses = unstable_cache(
 );
 
 export const getPublicPlans = unstable_cache(
-  async (): Promise<{ programs: Program[]; poolPasses: PoolPass[] }> => {
+  async (): Promise<{
+    programs: Program[];
+    poolPasses: PoolPass[];
+    privateLessons: PrivateLesson[];
+  }> => {
     const supabase = createPublicClient();
-    const [{ data: programs, error: programsError }, { data: poolPasses, error: passesError }] =
-      await Promise.all([
-        supabase.from("programs").select("*").eq("status", "active"),
-        supabase.from("pool_passes").select("*").eq("status", "active"),
-      ]);
+    const [
+      { data: programs, error: programsError },
+      { data: poolPasses, error: passesError },
+      { data: privateLessons, error: lessonsError },
+    ] = await Promise.all([
+      supabase
+        .from("programs")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("pool_passes")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("private_lessons")
+        .select("*")
+        .eq("status", "active")
+        .order("created_at", { ascending: true }),
+    ]);
 
     if (programsError) throw programsError;
     if (passesError) throw passesError;
+    if (lessonsError) throw lessonsError;
 
     return {
       programs: programs ?? [],
       poolPasses: poolPasses ?? [],
+      privateLessons: privateLessons ?? [],
     };
   },
   ["public-plans"],

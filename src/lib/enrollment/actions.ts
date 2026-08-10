@@ -22,6 +22,10 @@ import {
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import {
+  chargeDescriptionForCheckout,
+  resolveReceiptLabelForCheckout,
+} from "@/lib/enrollment/receiptLabel";
 
 /** אמצעי התשלום שאפשר לבחור במסך ההרשמה. */
 export type CheckoutPaymentMethod = "credit_card" | DeferredPaymentMethod;
@@ -151,6 +155,8 @@ export async function completeClassEnrollmentPayment(input: {
   childIds: string[];
   paymentMethod: CheckoutPaymentMethod;
   couponCode?: string | null;
+  /** תווית לקבלה — אם נבחרה, מחליפה את שם החוג בתיאור החיוב/הקבלה. */
+  receiptLabelId?: string | null;
 }): Promise<CompleteEnrollmentResult> {
   const profile = await requireRole("parent");
   const { classId, childIds, paymentMethod } = input;
@@ -230,7 +236,7 @@ export async function completeClassEnrollmentPayment(input: {
     .from("enrollments")
     .select("id", { count: "exact", head: true })
     .eq("class_id", classId)
-    .eq("status", "active");
+    .in("status", ["active", "pending"]);
 
   const available = cls.capacity - (takenCount ?? 0);
   if (uniqueChildIds.length > available) {
@@ -306,6 +312,22 @@ export async function completeClassEnrollmentPayment(input: {
     uniqueChildIds.map((childId, index) => [childId, childAmounts[index]])
   );
 
+  const receiptLabel = await resolveReceiptLabelForCheckout(
+    supabase,
+    input.receiptLabelId
+  );
+  if (!receiptLabel.ok) {
+    await releaseCoupon();
+    return { success: false, error: receiptLabel.error };
+  }
+
+  const chargeDescription = chargeDescriptionForCheckout({
+    productTitle: cls.title,
+    participantCount: uniqueChildIds.length,
+    kind: "class",
+    customLabel: receiptLabel.description,
+  });
+
   // תשלום נדחה (מזומן, העברה, מכבי, עמית) נגבה מול המשרד ולכן לא עובר סליקה.
   // גם הזמנה שהקופון מאפס אותה לא עוברת סליקה.
   let paymentReference: string | null = null;
@@ -313,7 +335,7 @@ export async function completeClassEnrollmentPayment(input: {
   if (!deferred && totalAmount > 0) {
     const charge = await getPaymentProvider().createCharge({
       amount: totalAmount,
-      description: `הרשמה ל${cls.title} (${uniqueChildIds.length} ילדים)`,
+      description: chargeDescription,
       parentId: profile.id,
       method: paymentMethod,
       metadata: { classId, childIds: uniqueChildIds },
@@ -371,6 +393,8 @@ export async function completeClassEnrollmentPayment(input: {
       status: deferred ? ("pending" as const) : ("paid" as const),
       paid_at: deferred ? null : paidAt,
       external_reference: paymentReference,
+      receipt_label_id: receiptLabel.labelId,
+      receipt_description: receiptLabel.description ?? chargeDescription,
     }))
   );
 

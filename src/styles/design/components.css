@@ -233,6 +233,12 @@
 .plan-ticket-shadow:hover {
   filter: drop-shadow(0 22px 34px rgba(15, 40, 70, 0.34));
 }
+.plan-ticket-shadow--compact {
+  filter: drop-shadow(0 10px 18px rgba(15, 40, 70, 0.18));
+}
+.plan-ticket-shadow--compact:hover {
+  filter: drop-shadow(0 14px 22px rgba(15, 40, 70, 0.24));
+}
 
 .plan-ticket {
   --ticket-radius: 20px;
@@ -271,6 +277,14 @@
       )
       right / 51% 100% no-repeat;
 }
+.plan-ticket--compact {
+  --ticket-radius: 18px;
+  --notch: 8px;
+  --stub-w: 5.75rem;
+  --perf-w: 0.75rem;
+  --stub-h: 4.25rem;
+  --perf-h: 0.75rem;
+}
 
 @media (min-width: 640px) {
   .plan-ticket {
@@ -302,5 +316,17 @@
         )
         bottom / 100% 51% no-repeat;
   }
+}
+
+/* כרטיס חוג ציבורי — צל עדין והרמה בהובר, בסגנון קרוב לטיקטים של הבריכה */
+.class-card {
+  border-radius: 22px;
+  border: 1px solid rgba(15, 40, 70, 0.08);
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(15, 40, 70, 0.12);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.class-card:hover {
+  box-shadow: 0 20px 36px rgba(15, 40, 70, 0.18);
 }
 

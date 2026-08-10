@@ -17,8 +17,14 @@ export const ADMIN_NAV: NavItem[] = [
     icon: "🎫",
     matchPaths: ["/admin/programs", "/admin/pool-passes"],
   },
+  {
+    href: "/admin/private-lessons",
+    label: "שיעורים פרטיים",
+    icon: "🎯",
+  },
   { href: "/admin/calendar", label: "לוח שנה", icon: "📅" },
   { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
+  { href: "/admin/receipt-labels", label: "תוויות לקבלה", icon: "🧾" },
   {
     href: "/admin/activity",
     label: "פעילות אחרונה",
@@ -38,6 +44,7 @@ export const ADMIN_NAV: NavItem[] = [
 export const INSTRUCTOR_NAV: NavItem[] = [
   { href: "/instructor", label: "דשבורד", icon: "📊" },
   { href: "/instructor/payroll", label: "שכר ופעילות", icon: "💰" },
+  { href: "/instructor/documents", label: "מסמכים", icon: "📄" },
 ];
 
 export const PUBLIC_NAV: NavItem[] = [

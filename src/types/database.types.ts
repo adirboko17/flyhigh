@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -349,6 +351,7 @@ export type Database = {
           max_uses: number | null
           parent_id: string | null
           pool_pass_id: string | null
+          private_lesson_id: string | null
           program_id: string | null
           starts_on: string | null
           updated_at: string
@@ -367,6 +370,7 @@ export type Database = {
           max_uses?: number | null
           parent_id?: string | null
           pool_pass_id?: string | null
+          private_lesson_id?: string | null
           program_id?: string | null
           starts_on?: string | null
           updated_at?: string
@@ -385,6 +389,7 @@ export type Database = {
           max_uses?: number | null
           parent_id?: string | null
           pool_pass_id?: string | null
+          private_lesson_id?: string | null
           program_id?: string | null
           starts_on?: string | null
           updated_at?: string
@@ -413,6 +418,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "coupons_private_lesson_id_fkey"
+            columns: ["private_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "private_lessons"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "coupons_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
@@ -432,6 +444,7 @@ export type Database = {
           parent_id: string
           payment_status: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id: string | null
+          private_lesson_id: string | null
           program_id: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
@@ -446,6 +459,7 @@ export type Database = {
           parent_id: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id?: string | null
+          private_lesson_id?: string | null
           program_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
@@ -460,6 +474,7 @@ export type Database = {
           parent_id?: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id?: string | null
+          private_lesson_id?: string | null
           program_id?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type?: Database["public"]["Enums"]["enrollment_type"]
@@ -494,10 +509,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "enrollments_private_lesson_id_fkey"
+            columns: ["private_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "private_lessons"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "enrollments_program_id_fkey"
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instructor_documents: {
+        Row: {
+          category: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          instructor_id: string
+          mime_type: string | null
+          notes: string | null
+          title: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          instructor_id: string
+          mime_type?: string | null
+          notes?: string | null
+          title: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          instructor_id?: string
+          mime_type?: string | null
+          notes?: string | null
+          title?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instructor_documents_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instructor_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -540,6 +619,51 @@ export type Database = {
           },
         ]
       }
+      payment_receipts: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          payment_id: string
+          received_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          payment_id: string
+          received_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          payment_id?: string
+          received_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_receipts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_receipts_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -550,6 +674,8 @@ export type Database = {
           paid_at: string | null
           parent_id: string
           payment_method: Database["public"]["Enums"]["payment_method"] | null
+          receipt_description: string | null
+          receipt_label_id: string | null
           status: Database["public"]["Enums"]["payment_status"]
         }
         Insert: {
@@ -561,6 +687,8 @@ export type Database = {
           paid_at?: string | null
           parent_id: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_description?: string | null
+          receipt_label_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Update: {
@@ -572,6 +700,8 @@ export type Database = {
           paid_at?: string | null
           parent_id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_description?: string | null
+          receipt_label_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Relationships: [
@@ -587,6 +717,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_receipt_label_id_fkey"
+            columns: ["receipt_label_id"]
+            isOneToOne: false
+            referencedRelation: "receipt_labels"
             referencedColumns: ["id"]
           },
         ]
@@ -614,6 +751,107 @@ export type Database = {
           created_at?: string
           description?: string | null
           entries_count?: number
+          id?: string
+          price?: number
+          status?: Database["public"]["Enums"]["listing_status"]
+          title?: string
+        }
+        Relationships: []
+      }
+      private_lesson_slots: {
+        Row: {
+          child_id: string | null
+          created_at: string
+          end_time: string | null
+          enrollment_id: string
+          id: string
+          notes: string | null
+          parent_id: string
+          private_lesson_id: string
+          session_date: string | null
+          start_time: string | null
+          status: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Insert: {
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id: string
+          id?: string
+          notes?: string | null
+          parent_id: string
+          private_lesson_id: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Update: {
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id?: string
+          id?: string
+          notes?: string | null
+          parent_id?: string
+          private_lesson_id?: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "private_lesson_slots_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_lesson_slots_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_lesson_slots_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "private_lesson_slots_private_lesson_id_fkey"
+            columns: ["private_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "private_lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      private_lessons: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration_minutes: number
+          id: string
+          price: number
+          status: Database["public"]["Enums"]["listing_status"]
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          price?: number
+          status?: Database["public"]["Enums"]["listing_status"]
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration_minutes?: number
           id?: string
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]
@@ -693,6 +931,30 @@ export type Database = {
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
+        }
+        Relationships: []
+      }
+      receipt_labels: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -816,6 +1078,52 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_coupon:
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_pool_pass_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              error: string
+              redemption_id: string
+            }[]
+          }
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_pool_pass_id?: string
+              p_private_lesson_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              error: string
+              redemption_id: string
+            }[]
+          }
+      class_sibling_discount_tiers: {
+        Args: { p_class_id: string }
+        Returns: Json
+      }
+      coupon_discount_amount: {
+        Args: {
+          p_amount: number
+          p_type: Database["public"]["Enums"]["coupon_discount_type"]
+          p_value: number
+        }
+        Returns: number
+      }
       current_instructor_id: { Args: never; Returns: string }
       current_school_year: { Args: { on_date?: string }; Returns: number }
       current_user_role: {
@@ -823,42 +1131,56 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"]
       }
       effective_school_grade: {
-        Args: {
-          grade: number
-          as_of_school_year: number
-          on_date?: string
-        }
+        Args: { as_of_school_year: number; grade: number; on_date?: string }
         Returns: number
       }
-      class_sibling_discount_tiers: { Args: { p_class_id: string }; Returns: Json }
-      claim_coupon: {
-        Args: {
-          p_code: string
-          p_class_id?: string | null
-          p_program_id?: string | null
-          p_pool_pass_id?: string | null
-          p_amount?: number
-        }
-        Returns: {
-          redemption_id: string | null
-          coupon_id: string | null
-          code: string | null
-          discount_amount: number | null
-          error: string | null
-        }[]
-      }
-      coupon_discount_amount: {
-        Args: {
-          p_type: Database["public"]["Enums"]["coupon_discount_type"]
-          p_value: number
-          p_amount: number
-        }
-        Returns: number
-      }
+      evaluate_coupon:
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_parent: string
+              p_pool_pass_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+              discount_value: number
+              error: string
+            }[]
+          }
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_parent: string
+              p_pool_pass_id?: string
+              p_private_lesson_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+              discount_value: number
+              error: string
+            }[]
+          }
       instructor_owns_class: { Args: { cid: string }; Returns: boolean }
+      instructor_substitutes_class: { Args: { cid: string }; Returns: boolean }
       instructor_teaches_child: { Args: { cid: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_my_child: { Args: { cid: string }; Returns: boolean }
+      link_coupon_redemption: {
+        Args: { p_enrollment_id: string; p_redemption_id: string }
+        Returns: undefined
+      }
       list_active_instructors: {
         Args: never
         Returns: {
@@ -869,67 +1191,82 @@ export type Database = {
       list_public_class_sessions: {
         Args: { p_class_id: string }
         Returns: {
+          end_time: string
           id: string
+          notes: string
           session_date: string
           start_time: string
-          end_time: string
           status: Database["public"]["Enums"]["class_session_status"]
-          notes: string | null
-          substitute_instructor_name: string | null
+          substitute_instructor_name: string
         }[]
       }
       list_public_classes: {
         Args: never
         Returns: {
-          id: string
-          title: string
-          description: string | null
-          category: string | null
-          level: string | null
-          age_min: number | null
-          age_max: number | null
-          capacity: number
-          price: number
-          schedule_type: Database["public"]["Enums"]["schedule_type"]
-          start_date: string | null
-          end_date: string | null
-          day_of_week: number | null
-          start_time: string | null
-          end_time: string | null
-          status: Database["public"]["Enums"]["class_status"]
-          image_url: string | null
-          instructor_name: string | null
-          taken_count: number
-          available: number
-          schedule_days: string | null
-          session_count: number
-          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          age_max: number
+          age_min: number
           audience_type: Database["public"]["Enums"]["class_audience_type"]
-          grade_min: number | null
-          grade_max: number | null
+          available: number
+          capacity: number
+          category: string
+          day_of_week: number
+          description: string
+          end_date: string
+          end_time: string
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          grade_max: number
+          grade_min: number
+          id: string
+          image_url: string
+          instructor_name: string
+          level: string
+          price: number
+          schedule_days: string
+          schedule_type: Database["public"]["Enums"]["schedule_type"]
+          session_count: number
+          start_date: string
+          start_time: string
+          status: Database["public"]["Enums"]["class_status"]
+          taken_count: number
+          title: string
         }[]
       }
-      preview_coupon: {
-        Args: {
-          p_code: string
-          p_class_id?: string | null
-          p_program_id?: string | null
-          p_pool_pass_id?: string | null
-          p_amount?: number
-        }
-        Returns: {
-          coupon_id: string | null
-          code: string | null
-          discount_type: Database["public"]["Enums"]["coupon_discount_type"] | null
-          discount_value: number | null
-          discount_amount: number | null
-          error: string | null
-        }[]
-      }
-      link_coupon_redemption: {
-        Args: { p_redemption_id: string; p_enrollment_id: string }
-        Returns: undefined
-      }
+      preview_coupon:
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_pool_pass_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+              discount_value: number
+              error: string
+            }[]
+          }
+        | {
+            Args: {
+              p_amount?: number
+              p_class_id?: string
+              p_code: string
+              p_pool_pass_id?: string
+              p_private_lesson_id?: string
+              p_program_id?: string
+            }
+            Returns: {
+              code: string
+              coupon_id: string
+              discount_amount: number
+              discount_type: Database["public"]["Enums"]["coupon_discount_type"]
+              discount_value: number
+              error: string
+            }[]
+          }
       release_coupon: { Args: { p_redemption_id: string }; Returns: undefined }
     }
     Enums: {
@@ -941,7 +1278,7 @@ export type Database = {
       coupon_discount_type: "percent" | "fixed"
       enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded"
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
-      enrollment_type: "class" | "program" | "pool_pass"
+      enrollment_type: "class" | "program" | "pool_pass" | "private_lesson"
       gender_type: "male" | "female" | "other"
       instructor_status: "active" | "inactive"
       listing_status: "draft" | "active" | "inactive"
@@ -955,7 +1292,12 @@ export type Database = {
         | "bank_transfer"
         | "maccabi"
         | "amit"
-      payment_status: "pending" | "paid" | "failed" | "refunded"
+      payment_status: "pending" | "paid" | "failed" | "refunded" | "partial"
+      private_lesson_slot_status:
+        | "awaiting_schedule"
+        | "scheduled"
+        | "cancelled"
+        | "completed"
       schedule_type: "weekly" | "custom"
       user_role: "admin" | "instructor" | "parent"
       waitlist_status:
@@ -971,16 +1313,159 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database["public"]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export type Tables<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Row"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
-export type TablesInsert<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Insert"]
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
-export type TablesUpdate<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Update"]
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
-export type Enums<T extends keyof DefaultSchema["Enums"]> =
-  DefaultSchema["Enums"][T]
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      attendance_status: ["present", "absent", "late"],
+      class_audience_type: ["age", "grade"],
+      class_gender_policy: ["male", "female", "mixed"],
+      class_session_status: ["scheduled", "cancelled", "completed"],
+      class_status: ["active", "inactive", "full"],
+      coupon_discount_type: ["percent", "fixed"],
+      enrollment_payment_status: ["unpaid", "partial", "paid", "refunded"],
+      enrollment_status: ["pending", "active", "cancelled", "completed"],
+      enrollment_type: ["class", "program", "pool_pass", "private_lesson"],
+      gender_type: ["male", "female", "other"],
+      instructor_status: ["active", "inactive"],
+      listing_status: ["draft", "active", "inactive"],
+      payment_method: [
+        "credit_card",
+        "bit",
+        "paybox",
+        "standing_order",
+        "cash",
+        "external",
+        "bank_transfer",
+        "maccabi",
+        "amit",
+      ],
+      payment_status: ["pending", "paid", "failed", "refunded", "partial"],
+      private_lesson_slot_status: [
+        "awaiting_schedule",
+        "scheduled",
+        "cancelled",
+        "completed",
+      ],
+      schedule_type: ["weekly", "custom"],
+      user_role: ["admin", "instructor", "parent"],
+      waitlist_status: ["waiting", "offered", "expired", "joined", "cancelled"],
+    },
+  },
+} as const

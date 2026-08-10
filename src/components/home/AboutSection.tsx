@@ -34,14 +34,9 @@ export function AboutSection() {
   return (
     <section
       id="about"
-      className="relative overflow-hidden py-16 sm:py-20"
+      className="relative py-16 sm:py-20"
       aria-labelledby="about-heading"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(0,174,239,0.07),transparent_50%),radial-gradient(ellipse_at_90%_100%,rgba(236,0,140,0.05),transparent_45%)]"
-      />
-
       <div className="container-page relative">
         <ScrollReveal>
           <SectionHead

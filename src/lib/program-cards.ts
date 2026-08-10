@@ -13,25 +13,23 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
   {
     icon: "drop",
     accent: "var(--logo-cyan)",
-    period: "/ לחודש",
+    period: "/ 6 חודשים",
+    featured: true,
+    badge: "הכי משתלם",
     features: [
-      "כניסה חופשית לבריכה כל החודש",
+      "כניסה חופשית לבריכה למשך חצי שנה",
       "גישה בכל שעות הפעילות",
-      "ביטול בכל עת, ללא קנס",
-      "הטבות במחירי חוגים",
+      "בלי התחייבות ארוכה מעבר לתקופה",
     ],
   },
   {
     icon: "family",
     accent: "var(--logo-magenta)",
-    period: "/ 3 חודשים",
-    featured: true,
-    badge: "הכי משתלם",
+    period: "/ הפוגה",
     features: [
-      "עד 4 בני משפחה במנוי אחד",
-      "שחייה חופשית למשך 3 חודשים",
-      "חיסכון משמעותי לעומת חודשי",
-      "עדיפות בהרשמה לחוגים חדשים",
+      "פעילות בבריכה בתקופת ההפוגה",
+      "מתאים לילדים ולמשפחות",
+      "תיאום מול המשרד לפי התקופה",
     ],
   },
 ];
@@ -39,11 +37,13 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
 /** מספר חודשים לקצה התלישה בכרטיס הטיקט של מנוי. */
 export function programStubMonths(period?: string, index = 0): number {
   if (period) {
+    if (period.includes("הפוגה")) return 1;
     const match = period.match(/(\d+)/);
     if (match) return Number(match[1]);
     if (period.includes("חודש") && !period.includes("חודשים")) return 1;
+    if (period.includes("חצי")) return 6;
   }
-  return index === 0 ? 1 : 3;
+  return index === 0 ? 6 : 1;
 }
 
 export const POOL_PASS_CARD_TEMPLATES: PlanCardTemplate[] = [
@@ -63,9 +63,20 @@ export const POOL_PASS_CARD_TEMPLATES: PlanCardTemplate[] = [
     badge: "חיסכון ₪50",
     features: [
       "10 כניסות לבריכה",
-      "תוקף לשנה מיום הרכישה",
-      "חיסכון משמעותי",
+      "חיסכון משמעותי לעומת כניסה בודדת",
       "ניתן לשיתוף בין בני המשפחה",
+    ],
+  },
+];
+
+export const PRIVATE_LESSON_CARD_TEMPLATES: PlanCardTemplate[] = [
+  {
+    icon: "drop",
+    accent: "var(--logo-magenta)",
+    features: [
+      "שיעור אישי עם מדריכה",
+      "תיאום תאריך ושעה מול המשרד",
+      "אפשר לרכוש כמה שיעורים בבת אחת",
     ],
   },
 ];

@@ -55,6 +55,14 @@ function subjectOf(coupon: AdminCouponRow, labelOf: Map<string, string>) {
       redeemable: true,
     };
   }
+  if (coupon.private_lesson_id) {
+    return {
+      label:
+        labelOf.get(`private_lesson:${coupon.private_lesson_id}`) ??
+        "שיעור פרטי שנמחק",
+      redeemable: true,
+    };
+  }
   return { label: "כל מה שבתשלום", redeemable: true };
 }
 
@@ -70,6 +78,9 @@ export function CouponList({ coupons, options, today }: CouponListProps) {
     for (const item of options.programs) map.set(`program:${item.id}`, item.label);
     for (const item of options.poolPasses) {
       map.set(`pool_pass:${item.id}`, item.label);
+    }
+    for (const item of options.privateLessons) {
+      map.set(`private_lesson:${item.id}`, item.label);
     }
     return map;
   }, [options]);

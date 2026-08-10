@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
@@ -35,7 +35,6 @@ export function Sidebar({
   profile,
 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
 
@@ -157,9 +156,8 @@ export function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                onPointerEnter={() => router.prefetch(item.href)}
-                onTouchStart={() => router.prefetch(item.href)}
-                onFocus={() => router.prefetch(item.href)}
+                // עמודי ניהול דינמיים וכבדים — prefetch ב-hover טוען כמה מסכים במקביל ומאט הכל.
+                prefetch={false}
                 onClick={() => {
                   setOpen(false);
                   if (item.href !== pathname) setNavigatingTo(item.href);

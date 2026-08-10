@@ -8,7 +8,7 @@ const FK_MESSAGE =
 
 export async function deleteAdminRow(
   supabase: Client,
-  table: "classes" | "programs" | "pool_passes" | "instructors" | "coupons",
+  table: "classes" | "programs" | "pool_passes" | "private_lessons" | "instructors" | "coupons" | "receipt_labels",
   id: string
 ): Promise<{ error?: string }> {
   const { error } = await supabase.from(table).delete().eq("id", id);

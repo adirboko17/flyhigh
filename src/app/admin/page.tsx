@@ -34,25 +34,52 @@ export default async function AdminDashboard() {
   const currentMonth = monthOf(today);
   const previousMonth = shiftMonth(currentMonth, -1);
   const { start: previousMonthStart } = monthRange(previousMonth);
+  const currentMonthRange = monthRange(currentMonth);
+  const previousMonthRange = monthRange(previousMonth);
   const weekEnd = addDays(today, 6);
 
   const supabase = await createClient();
 
   const [
     { data: payments },
-    { data: enrollments },
+    { count: enrollmentsThisMonth },
+    { count: enrollmentsLastMonth },
+    { count: pendingEnrollments },
+    { data: activeClassEnrollments },
     { data: sessions },
     { data: classes },
     { data: instructors },
     { count: waitlistCount },
+    { count: awaitingPrivateLessons },
     { data: recentEnrollments },
   ] = await Promise.all([
-    // חלון של חודשיים לחישוב המגמה, ובנוסף כל חוב פתוח בלי תלות בתאריך.
+    // חלון של חודשיים לחישוב המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
     supabase
       .from("payments")
-      .select("amount, status, paid_at")
-      .or(`paid_at.gte.${previousMonthStart},status.eq.pending`),
-    supabase.from("enrollments").select("class_id, status, created_at"),
+      .select("amount, status, paid_at, payment_receipts(amount)")
+      .or(
+        `paid_at.gte.${previousMonthStart},status.eq.pending,status.eq.partial`
+      ),
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", `${currentMonthRange.start}T00:00:00`)
+      .lte("created_at", `${currentMonthRange.end}T23:59:59`),
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", `${previousMonthRange.start}T00:00:00`)
+      .lte("created_at", `${previousMonthRange.end}T23:59:59`),
+    supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
+    supabase
+      .from("enrollments")
+      .select("class_id")
+      .eq("type", "class")
+      .eq("status", "active")
+      .not("class_id", "is", null),
     supabase
       .from("class_sessions")
       .select(
@@ -69,17 +96,23 @@ export default async function AdminDashboard() {
       .select("id", { count: "exact", head: true })
       .eq("status", "waiting"),
     supabase
+      .from("private_lesson_slots")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "awaiting_schedule"),
+    supabase
       .from("enrollments")
       .select(
-        "*, classes(title), programs(title), children(full_name), profiles(full_name)"
+        "id, type, status, payment_status, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name)"
       )
       .order("created_at", { ascending: false })
       .limit(6),
   ]);
 
   const allPayments = payments ?? [];
-  const allEnrollments = enrollments ?? [];
   const allSessions = sessions ?? [];
+  const enrollmentsThisMonthCount = enrollmentsThisMonth ?? 0;
+  const enrollmentsLastMonthCount = enrollmentsLastMonth ?? 0;
+  const pendingEnrollmentsCount = pendingEnrollments ?? 0;
 
   const revenueOfMonth = (month: string) =>
     allPayments
@@ -94,22 +127,16 @@ export default async function AdminDashboard() {
   const revenueThisMonth = revenueOfMonth(currentMonth);
   const revenueLastMonth = revenueOfMonth(previousMonth);
 
-  const openCharges = allPayments.filter((payment) => payment.status === "pending");
-  const openAmount = openCharges.reduce(
-    (sum, payment) => sum + Number(payment.amount),
-    0
+  const openCharges = allPayments.filter(
+    (payment) => payment.status === "pending" || payment.status === "partial"
   );
-
-  const enrollmentsOfMonth = (month: string) =>
-    allEnrollments.filter((enrollment) =>
-      israelDateOf(enrollment.created_at).startsWith(month)
-    ).length;
-
-  const enrollmentsThisMonth = enrollmentsOfMonth(currentMonth);
-  const enrollmentsLastMonth = enrollmentsOfMonth(previousMonth);
-  const pendingEnrollments = allEnrollments.filter(
-    (enrollment) => enrollment.status === "pending"
-  ).length;
+  const openAmount = openCharges.reduce((sum, payment) => {
+    const paid = (payment.payment_receipts ?? []).reduce(
+      (acc, receipt) => acc + Number(receipt.amount),
+      0
+    );
+    return sum + Math.max(0, Number(payment.amount) - paid);
+  }, 0);
 
   const scheduledSessions = allSessions.filter(
     (session) => session.status !== "cancelled"
@@ -122,8 +149,8 @@ export default async function AdminDashboard() {
   const agenda = agendaIsToday ? todaySessions : scheduledSessions.slice(0, 5);
 
   const registeredByClass = new Map<string, number>();
-  for (const enrollment of allEnrollments) {
-    if (!enrollment.class_id || enrollment.status !== "active") continue;
+  for (const enrollment of activeClassEnrollments ?? []) {
+    if (!enrollment.class_id) continue;
     registeredByClass.set(
       enrollment.class_id,
       (registeredByClass.get(enrollment.class_id) ?? 0) + 1
@@ -168,10 +195,17 @@ export default async function AdminDashboard() {
       detail: "אפשר לשבץ אותם לחוגים עם מקום פנוי",
       href: "/admin/classes",
     },
-    pendingEnrollments > 0 && {
+    (awaitingPrivateLessons ?? 0) > 0 && {
+      icon: "🎯",
+      tone: "brand" as const,
+      title: `${awaitingPrivateLessons} ${awaitingPrivateLessons === 1 ? "שיעור פרטי" : "שיעורים פרטיים"} לתיאום`,
+      detail: "לקוחות שרכשו וממתינים לתיאום מועד",
+      href: "/admin/private-lessons",
+    },
+    pendingEnrollmentsCount > 0 && {
       icon: "📝",
       tone: "brand" as const,
-      title: `${pendingEnrollments} ${pendingEnrollments === 1 ? "הרשמה ממתינה" : "הרשמות ממתינות"} לאישור`,
+      title: `${pendingEnrollmentsCount} ${pendingEnrollmentsCount === 1 ? "הרשמה ממתינה" : "הרשמות ממתינות"} לאישור`,
       detail: "הרשמות שנפתחו ולא הושלמו",
       href: "/admin/activity",
     },
@@ -226,10 +260,10 @@ export default async function AdminDashboard() {
         />
         <StatCard
           label="הרשמות החודש"
-          value={enrollmentsThisMonth}
+          value={enrollmentsThisMonthCount}
           icon="📝"
           tone="violet"
-          hint={compareHint(enrollmentsThisMonth, enrollmentsLastMonth)}
+          hint={compareHint(enrollmentsThisMonthCount, enrollmentsLastMonthCount)}
         />
         <StatCard
           label="מפגשים השבוע"
@@ -398,6 +432,8 @@ export default async function AdminDashboard() {
                   const title =
                     enrollment.classes?.title ??
                     enrollment.programs?.title ??
+                    enrollment.pool_passes?.title ??
+                    enrollment.private_lessons?.title ??
                     ENROLLMENT_TYPE[enrollment.type];
 
                   return (

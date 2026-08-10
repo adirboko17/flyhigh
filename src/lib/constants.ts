@@ -20,8 +20,8 @@ export const CONTACT = {
 
 export const MIN_PASSWORD_LENGTH = 8;
 
-export const HERO_POOL_IMAGE =
-  "https://images.unsplash.com/photo-1600965962361-9035dbfd1c50?auto=format&fit=crop&w=1200&q=80";
+/** תמונת הירו — בריכה ריקה (בלי דמויות), צנועה ומתאימה לקהל דתי. */
+export const HERO_POOL_IMAGE = "/images/hero-pool.jpg";
 
 export const DAYS_OF_WEEK = [
   "ראשון",
@@ -147,7 +147,8 @@ export const PAYMENT_STATUS: Record<
   Enums<"payment_status">,
   { label: string; tone: BadgeTone }
 > = {
-  pending: { label: "ממתין", tone: "warning" },
+  pending: { label: "לא שולם", tone: "danger" },
+  partial: { label: "שולם חלקית", tone: "warning" },
   paid: { label: "שולם", tone: "success" },
   failed: { label: "נכשל", tone: "danger" },
   refunded: { label: "הוחזר", tone: "neutral" },
@@ -158,8 +159,13 @@ export function parentPaymentBadge(
   status: Enums<"payment_status">,
   paymentMethod: Enums<"payment_method"> | null | undefined
 ): { label: string; tone: BadgeTone } {
-  if (status === "pending" && isNonImmediatePaymentMethod(paymentMethod)) {
-    return PARENT_PENDING_MANAGER_APPROVAL;
+  if (
+    (status === "pending" || status === "partial") &&
+    isNonImmediatePaymentMethod(paymentMethod)
+  ) {
+    return status === "partial"
+      ? PAYMENT_STATUS.partial
+      : PARENT_PENDING_MANAGER_APPROVAL;
   }
   return PAYMENT_STATUS[status];
 }
@@ -229,6 +235,17 @@ export const ENROLLMENT_TYPE: Record<Enums<"enrollment_type">, string> = {
   class: "חוג",
   program: "מסלול",
   pool_pass: "כניסה לבריכה",
+  private_lesson: "שיעור פרטי",
+};
+
+export const PRIVATE_LESSON_SLOT_STATUS: Record<
+  Enums<"private_lesson_slot_status">,
+  { label: string; tone: BadgeTone }
+> = {
+  awaiting_schedule: { label: "ממתין לתיאום", tone: "warning" },
+  scheduled: { label: "מתוזמן", tone: "info" },
+  cancelled: { label: "בוטל", tone: "danger" },
+  completed: { label: "הושלם", tone: "success" },
 };
 
 export const GENDER: Record<Enums<"gender_type">, string> = {

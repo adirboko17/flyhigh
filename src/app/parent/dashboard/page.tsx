@@ -66,7 +66,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, classes(id, title, day_of_week, start_time, end_time), programs(title), pool_passes(title, entries_count), children(full_name)"
+        "*, classes(id, title, day_of_week, start_time, end_time), programs(title), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -564,14 +564,14 @@ export default async function ParentDashboard() {
 
       <Card id="plans" className="min-w-0 scroll-mt-24 rounded-xl sm:rounded-2xl">
         <CardHeader className="px-3 py-3 sm:px-5 sm:py-4">
-          <CardTitle className="break-words">המסלולים והכניסות שלי</CardTitle>
+          <CardTitle className="break-words">מסלולים, כניסות ושיעורים פרטיים</CardTitle>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {activePlans.length > 0 && (
               <Badge tone="brand">{activePlans.length} פעילים</Badge>
             )}
             <ViewAllDialog
-              title="המסלולים והכניסות שלי"
-              description="כל המסלולים והכרטיסיות שרכשתם, כולל היסטוריה"
+              title="מסלולים, כניסות ושיעורים פרטיים"
+              description="כל הרכישות שלכם לבריכה ולשיעורים פרטיים, כולל היסטוריה"
               count={planEnrollments.length}
               disabled={planEnrollments.length === 0}
             >
@@ -592,11 +592,11 @@ export default async function ParentDashboard() {
           {planEnrollments.length === 0 ? (
             <EmptyState
               icon="🎫"
-              title="עדיין לא רכשתם מסלול או כניסות"
-              description="מנוי חודשי לשחייה חופשית או כרטיסיית כניסות — הרכישה מתבצעת אונליין בכמה קליקים."
+              title="עדיין לא רכשתם מסלול, כניסות או שיעור פרטי"
+              description="מנוי, כרטיסייה או שיעור פרטי — הרכישה מתבצעת אונליין בכמה קליקים."
               action={
                 <ButtonLink href="/programs" size="sm">
-                  למסלולים ולכניסות
+                  לבריכה ולשיעורים
                 </ButtonLink>
               }
               className="border-0 bg-transparent py-8"
@@ -757,6 +757,16 @@ type EnrollmentRowData = {
   } | null;
   programs: { title: string } | null;
   pool_passes: { title: string; entries_count: number } | null;
+  private_lessons: { title: string; duration_minutes: number } | null;
+  private_lesson_slots:
+    | {
+        id: string;
+        status: Enums<"private_lesson_slot_status">;
+        session_date: string | null;
+        start_time: string | null;
+        end_time: string | null;
+      }[]
+    | null;
   children: { full_name: string } | null;
 };
 
@@ -854,7 +864,16 @@ function PlanRow({
   paymentMethod?: Enums<"payment_method"> | null;
 }) {
   const isPass = enrollment.type === "pool_pass";
+  const isPrivate = enrollment.type === "private_lesson";
   const entries = enrollment.pool_passes?.entries_count ?? null;
+  const duration = enrollment.private_lessons?.duration_minutes ?? null;
+  const slots = enrollment.private_lesson_slots ?? [];
+  const awaitingSlots = slots.filter((s) => s.status === "awaiting_schedule");
+  const scheduledSlots = slots
+    .filter((s) => s.status === "scheduled" && s.session_date)
+    .sort((a, b) =>
+      (a.session_date ?? "").localeCompare(b.session_date ?? "")
+    );
   const paymentBadge = parentEnrollmentPaymentBadge(
     enrollment.payment_status,
     paymentMethod
@@ -865,10 +884,14 @@ function PlanRow({
       <span
         className={cn(
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base sm:h-11 sm:w-11 sm:rounded-xl sm:text-lg",
-          isPass ? "bg-aqua-100 text-aqua-700" : "bg-brand-100 text-brand-700"
+          isPrivate
+            ? "bg-violet-100 text-violet-700"
+            : isPass
+              ? "bg-aqua-100 text-aqua-700"
+              : "bg-brand-100 text-brand-700"
         )}
       >
-        {isPass ? "🎫" : "🏊"}
+        {isPrivate ? "🎯" : isPass ? "🎫" : "🏊"}
       </span>
 
       <div className="min-w-0 flex-1">
@@ -880,10 +903,30 @@ function PlanRow({
           {" · "}
           {ENROLLMENT_TYPE[enrollment.type]}
           {isPass && entries !== null && ` · ${entries} כניסות`}
+          {isPrivate && duration !== null && ` · ${duration} דק׳`}
+          {isPrivate && slots.length > 0 && ` · ${slots.length} שיעורים`}
         </p>
         <p className="mt-0.5 text-xs text-ink-400">
           נרכש ב-{formatDate(enrollment.created_at)}
         </p>
+        {isPrivate && awaitingSlots.length > 0 && (
+          <p className="mt-1 text-xs font-medium text-amber-700">
+            ממתין לתיאום תאריך ושעה ({awaitingSlots.length})
+          </p>
+        )}
+        {isPrivate && scheduledSlots.length > 0 && (
+          <p className="mt-1 text-xs text-ink-500">
+            מתוזמן:{" "}
+            {scheduledSlots
+              .slice(0, 3)
+              .map(
+                (slot) =>
+                  `${formatDate(slot.session_date!)} ${slot.start_time?.slice(0, 5) ?? ""}`
+              )
+              .join(" · ")}
+            {scheduledSlots.length > 3 ? "…" : ""}
+          </p>
+        )}
       </div>
 
       <div className="flex basis-full flex-row flex-wrap items-center justify-end gap-1 sm:basis-auto sm:shrink-0 sm:flex-col sm:items-end">
@@ -929,11 +972,13 @@ function enrollmentTitle(enrollment: {
   classes: { title: string } | null;
   programs: { title: string } | null;
   pool_passes: { title: string } | null;
+  private_lessons?: { title: string } | null;
 }): string {
   return (
     enrollment.classes?.title ??
     enrollment.programs?.title ??
     enrollment.pool_passes?.title ??
+    enrollment.private_lessons?.title ??
     ENROLLMENT_TYPE[enrollment.type]
   );
 }

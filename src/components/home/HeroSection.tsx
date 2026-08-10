@@ -17,10 +17,17 @@ const stats = [
 
 interface HeroSectionProps {
   imageUrl?: string | null;
+  /** כשמחוברים — קישור לאזור האישי במקום «פתיחת חשבון». */
+  accountHref?: string;
 }
 
-export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
+export function HeroSection({
+  imageUrl,
+  accountHref,
+}: HeroSectionProps = {}) {
   const heroImage = imageUrl || HERO_POOL_IMAGE;
+  const secondaryHref = accountHref ?? "/register";
+  const secondaryLabel = accountHref ? "לאזור האישי" : "פתיחת חשבון";
   return (
     <section
       data-theme-color={THEME_COLOR.hero}
@@ -104,10 +111,10 @@ export function HeroSection({ imageUrl }: HeroSectionProps = {}) {
                 </Link>
               </div>
               <Link
-                href="/register"
+                href={secondaryHref}
                 className="relative z-[1] text-base font-semibold text-white underline decoration-white/80 underline-offset-[6px] transition-opacity hover:opacity-90"
               >
-                פתיחת חשבון
+                {secondaryLabel}
               </Link>
             </div>
 

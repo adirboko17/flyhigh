@@ -5,8 +5,9 @@ import type { Database } from "@/types/database.types";
 /**
  * מרענן את ה־session בכל בקשה וחוסם גישה לאזורים מוגנים ללא התחברות.
  *
- * בדיקת התפקיד עצמה נעשית ב־layout של כל אזור (requireRole) ובמדיניות ה־RLS,
- * כדי שה־middleware לא יבצע שאילתה למסד הנתונים בכל ניווט.
+ * חשוב לקרוא ל־getUser (לא רק getClaims): כך ה־access token מתרענן פעם אחת
+ * ב־middleware, והעמוד לא מנסה לרענן במקביל בכל שאילתת DB — מרוץ שגורם
+ * ל־"Invalid Refresh Token" ומאט כל ניווט בעשרות שניות.
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -32,10 +33,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // getClaims מאמת את חתימת הטוקן מקומית מול ה־JWKS של הפרויקט,
-  // ולכן אינו עולה בקריאת רשת כמו getUser.
-  const { data } = await supabase.auth.getClaims();
-  const signedIn = Boolean(data?.claims?.sub);
+  const { data, error } = await supabase.auth.getUser();
+  const signedIn = Boolean(data.user);
+
+  // טוקן רענון פגום/משומש — מנקים כדי לא לנסות לרענן שוב בכל בקשה.
+  if (error) {
+    clearSupabaseAuthCookies(request, supabaseResponse);
+  }
 
   const path = request.nextUrl.pathname;
   const isProtected =
@@ -47,8 +51,27 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", path);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+    return redirectResponse;
   }
 
   return supabaseResponse;
+}
+
+function clearSupabaseAuthCookies(
+  request: NextRequest,
+  response: NextResponse
+) {
+  for (const cookie of request.cookies.getAll()) {
+    if (
+      cookie.name.startsWith("sb-") &&
+      (cookie.name.includes("auth-token") || cookie.name.includes("auth."))
+    ) {
+      response.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
+      request.cookies.set(cookie.name, "");
+    }
+  }
 }
