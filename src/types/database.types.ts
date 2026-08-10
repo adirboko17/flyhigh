@@ -1193,39 +1193,39 @@ export type Database = {
         Returns: {
           end_time: string
           id: string
-          notes: string
+          notes: string | null
           session_date: string
           start_time: string
           status: Database["public"]["Enums"]["class_session_status"]
-          substitute_instructor_name: string
+          substitute_instructor_name: string | null
         }[]
       }
       list_public_classes: {
         Args: never
         Returns: {
-          age_max: number
-          age_min: number
+          age_max: number | null
+          age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           available: number
           capacity: number
-          category: string
-          day_of_week: number
-          description: string
-          end_date: string
-          end_time: string
+          category: string | null
+          day_of_week: number | null
+          description: string | null
+          end_date: string | null
+          end_time: string | null
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
-          grade_max: number
-          grade_min: number
+          grade_max: number | null
+          grade_min: number | null
           id: string
-          image_url: string
-          instructor_name: string
-          level: string
+          image_url: string | null
+          instructor_name: string | null
+          level: string | null
           price: number
-          schedule_days: string
+          schedule_days: string | null
           schedule_type: Database["public"]["Enums"]["schedule_type"]
           session_count: number
-          start_date: string
-          start_time: string
+          start_date: string | null
+          start_time: string | null
           status: Database["public"]["Enums"]["class_status"]
           taken_count: number
           title: string

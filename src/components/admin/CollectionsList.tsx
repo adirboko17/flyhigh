@@ -144,10 +144,11 @@ export function CollectionsList({ parents }: CollectionsListProps) {
 
   // אחרי refresh — מעדכנים את החלון עם הנתונים החדשים של אותו חיוב.
   useEffect(() => {
-    if (!activeCharge) return;
+    const chargeId = activeCharge?.id;
+    if (!chargeId) return;
     const next = parents
       .flatMap((parent) => parent.charges)
-      .find((charge) => charge.id === activeCharge.id);
+      .find((charge) => charge.id === chargeId);
     if (next) setActiveCharge(next);
   }, [parents, activeCharge?.id]);
 
