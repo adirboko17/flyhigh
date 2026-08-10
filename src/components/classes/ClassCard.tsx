@@ -120,12 +120,10 @@ export function ClassCard({
         )}
 
         {cls.category && (
-          <span className="absolute bottom-3 start-3 inline-flex max-w-[70%] items-center gap-1.5 truncate rounded-lg bg-white/92 px-2.5 py-1 text-[11px] font-bold text-ink-800 shadow-sm backdrop-blur-sm">
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-sm"
-              style={{ background: accent }}
-            />
+          <span
+            className="absolute bottom-3 start-3 z-[1] inline-flex max-w-[70%] items-center truncate rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-md"
+            style={{ background: accent }}
+          >
             {cls.category}
           </span>
         )}
