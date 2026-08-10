@@ -632,6 +632,8 @@ export type Database = {
           id: string
           is_primary_admin: boolean
           phone: string | null
+          receipt_id_number: string | null
+          receipt_name: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
@@ -644,6 +646,8 @@ export type Database = {
           id: string
           is_primary_admin?: boolean
           phone?: string | null
+          receipt_id_number?: string | null
+          receipt_name?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
@@ -656,6 +660,8 @@ export type Database = {
           id?: string
           is_primary_admin?: boolean
           phone?: string | null
+          receipt_id_number?: string | null
+          receipt_name?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []
