@@ -1,4 +1,5 @@
 import { ClassCard } from "@/components/classes/ClassCard";
+import { AboutSection } from "@/components/home/AboutSection";
 import { FeaturesSection } from "@/components/home/FeaturesSection";
 import { HeroSection } from "@/components/home/HeroSection";
 import { HomePlansGrid } from "@/components/home/HomePlansGrid";
@@ -42,6 +43,7 @@ export default async function HomePage() {
     <>
       <HeroSection />
       <FeaturesSection />
+      <AboutSection />
 
       <section className="container-page pb-2 pt-14">
         <ScrollReveal>
@@ -76,7 +78,7 @@ export default async function HomePage() {
             title="מסלולים חודשיים וכניסות לבריכה"
             sub="בלי התחייבות ארוכה — בוחרים את המסלול שמתאים לקצב המשפחה."
             accent="var(--logo-cyan)"
-            link="לכל המסלולים"
+            link="לבריכה"
             linkHref="/programs"
           />
         </ScrollReveal>

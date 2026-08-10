@@ -1,5 +1,9 @@
 "use server";
 
+import {
+  childEligibilityError,
+  type ClassAudienceFields,
+} from "@/lib/class-audience";
 import { requireRole } from "@/lib/auth";
 import {
   DEFERRED_PAYMENT_METHODS,
@@ -15,7 +19,7 @@ import {
 import {
   calculateOrderTotal,
   parseSiblingTiers,
-  splitAmount,
+  splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 
@@ -168,13 +172,17 @@ export async function completeClassEnrollmentPayment(input: {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, title, price, capacity, status")
+        .select(
+          "id, title, price, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+        )
         .eq("id", classId)
         .in("status", ["active", "full"])
         .maybeSingle(),
       supabase
         .from("children")
-        .select("id, full_name")
+        .select(
+          "id, full_name, gender, birth_date, school_grade, grade_school_year"
+        )
         .eq("parent_id", profile.id)
         .in("id", uniqueChildIds),
       supabase
@@ -191,6 +199,21 @@ export async function completeClassEnrollmentPayment(input: {
 
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+
+  const audience: ClassAudienceFields = {
+    gender_policy: cls.gender_policy,
+    audience_type: cls.audience_type,
+    age_min: cls.age_min,
+    age_max: cls.age_max,
+    grade_min: cls.grade_min,
+    grade_max: cls.grade_max,
+  };
+  for (const child of children) {
+    const eligibilityError = childEligibilityError(audience, child);
+    if (eligibilityError) {
+      return { success: false, error: eligibilityError };
+    }
   }
 
   const alreadyEnrolled = new Set(
@@ -221,17 +244,18 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   // הנחת אחים נקבעת לפי כל האחים הרשומים לחוג — גם כאלה שנרשמו בהרשמה קודמת —
-  // אך חלה רק על ההזמנה הנוכחית.
+  // וחלה רק על הילד השני ומעלה (לא על הילד הראשון במשפחה).
   const { data: tiersJson } = await supabase.rpc("class_sibling_discount_tiers", {
     p_class_id: classId,
   });
 
   const unitPrice = Number(cls.price);
+  const alreadyEnrolledCount = alreadyEnrolled.size;
   const order = calculateOrderTotal(
     unitPrice,
     uniqueChildIds.length,
     parseSiblingTiers(tiersJson),
-    alreadyEnrolled.size + uniqueChildIds.length
+    alreadyEnrolledCount + uniqueChildIds.length
   );
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
@@ -271,7 +295,13 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   const totalAmount = Math.round((order.total - couponDiscount) * 100) / 100;
-  const childAmounts = splitAmount(totalAmount, uniqueChildIds.length);
+  const childAmounts = splitSiblingAmounts(
+    unitPrice,
+    uniqueChildIds.length,
+    order.percent,
+    alreadyEnrolledCount,
+    totalAmount,
+  );
   const amountPerChild = new Map(
     uniqueChildIds.map((childId, index) => [childId, childAmounts[index]])
   );
@@ -298,15 +328,19 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   const paidAt = new Date().toISOString();
-  const enrollmentRows = uniqueChildIds.map((childId) => ({
-    parent_id: profile.id,
-    child_id: childId,
-    class_id: classId,
-    type: "class" as const,
-    status: "active" as const,
-    payment_status: deferred ? ("unpaid" as const) : ("paid" as const),
-    discount_percent: order.percent,
-  }));
+  const enrollmentRows = uniqueChildIds.map((childId, index) => {
+    const paysFull =
+      order.percent <= 0 || (alreadyEnrolledCount === 0 && index === 0);
+    return {
+      parent_id: profile.id,
+      child_id: childId,
+      class_id: classId,
+      type: "class" as const,
+      status: "active" as const,
+      payment_status: deferred ? ("unpaid" as const) : ("paid" as const),
+      discount_percent: paysFull ? 0 : order.percent,
+    };
+  });
 
   const { data: createdEnrollments, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -372,22 +406,51 @@ export async function joinClassWaitlist(input: {
 
   const supabase = await createClient();
 
-  const [{ data: children }, { data: existingWaitlist }] = await Promise.all([
-    supabase
-      .from("children")
-      .select("id")
-      .eq("parent_id", profile.id)
-      .in("id", uniqueChildIds),
-    supabase
-      .from("waitlist")
-      .select("child_id")
-      .eq("class_id", input.classId)
-      .eq("parent_id", profile.id)
-      .neq("status", "cancelled"),
-  ]);
+  const [{ data: cls }, { data: children }, { data: existingWaitlist }] =
+    await Promise.all([
+      supabase
+        .from("classes")
+        .select(
+          "id, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+        )
+        .eq("id", input.classId)
+        .maybeSingle(),
+      supabase
+        .from("children")
+        .select(
+          "id, full_name, gender, birth_date, school_grade, grade_school_year"
+        )
+        .eq("parent_id", profile.id)
+        .in("id", uniqueChildIds),
+      supabase
+        .from("waitlist")
+        .select("child_id")
+        .eq("class_id", input.classId)
+        .eq("parent_id", profile.id)
+        .neq("status", "cancelled"),
+    ]);
+
+  if (!cls) {
+    return { success: false, error: "החוג לא נמצא." };
+  }
 
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+
+  const audience: ClassAudienceFields = {
+    gender_policy: cls.gender_policy,
+    audience_type: cls.audience_type,
+    age_min: cls.age_min,
+    age_max: cls.age_max,
+    grade_min: cls.grade_min,
+    grade_max: cls.grade_max,
+  };
+  for (const child of children) {
+    const eligibilityError = childEligibilityError(audience, child);
+    if (eligibilityError) {
+      return { success: false, error: eligibilityError };
+    }
   }
 
   const alreadyWaitlisted = new Set(

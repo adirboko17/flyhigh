@@ -18,7 +18,7 @@ type OpenSection = "profile" | "password" | "admins" | "siblingDiscount" | null;
 function formatSiblingDiscountSummary(tiers: SiblingDiscountTier[]): string {
   if (tiers.length === 0) return "לא הוגדרה הנחה";
   return tiers
-    .map((t) => `${t.minChildren}+ ילדים: ${t.percent}%`)
+    .map((t) => `${t.minChildren}+ ילדים: ${t.percent}% מהשני ומעלה`)
     .join(" · ");
 }
 
@@ -127,7 +127,7 @@ export function AdminSettingsHub({
         open={open === "siblingDiscount"}
         onClose={() => setOpen(null)}
         title="הנחת אחים — ברירת מחדל"
-        description="ההנחה חלה על כל ההזמנה כשמשפחה רושמת כמה ילדים לאותו חוג. חוג יכול להגדיר מדרגות משלו ולעקוף את ברירת המחדל."
+        description="ההנחה חלה רק על הילד השני ומעלה — לא על הילד הראשון. חוג יכול להגדיר מדרגות משלו ולעקוף את ברירת המחדל."
         className="max-w-lg"
       >
         <SiblingDiscountForm

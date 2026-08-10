@@ -1,18 +1,13 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassForm } from "@/components/admin/ClassForm";
+import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "חוג חדש" };
 
 export default async function NewClassPage() {
-  const supabase = await createClient();
-  const [{ data: instructors }, defaultSiblingTiers] = await Promise.all([
-    supabase
-      .from("instructors")
-      .select("id, full_name")
-      .eq("status", "active")
-      .order("full_name"),
+  const [instructors, defaultSiblingTiers] = await Promise.all([
+    getClassInstructorOptions(),
     getDefaultSiblingTiers(),
   ]);
 
@@ -23,7 +18,7 @@ export default async function NewClassPage() {
         description="מלאו את פרטי החוג. ניתן לשמור כטיוטה ולפרסם בהמשך."
       />
       <ClassForm
-        instructors={instructors ?? []}
+        instructors={instructors}
         defaultSiblingTiers={defaultSiblingTiers}
       />
     </div>

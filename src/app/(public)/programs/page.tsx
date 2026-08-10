@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { SectionHead } from "@/components/home/SectionHead";
-import { PlanCard } from "@/components/programs/PlanCard";
+import { PlanTicketCard } from "@/components/programs/PlanTicketCard";
 import {
   PlanPurchaseButton,
   type PlanViewer,
@@ -11,13 +10,14 @@ import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
   POOL_PASS_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
+  programStubMonths,
 } from "@/lib/program-cards";
 import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/utils/format";
 
 export const metadata = {
-  title: "מסלולים",
+  title: "הבריכה",
   description: "מנויים חודשיים וכניסות לבריכה - על הגובה.",
 };
 
@@ -51,8 +51,8 @@ export default async function ProgramsPage() {
     <div className="bg-ink-50">
       <PublicPageHero
         badgeIcon="ticket"
-        badgeText="מחירון · מסלולים וכניסות"
-        title="בחרו את המסלול שלכם"
+        badgeText="מחירון · הבריכה"
+        title="שנקפוץ למים?"
         description="מנויים חודשיים לשחייה חופשית וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
       />
 
@@ -78,11 +78,15 @@ export default async function ProgramsPage() {
                   delay={Math.min((index % 2) * 90, 90)}
                   className="h-full"
                 >
-                  <PlanCard
+                  <PlanTicketCard
                     name={program.title}
                     desc={program.description}
                     price={formatCurrency(program.price)}
                     period={template.period}
+                    stub={{
+                      kind: "months",
+                      count: programStubMonths(template.period, index),
+                    }}
                     features={template.features}
                     icon={template.icon}
                     accent={template.accent}
@@ -110,7 +114,7 @@ export default async function ProgramsPage() {
         )}
       </section>
 
-      <section className="container-page py-14">
+      <section className="container-page py-14 pb-16">
         <ScrollReveal>
           <SectionHead
             eyebrow="גמיש"
@@ -132,10 +136,11 @@ export default async function ProgramsPage() {
                   delay={Math.min((index % 2) * 90, 90)}
                   className="h-full"
                 >
-                  <PlanCard
+                  <PlanTicketCard
                     name={pass.title}
                     desc={pass.description}
                     price={formatCurrency(pass.price)}
+                    stub={{ kind: "entries", count: pass.entries_count }}
                     features={template.features}
                     icon={template.icon}
                     accent={template.accent}
@@ -162,44 +167,6 @@ export default async function ProgramsPage() {
             אין כניסות פעילות כרגע.
           </p>
         )}
-      </section>
-
-      <section className="container-page pb-16">
-        <ScrollReveal>
-          <div className="flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-ink-100 bg-[var(--brand-gradient-soft)] p-7 sm:p-8">
-            <div>
-              <h3 className="font-display text-[22px] font-extrabold text-ink-900">
-                לא בטוחים מה מתאים לכם?
-              </h3>
-              <p className="mt-1 text-ink-600">
-                {viewer.kind === "guest"
-                  ? "פתחו חשבון בחינם - תוכלו לבחור מסלול או כניסה בכל רגע."
-                  : "כל המסלולים והכניסות שרכשתם מרוכזים באזור האישי שלכם."}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {viewer.kind === "guest" ? (
-                <Link href="/register" className="hero-cta-primary ah-btn ah-btn--lg">
-                  פתיחת חשבון
-                </Link>
-              ) : (
-                <Link
-                  href={
-                    viewer.kind === "parent"
-                      ? "/parent/dashboard#plans"
-                      : viewer.homeHref
-                  }
-                  className="hero-cta-primary ah-btn ah-btn--lg"
-                >
-                  לאזור האישי
-                </Link>
-              )}
-              <Link href="/classes" className="ah-btn ah-btn--lg ah-btn--outline">
-                עיון בחוגים
-              </Link>
-            </div>
-          </div>
-        </ScrollReveal>
       </section>
     </div>
   );

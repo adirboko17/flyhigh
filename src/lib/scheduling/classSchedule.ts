@@ -77,26 +77,41 @@ export function mergeGeneratedSessions(
   existing: ClassSessionDraft[],
   generated: ClassSessionDraft[]
 ): ClassSessionDraft[] {
-  const key = (s: ClassSessionDraft) =>
-    `${s.sessionDate}|${s.startTime.slice(0, 5)}`;
+  // מפתח לפי תאריך בלבד — כדי ששינוי שעה של מפגש לא יימחק בעדכון הרשימה.
+  const existingByDate = new Map(
+    existing.map((session) => [session.sessionDate, session]),
+  );
+  const usedDates = new Set<string>();
 
-  const existingMap = new Map(existing.map((s) => [key(s), s]));
+  const merged = generated.map((generatedSession) => {
+    const prev = existingByDate.get(generatedSession.sessionDate);
+    usedDates.add(generatedSession.sessionDate);
+    if (!prev) return generatedSession;
 
-  return generated.map((g) => {
-    const prev = existingMap.get(key(g));
-    if (prev) {
-      return {
-        ...g,
-        id: prev.id,
-        status: prev.status,
-        notes: prev.notes,
-        sessionDate: prev.sessionDate,
-        startTime: prev.startTime,
-        endTime: prev.endTime,
-      };
-    }
-    return g;
+    return {
+      ...generatedSession,
+      id: prev.id,
+      status: prev.status,
+      notes: prev.notes,
+      sessionDate: prev.sessionDate,
+      startTime: prev.startTime,
+      endTime: prev.endTime,
+    };
   });
+
+  // מפגשים ידניים/מבוטלים שלא נוצרו מחדש מהטווח נשארים ברשימה.
+  for (const session of existing) {
+    if (usedDates.has(session.sessionDate)) continue;
+    if (session.status === "cancelled" || session.id) {
+      merged.push(session);
+    }
+  }
+
+  return merged.sort(
+    (a, b) =>
+      a.sessionDate.localeCompare(b.sessionDate) ||
+      a.startTime.localeCompare(b.startTime),
+  );
 }
 
 export function formatWeeklyDays(days: number[]): string {
@@ -119,10 +134,20 @@ export function formatScheduleSummary(
   }
 
   const days = formatWeeklyDays(weeklySlots.map((s) => s.dayOfWeek));
+  const uniqueTimes = [
+    ...new Set(
+      weeklySlots.map(
+        (slot) =>
+          `${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}`,
+      ),
+    ),
+  ];
   const times =
-    weeklySlots.length > 0
-      ? `${weeklySlots[0].startTime.slice(0, 5)}–${weeklySlots[0].endTime.slice(0, 5)}`
-      : "";
+    uniqueTimes.length === 1
+      ? uniqueTimes[0]
+      : uniqueTimes.length > 1
+        ? "שעות משתנות"
+        : "";
 
   if (active.length > 0) {
     return `${days}${times ? ` · ${times}` : ""} · ${active.length} מפגשים`;
@@ -209,8 +234,12 @@ export function formToPreviewClass(
     description: string;
     category: string;
     level: string;
+    gender_policy: PublicClass["gender_policy"];
+    audience_type: PublicClass["audience_type"];
     age_min: string;
     age_max: string;
+    grade_min: string;
+    grade_max: string;
     capacity: string;
     price: string;
   },
@@ -226,6 +255,7 @@ export function formToPreviewClass(
     schedule.sessions
   );
   const activeSessions = schedule.sessions.filter((s) => s.status !== "cancelled");
+  const isGrade = form.audience_type === "grade";
 
   return {
     id: "preview",
@@ -233,8 +263,12 @@ export function formToPreviewClass(
     description: form.description || null,
     category: form.category || null,
     level: form.level || null,
-    age_min: form.age_min ? Number(form.age_min) : null,
-    age_max: form.age_max ? Number(form.age_max) : null,
+    gender_policy: form.gender_policy || "mixed",
+    audience_type: form.audience_type || "age",
+    age_min: isGrade ? null : form.age_min ? Number(form.age_min) : null,
+    age_max: isGrade ? null : form.age_max ? Number(form.age_max) : null,
+    grade_min: isGrade && form.grade_min ? Number(form.grade_min) : null,
+    grade_max: isGrade && form.grade_max ? Number(form.grade_max) : null,
     capacity,
     price: Number(form.price) || 0,
     start_date: legacy.start_date,

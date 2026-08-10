@@ -73,27 +73,33 @@ export type Database = {
           created_at: string
           full_name: string
           gender: Database["public"]["Enums"]["gender_type"] | null
+          grade_school_year: number | null
           id: string
           notes: string | null
           parent_id: string
+          school_grade: number | null
         }
         Insert: {
           birth_date?: string | null
           created_at?: string
           full_name: string
           gender?: Database["public"]["Enums"]["gender_type"] | null
+          grade_school_year?: number | null
           id?: string
           notes?: string | null
           parent_id: string
+          school_grade?: number | null
         }
         Update: {
           birth_date?: string | null
           created_at?: string
           full_name?: string
           gender?: Database["public"]["Enums"]["gender_type"] | null
+          grade_school_year?: number | null
           id?: string
           notes?: string | null
           parent_id?: string
+          school_grade?: number | null
         }
         Relationships: [
           {
@@ -195,6 +201,7 @@ export type Database = {
         Row: {
           age_max: number | null
           age_min: number | null
+          audience_type: Database["public"]["Enums"]["class_audience_type"]
           capacity: number
           category: string | null
           created_at: string
@@ -202,6 +209,9 @@ export type Database = {
           description: string | null
           end_date: string | null
           end_time: string | null
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          grade_max: number | null
+          grade_min: number | null
           id: string
           image_url: string | null
           instructor_id: string | null
@@ -217,6 +227,7 @@ export type Database = {
         Insert: {
           age_max?: number | null
           age_min?: number | null
+          audience_type?: Database["public"]["Enums"]["class_audience_type"]
           capacity?: number
           category?: string | null
           created_at?: string
@@ -224,6 +235,9 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
+          grade_max?: number | null
+          grade_min?: number | null
           id?: string
           image_url?: string | null
           instructor_id?: string | null
@@ -239,6 +253,7 @@ export type Database = {
         Update: {
           age_max?: number | null
           age_min?: number | null
+          audience_type?: Database["public"]["Enums"]["class_audience_type"]
           capacity?: number
           category?: string | null
           created_at?: string
@@ -246,6 +261,9 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
+          grade_max?: number | null
+          grade_min?: number | null
           id?: string
           image_url?: string | null
           instructor_id?: string | null
@@ -792,10 +810,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      current_instructor_id: { Args: Record<PropertyKey, never>; Returns: string }
+      current_instructor_id: { Args: never; Returns: string }
+      current_school_year: { Args: { on_date?: string }; Returns: number }
       current_user_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      effective_school_grade: {
+        Args: {
+          grade: number
+          as_of_school_year: number
+          on_date?: string
+        }
+        Returns: number
       }
       class_sibling_discount_tiers: { Args: { p_class_id: string }; Returns: Json }
       claim_coupon: {
@@ -824,10 +851,10 @@ export type Database = {
       }
       instructor_owns_class: { Args: { cid: string }; Returns: boolean }
       instructor_teaches_child: { Args: { cid: string }; Returns: boolean }
-      is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
+      is_admin: { Args: never; Returns: boolean }
       is_my_child: { Args: { cid: string }; Returns: boolean }
       list_active_instructors: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           full_name: string
           id: string
@@ -846,7 +873,7 @@ export type Database = {
         }[]
       }
       list_public_classes: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           id: string
           title: string
@@ -870,6 +897,10 @@ export type Database = {
           available: number
           schedule_days: string | null
           session_count: number
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          audience_type: Database["public"]["Enums"]["class_audience_type"]
+          grade_min: number | null
+          grade_max: number | null
         }[]
       }
       preview_coupon: {
@@ -897,6 +928,8 @@ export type Database = {
     }
     Enums: {
       attendance_status: "present" | "absent" | "late"
+      class_audience_type: "age" | "grade"
+      class_gender_policy: "male" | "female" | "mixed"
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
       coupon_discount_type: "percent" | "fixed"

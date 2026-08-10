@@ -3,6 +3,7 @@ import Link from "next/link";
 interface SectionHeadProps {
   eyebrow?: string;
   title: string;
+  titleId?: string;
   sub?: string;
   link?: string;
   linkHref?: string;
@@ -12,6 +13,7 @@ interface SectionHeadProps {
 export function SectionHead({
   eyebrow,
   title,
+  titleId,
   sub,
   link,
   linkHref,
@@ -32,7 +34,10 @@ export function SectionHead({
             {eyebrow}
           </span>
         )}
-        <h2 className="mt-2.5 font-display text-2xl font-extrabold leading-tight text-ink-900 sm:text-[34px]">
+        <h2
+          id={titleId}
+          className="mt-2.5 font-display text-2xl font-extrabold leading-tight text-ink-900 sm:text-[34px]"
+        >
           {title}
         </h2>
         {sub && <p className="mt-1.5 text-sm text-ink-500 sm:text-base">{sub}</p>}

@@ -1,4 +1,8 @@
 import { getSessionProfile, homeForRole } from "@/lib/auth";
+import {
+  formatClassAudience,
+  formatClassGenderPolicy,
+} from "@/lib/class-audience";
 import { createClient } from "@/lib/supabase/server";
 import {
   parseSiblingTiers,
@@ -111,6 +115,8 @@ export async function ClassEnrollmentPanel({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {cls.category && <Badge tone="brand">{cls.category}</Badge>}
           {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
+          <Badge tone="neutral">{formatClassGenderPolicy(cls.gender_policy)}</Badge>
+          <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           {cls.session_count != null && cls.session_count > 0 && (
             <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
           )}
@@ -133,7 +139,8 @@ function SiblingDiscountNote({ tiers }: { tiers: SiblingDiscountTier[] }) {
       <ul className="mt-1 space-y-0.5 text-sm text-aqua-700">
         {sorted.map((tier) => (
           <li key={tier.minChildren}>
-            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה על ההרשמה
+            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה על הילד ה־
+            {tier.minChildren} ומעלה (לא על הראשון)
           </li>
         ))}
       </ul>

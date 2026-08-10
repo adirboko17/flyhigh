@@ -24,9 +24,15 @@ import {
   serializeSiblingTiers,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
+import {
+  CLASS_GENDER_POLICY,
+  type ClassAudienceType,
+  type ClassGenderPolicy,
+} from "@/lib/class-audience";
+import { SCHOOL_GRADES, parseSchoolGradeInput } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
 import type { Json } from "@/types/database.types";
-import type { Instructor } from "@/types";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 
 export type ClassFormData = {
   id: string;
@@ -34,8 +40,12 @@ export type ClassFormData = {
   description: string | null;
   category: string | null;
   level: string | null;
+  gender_policy: ClassGenderPolicy;
+  audience_type: ClassAudienceType;
   age_min: number | null;
   age_max: number | null;
+  grade_min: number | null;
+  grade_max: number | null;
   capacity: number;
   price: number;
   instructor_id: string | null;
@@ -46,7 +56,7 @@ export type ClassFormData = {
 };
 
 interface Props {
-  instructors: Pick<Instructor, "id" | "full_name">[];
+  instructors: ClassInstructorOption[];
   existing?: ClassFormData;
   initialSchedule?: ClassScheduleState;
   /** מדרגות ברירת המחדל של המערכת, מוצגות כשהחוג לא מגדיר מדרגות משלו. */
@@ -58,8 +68,12 @@ const emptyForm = {
   description: "",
   category: "שחייה",
   level: "",
+  gender_policy: "mixed" as ClassGenderPolicy,
+  audience_type: "age" as ClassAudienceType,
   age_min: "",
   age_max: "",
+  grade_min: "",
+  grade_max: "",
   capacity: "10",
   price: "",
   instructor_id: "",
@@ -73,8 +87,12 @@ function toFormState(existing?: ClassFormData) {
     description: existing.description ?? "",
     category: existing.category ?? "שחייה",
     level: existing.level ?? "",
+    gender_policy: existing.gender_policy ?? "mixed",
+    audience_type: existing.audience_type ?? "age",
     age_min: existing.age_min?.toString() ?? "",
     age_max: existing.age_max?.toString() ?? "",
+    grade_min: existing.grade_min?.toString() ?? "",
+    grade_max: existing.grade_max?.toString() ?? "",
     capacity: existing.capacity.toString(),
     price: existing.price.toString(),
     instructor_id: existing.instructor_id ?? "",
@@ -89,14 +107,21 @@ function toPayload(
   status: ClassFormData["status"],
   siblingDiscountTiers: Json | null
 ) {
+  const audienceType = form.audience_type;
+  const isGrade = audienceType === "grade";
+
   return {
     sibling_discount_tiers: siblingDiscountTiers,
     title: form.title,
     description: form.description || null,
     category: form.category || null,
     level: form.level || null,
-    age_min: form.age_min ? Number(form.age_min) : null,
-    age_max: form.age_max ? Number(form.age_max) : null,
+    gender_policy: form.gender_policy,
+    audience_type: audienceType,
+    age_min: isGrade ? null : form.age_min ? Number(form.age_min) : null,
+    age_max: isGrade ? null : form.age_max ? Number(form.age_max) : null,
+    grade_min: isGrade ? parseSchoolGradeInput(form.grade_min) : null,
+    grade_max: isGrade ? parseSchoolGradeInput(form.grade_max) : null,
     capacity: Number(form.capacity) || 0,
     price: Number(form.price) || 0,
     instructor_id: form.instructor_id || null,
@@ -104,6 +129,29 @@ function toPayload(
     image_url: imageUrl,
     schedule_type: scheduleType,
   };
+}
+
+function validateAudience(form: ReturnType<typeof toFormState>): string | null {
+  if (!form.gender_policy) return "נא לבחור למי מיועד החוג.";
+
+  if (form.audience_type === "grade") {
+    const min = parseSchoolGradeInput(form.grade_min);
+    const max = parseSchoolGradeInput(form.grade_max);
+    if (min === null || max === null) {
+      return "נא לבחור כיתה מינימום וכיתה מקסימום.";
+    }
+    if (min > max) {
+      return "כיתת המינימום לא יכולה להיות גבוהה מכיתת המקסימום.";
+    }
+    return null;
+  }
+
+  const min = form.age_min ? Number(form.age_min) : null;
+  const max = form.age_max ? Number(form.age_max) : null;
+  if (min !== null && max !== null && min > max) {
+    return "גיל המינימום לא יכול להיות גבוה מגיל המקסימום.";
+  }
+  return null;
 }
 
 function validateSchedule(schedule: ClassScheduleState): string | null {
@@ -182,6 +230,10 @@ export function ClassForm({
     ) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  function setAudienceType(audienceType: ClassAudienceType) {
+    setForm((f) => ({ ...f, audience_type: audienceType }));
+  }
+
   function handleImageSelect(file: File) {
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setError(null);
@@ -199,6 +251,12 @@ export function ClassForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const audienceError = validateAudience(form);
+    if (audienceError) {
+      setError(audienceError);
+      return;
+    }
 
     const scheduleError = validateSchedule(schedule);
     if (scheduleError) {
@@ -310,26 +368,104 @@ export function ClassForm({
 
         <Card>
           <CardContent className="space-y-5">
-            <div className="grid gap-4 grid-cols-2 sm:gap-5 lg:grid-cols-3">
-              <Field label="גיל מינימום">
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.age_min}
-                  onChange={set("age_min")}
-                  placeholder="למשל: 4"
-                />
-              </Field>
-              <Field label="גיל מקסימום">
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.age_max}
-                  onChange={set("age_max")}
-                  placeholder="למשל: 8"
-                />
-              </Field>
-              <Field label="מכסת משתתפים" required className="col-span-2 lg:col-span-1">
+            <div>
+              <h3 className="font-display text-base font-bold text-ink-900">
+                למי מיועד החוג
+              </h3>
+              <p className="mt-0.5 text-sm text-ink-500">
+                הגדירו מגדר וטווח גילאים או כיתות להרשמה.
+              </p>
+            </div>
+
+            <Field label="מגדר" required>
+              <Select
+                value={form.gender_policy}
+                onChange={set("gender_policy")}
+                required
+              >
+                {(Object.keys(CLASS_GENDER_POLICY) as ClassGenderPolicy[]).map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {CLASS_GENDER_POLICY[value]}
+                    </option>
+                  )
+                )}
+              </Select>
+            </Field>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AudienceModeOption
+                selected={form.audience_type === "age"}
+                onSelect={() => setAudienceType("age")}
+                title="לפי גיל"
+                hint="גיל מינימום ומקסימום"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={form.audience_type === "grade"}
+                onSelect={() => setAudienceType("grade")}
+                title="לפי כיתה"
+                hint="מכיתה ועד כיתה"
+                disabled={loading}
+              />
+            </div>
+
+            {form.audience_type === "age" ? (
+              <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                <Field label="גיל מינימום">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.age_min}
+                    onChange={set("age_min")}
+                    placeholder="למשל: 4"
+                  />
+                </Field>
+                <Field label="גיל מקסימום">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.age_max}
+                    onChange={set("age_max")}
+                    placeholder="למשל: 8"
+                  />
+                </Field>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                <Field label="מכיתה" required>
+                  <Select
+                    value={form.grade_min}
+                    onChange={set("grade_min")}
+                    required
+                  >
+                    <option value="">בחרו...</option>
+                    {SCHOOL_GRADES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="עד כיתה" required>
+                  <Select
+                    value={form.grade_max}
+                    onChange={set("grade_max")}
+                    required
+                  >
+                    <option value="">בחרו...</option>
+                    {SCHOOL_GRADES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            )}
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="מכסת משתתפים" required>
                 <Input
                   type="number"
                   min={1}
@@ -339,8 +475,6 @@ export function ClassForm({
                   required
                 />
               </Field>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
               <Field label="מחיר (₪)" required>
                 <Input
                   type="number"
@@ -352,17 +486,17 @@ export function ClassForm({
                   required
                 />
               </Field>
-              <Field label="מדריכה">
-                <Select value={form.instructor_id} onChange={set("instructor_id")}>
-                  <option value="">ללא שיוך</option>
-                  {instructors.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.full_name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
             </div>
+            <Field label="מדריכה">
+              <Select value={form.instructor_id} onChange={set("instructor_id")}>
+                <option value="">ללא שיוך</option>
+                {instructors.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.isSelf ? `${i.full_name} (אני · מנהל)` : i.full_name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </CardContent>
         </Card>
 
@@ -373,7 +507,8 @@ export function ClassForm({
                 הנחת אחים
               </h3>
               <p className="mt-0.5 text-sm text-ink-500">
-                כשמשפחה רושמת כמה ילדים לחוג הזה, ההנחה חלה על כל ההזמנה.
+                כשמשפחה רושמת כמה ילדים לחוג הזה, ההנחה חלה רק על הילד השני
+                ומעלה — לא על הילד הראשון.
               </p>
             </div>
 
@@ -462,6 +597,45 @@ export function ClassForm({
         previewStatus={existing?.status ?? "active"}
       />
     </div>
+  );
+}
+
+function AudienceModeOption({
+  selected,
+  onSelect,
+  title,
+  hint,
+  disabled,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  hint: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        "rounded-xl border px-4 py-3 text-start transition-colors disabled:opacity-60",
+        selected
+          ? "border-brand-500 bg-brand-50"
+          : "border-ink-200 bg-white hover:border-ink-300"
+      )}
+    >
+      <span
+        className={cn(
+          "block text-sm font-semibold",
+          selected ? "text-brand-800" : "text-ink-800"
+        )}
+      >
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs text-ink-500">{hint}</span>
+    </button>
   );
 }
 

@@ -1,4 +1,4 @@
-﻿import {
+import {
   ClassList,
   type AdminClassAttendance,
   type AdminClassEnrollment,
@@ -33,7 +33,7 @@ export default async function AdminClassesPage() {
     supabase
       .from("classes")
       .select(
-        "id, title, category, level, description, image_url, day_of_week, start_time, end_time, age_min, age_max, price, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructors(full_name)"
+        "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, instructors(full_name)"
       )
       .order("created_at", { ascending: false }),
     supabase

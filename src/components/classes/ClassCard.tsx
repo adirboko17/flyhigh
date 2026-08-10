@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Icon } from "@/components/icons/Icon";
+import { formatClassAudience } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import { formatCurrency, formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
@@ -143,9 +144,16 @@ export function ClassCard({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-          {(cls.age_min || cls.age_max) && (
+          {cls.gender_policy && cls.gender_policy !== "mixed" && (
             <span className="rounded-full bg-ink-50 px-2.5 py-1 text-xs font-semibold text-ink-600">
-              גילאי {cls.age_min}–{cls.age_max}
+              {cls.gender_policy === "male" ? "זכר" : "נקבה"}
+            </span>
+          )}
+          {(cls.audience_type === "grade"
+            ? cls.grade_min != null || cls.grade_max != null
+            : cls.age_min != null || cls.age_max != null) && (
+            <span className="rounded-full bg-ink-50 px-2.5 py-1 text-xs font-semibold text-ink-600">
+              {formatClassAudience(cls)}
             </span>
           )}
           {soldOut ? (

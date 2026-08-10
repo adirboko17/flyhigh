@@ -53,7 +53,7 @@ export function AnnouncementBar() {
           href="/programs"
           className="whitespace-nowrap font-bold text-brand-600 underline decoration-brand-200 underline-offset-4 transition-colors hover:text-brand-800"
         >
-          לכל המסלולים
+          לבריכה
         </Link>
       </div>
     </aside>

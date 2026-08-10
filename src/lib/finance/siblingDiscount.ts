@@ -1,13 +1,14 @@
 import type { Json } from "@/types/database.types";
 
 /**
- * הנחת אחים: כשמשפחה רושמת יותר מילד אחד לאותו חוג, ההנחה חלה על כל ההזמנה.
+ * הנחת אחים: כשמשפחה רושמת יותר מילד אחד לאותו חוג, ההנחה חלה רק על
+ * הילד השני ומעלה — הילד הראשון משלם מחיר מלא.
  * המדרגות נשמרות כמערך JSON על החוג, ואם לא הוגדרו — נלקחת ברירת המחדל הגלובלית
  * (הפונקציה class_sibling_discount_tiers במסד הנתונים מבצעת את הבחירה).
  */
 
 export type SiblingDiscountTier = {
-  /** ההנחה חלה כשמספר הילדים הרשומים גדול או שווה למספר הזה. */
+  /** ההנחה נפתחת כשמספר הילדים הרשומים גדול או שווה למספר הזה. */
   minChildren: number;
   percent: number;
 };
@@ -16,6 +17,10 @@ export type SiblingDiscountBreakdown = {
   /** מספר הילדים שנספרו לצורך המדרגה (כולל אחים שכבר רשומים לחוג). */
   childCount: number;
   percent: number;
+  /** כמה ילדים בהזמנה הנוכחית משלמים מחיר מלא. */
+  fullPriceChildren: number;
+  /** כמה ילדים בהזמנה הנוכחית מקבלים את אחוז ההנחה. */
+  discountedChildren: number;
   listTotal: number;
   discountAmount: number;
   total: number;
@@ -75,6 +80,10 @@ export function resolveSiblingDiscountPercent(
   return match ? clamp(round2(match.percent), 0, 100) : 0;
 }
 
+/**
+ * מחשב את סכום ההזמנה: ילד ראשון במשפחה (בחוג) במחיר מלא,
+ * וכל ילד נוסף מקבל את אחוז ההנחה של המדרגה המתאימה.
+ */
 export function calculateOrderTotal(
   unitPrice: number,
   chargedChildren: number,
@@ -82,13 +91,32 @@ export function calculateOrderTotal(
   /** מספר הילדים שנספר למדרגה — כולל אחים שכבר רשומים לחוג. */
   siblingCount = chargedChildren
 ): SiblingDiscountBreakdown {
-  const listTotal = round2(unitPrice * chargedChildren);
-  const percent = resolveSiblingDiscountPercent(tiers, siblingCount);
-  const total = round2(listTotal * (1 - percent / 100));
+  const safeCharged = Math.max(0, chargedChildren);
+  const safeSiblingCount = Math.max(safeCharged, siblingCount);
+  const alreadyEnrolled = Math.max(0, safeSiblingCount - safeCharged);
+  const percent = resolveSiblingDiscountPercent(tiers, safeSiblingCount);
+
+  // מושב אחד במחיר מלא לכל המשפחה. אם כבר יש אח רשום — כל הילדים בהזמנה מקבלים הנחה.
+  const fullPriceChildren =
+    percent <= 0
+      ? safeCharged
+      : alreadyEnrolled > 0
+        ? 0
+        : Math.min(1, safeCharged);
+  const discountedChildren = Math.max(0, safeCharged - fullPriceChildren);
+
+  const listTotal = round2(unitPrice * safeCharged);
+  const fullPriceAmount = round2(unitPrice * fullPriceChildren);
+  const discountedAmount = round2(
+    unitPrice * discountedChildren * (1 - percent / 100),
+  );
+  const total = round2(fullPriceAmount + discountedAmount);
 
   return {
-    childCount: siblingCount,
+    childCount: safeSiblingCount,
     percent,
+    fullPriceChildren,
+    discountedChildren,
     listTotal,
     discountAmount: round2(listTotal - total),
     total,
@@ -112,6 +140,41 @@ export function splitAmount(total: number, parts: number): number[] {
   );
 }
 
+/**
+ * סכום לחיוב לכל ילד: הראשון במשפחה במחיר מלא, השאר עם הנחה.
+ * אם הועבר finalTotal (למשל אחרי קופון) — מנרמלים פרופורציונלית אליו.
+ */
+export function splitSiblingAmounts(
+  unitPrice: number,
+  childCount: number,
+  percent: number,
+  alreadyEnrolled: number,
+  finalTotal?: number,
+): number[] {
+  if (childCount <= 0) return [];
+
+  const ideal = Array.from({ length: childCount }, (_, index) => {
+    const paysFull = percent <= 0 || (alreadyEnrolled === 0 && index === 0);
+    return paysFull
+      ? round2(unitPrice)
+      : round2(unitPrice * (1 - percent / 100));
+  });
+
+  const idealTotal = round2(ideal.reduce((sum, value) => sum + value, 0));
+  const target = finalTotal == null ? idealTotal : round2(finalTotal);
+
+  if (idealTotal === 0) return splitAmount(target, childCount);
+  if (idealTotal === target) return ideal;
+
+  const scaled = ideal.map((value) => round2((value / idealTotal) * target));
+  const scaledTotal = round2(scaled.reduce((sum, value) => sum + value, 0));
+  const fix = round2(target - scaledTotal);
+  if (scaled.length > 0 && fix !== 0) {
+    scaled[scaled.length - 1] = round2(scaled[scaled.length - 1] + fix);
+  }
+  return scaled;
+}
+
 export function describeTier(tier: SiblingDiscountTier): string {
-  return `${tier.minChildren} ילדים ומעלה · ${tier.percent}% הנחה`;
+  return `${tier.minChildren} ילדים ומעלה · ${tier.percent}% הנחה מהילד ה־${tier.minChildren} ומעלה`;
 }

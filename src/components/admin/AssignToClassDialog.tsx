@@ -19,8 +19,8 @@ import {
 } from "@/lib/admin/assignment";
 import { DEFERRED_PAYMENT_METHODS, PAYMENT_METHOD } from "@/lib/constants";
 import {
+  calculateOrderTotal,
   parseSiblingTiers,
-  resolveSiblingDiscountPercent,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
 import { createClient } from "@/lib/supabase/client";
@@ -38,10 +38,6 @@ type CustomerOption = {
 export type AssignMode =
   | { kind: "waitlist"; entry: AdminClassWaitlistEntry }
   | { kind: "manual" };
-
-function round2(value: number) {
-  return Math.round(value * 100) / 100;
-}
 
 function normalize(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
@@ -124,13 +120,15 @@ export function AssignToClassDialog({
       ).length
     : 0;
 
-  const discountPercent = resolveSiblingDiscountPercent(
+  const orderPreview = calculateOrderTotal(
+    Number(cls.price),
+    childIds.length,
     tiers,
-    siblingsInClass + childIds.length
+    siblingsInClass + childIds.length,
   );
-
-  const listTotal = round2(Number(cls.price) * childIds.length);
-  const suggestedTotal = round2(listTotal * (1 - discountPercent / 100));
+  const discountPercent = orderPreview.percent;
+  const listTotal = orderPreview.listTotal;
+  const suggestedTotal = orderPreview.total;
 
   // הסכום מתעדכן לפי הבחירה, אלא אם המנהל כבר שינה אותו ידנית.
   useEffect(() => {
@@ -270,9 +268,12 @@ export function AssignToClassDialog({
 
         {discountPercent > 0 && childIds.length > 0 && (
           <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
-            הנחת אחים של {discountPercent}% חלה על ההזמנה
+            הנחת אחים של {discountPercent}% חלה על הילד השני ומעלה
+            {orderPreview.fullPriceChildren > 0
+              ? ` (${orderPreview.fullPriceChildren} במחיר מלא, ${orderPreview.discountedChildren} בהנחה)`
+              : ` (כל ${orderPreview.discountedChildren} הילדים בהזמנה בהנחה)`}
             {siblingsInClass > 0
-              ? ` (למשפחה כבר ${siblingsInClass} ילדים בחוג)`
+              ? ` · למשפחה כבר ${siblingsInClass} ילדים בחוג`
               : ""}
             . מחיר מלא: {formatCurrency(listTotal)}.
           </p>

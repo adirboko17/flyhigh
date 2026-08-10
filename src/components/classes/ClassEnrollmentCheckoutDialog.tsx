@@ -216,10 +216,14 @@ export function ClassEnrollmentCheckoutDialog({
             {order.percent > 0 && (
               <div className="flex justify-between gap-3 font-semibold text-aqua-700">
                 <span className="min-w-0">
-                  הנחת אחים {order.percent}%
-                  {enrolledSiblings > 0 && (
+                  הנחת אחים {order.percent}% על הילד השני ומעלה
+                  {order.discountedChildren > 0 && (
                     <span className="ms-1 text-xs font-normal text-ink-400">
-                      ({order.childCount} ילדים רשומים לחוג)
+                      ({order.discountedChildren} ילדים בהנחה
+                      {enrolledSiblings > 0
+                        ? ` · ${order.childCount} רשומים לחוג`
+                        : ""}
+                      )
                     </span>
                   )}
                 </span>
@@ -274,7 +278,8 @@ export function ClassEnrollmentCheckoutDialog({
             </div>
             <p className="mt-1 break-words text-brand-700">
               {count} {count === 1 ? "ילד/ה" : "ילדים"} · {classTitle}
-              {order.percent > 0 && ` · כולל ${order.percent}% הנחת אחים`}
+              {order.percent > 0 &&
+                ` · כולל ${order.percent}% הנחת אחים על הילד השני ומעלה`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
             </p>
           </div>

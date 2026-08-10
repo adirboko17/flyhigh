@@ -156,6 +156,8 @@ export default async function ParentDashboard() {
       full_name: child.full_name,
       birth_date: child.birth_date,
       gender: child.gender,
+      school_grade: child.school_grade,
+      grade_school_year: child.grade_school_year,
       notes: child.notes,
       activities: activitiesByChild.get(child.id) ?? [],
       linkedRecords: enrollmentCount + waitlistCount,

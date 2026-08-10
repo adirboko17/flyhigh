@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
+import { formatSchoolGrade } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
 import { calcAge, formatDate } from "@/utils/format";
 export type CustomerChild = {
@@ -20,6 +21,8 @@ export type CustomerChild = {
   full_name: string;
   birth_date: string | null;
   gender: "male" | "female" | "other" | null;
+  school_grade: number | null;
+  grade_school_year: number | null;
   notes: string | null;
   created_at: string;
 };
@@ -392,6 +395,7 @@ function DetailRow({
 
 function ChildCard({ child }: { child: CustomerChild }) {
   const age = calcAge(child.birth_date);
+  const grade = formatSchoolGrade(child.school_grade, child.grade_school_year);
 
   return (
     <Card className="overflow-hidden">
@@ -400,6 +404,7 @@ function ChildCard({ child }: { child: CustomerChild }) {
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-ink-900">{child.full_name}</p>
           <div className="mt-2 flex flex-wrap gap-2">
+            {grade && <Badge tone="brand">{grade}</Badge>}
             {age !== null && (
               <Badge tone="neutral">גיל {age}</Badge>
             )}

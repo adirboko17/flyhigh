@@ -36,6 +36,16 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
   },
 ];
 
+/** מספר חודשים לקצה התלישה בכרטיס הטיקט של מנוי. */
+export function programStubMonths(period?: string, index = 0): number {
+  if (period) {
+    const match = period.match(/(\d+)/);
+    if (match) return Number(match[1]);
+    if (period.includes("חודש") && !period.includes("חודשים")) return 1;
+  }
+  return index === 0 ? 1 : 3;
+}
+
 export const POOL_PASS_CARD_TEMPLATES: PlanCardTemplate[] = [
   {
     icon: "badge",

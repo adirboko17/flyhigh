@@ -5,6 +5,12 @@ import { ClassCard } from "@/components/classes/ClassCard";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import {
+  formatClassAudience,
+  formatClassGenderPolicy,
+  type ClassAudienceType,
+  type ClassGenderPolicy,
+} from "@/lib/class-audience";
 import { CLASS_STATUS } from "@/lib/constants";
 import {
   formatScheduleSummary,
@@ -19,8 +25,12 @@ export type ClassPreviewForm = {
   description: string;
   category: string;
   level: string;
+  gender_policy: ClassGenderPolicy;
+  audience_type: ClassAudienceType;
   age_min: string;
   age_max: string;
+  grade_min: string;
+  grade_max: string;
   capacity: string;
   price: string;
 };
@@ -163,13 +173,14 @@ function ClassPagePreview({
             value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
           />
           <PreviewDetailRow
+            icon="👥"
+            label="מיועד ל"
+            value={formatClassGenderPolicy(cls.gender_policy)}
+          />
+          <PreviewDetailRow
             icon="🎂"
-            label="גילאים"
-            value={
-              cls.age_min || cls.age_max
-                ? `${cls.age_min}–${cls.age_max}`
-                : "כל הגילאים"
-            }
+            label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
+            value={formatClassAudience(cls)}
           />
           <PreviewDetailRow
             icon="🗓️"

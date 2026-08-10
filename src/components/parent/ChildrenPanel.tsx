@@ -10,6 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { GENDER } from "@/lib/constants";
+import {
+  currentSchoolYear,
+  formatSchoolGrade,
+  parseSchoolGradeInput,
+  resolveSchoolGrade,
+  SCHOOL_GRADES,
+} from "@/lib/school-grade";
 import { createClient } from "@/lib/supabase/client";
 import type { Enums } from "@/types/database.types";
 import { calcAge, formatDate, initials } from "@/utils/format";
@@ -19,6 +26,8 @@ export type ParentChild = {
   full_name: string;
   birth_date: string | null;
   gender: Enums<"gender_type"> | null;
+  school_grade: number | null;
+  grade_school_year: number | null;
   notes: string | null;
   /** שמות הפעילויות הפעילות של הילד/ה. */
   activities: string[];
@@ -30,7 +39,7 @@ export type ParentChild = {
 /** כמה ילדים להציג בכרטיס עצמו לפני שעוברים ל"צפה בהכל". */
 const PREVIEW_LIMIT = 3;
 
-const EMPTY_FORM = { name: "", birth: "", gender: "", notes: "" };
+const EMPTY_FORM = { name: "", birth: "", gender: "", grade: "", notes: "" };
 
 export function ChildrenPanel({
   parentId,
@@ -62,10 +71,15 @@ export function ChildrenPanel({
   function openEdit(child: ParentChild) {
     setEditingChild(child);
     setError(null);
+    const currentGrade = resolveSchoolGrade(
+      child.school_grade,
+      child.grade_school_year,
+    );
     setForm({
       name: child.full_name,
       birth: child.birth_date ?? "",
       gender: child.gender ?? "",
+      grade: currentGrade == null ? "" : String(currentGrade),
       notes: child.notes ?? "",
     });
   }
@@ -86,11 +100,20 @@ export function ChildrenPanel({
     setSaving(true);
     setError(null);
 
+    const schoolGrade = parseSchoolGradeInput(form.grade);
+    if (schoolGrade === null) {
+      setSaving(false);
+      setError("נא לבחור כיתה.");
+      return;
+    }
+
     const { error: insertError } = await createClient().from("children").insert({
       parent_id: parentId,
       full_name: form.name.trim(),
       birth_date: form.birth || null,
       gender: (form.gender || null) as Enums<"gender_type"> | null,
+      school_grade: schoolGrade,
+      grade_school_year: currentSchoolYear(),
       notes: form.notes.trim() || null,
     });
 
@@ -112,12 +135,21 @@ export function ChildrenPanel({
     setSaving(true);
     setError(null);
 
+    const schoolGrade = parseSchoolGradeInput(form.grade);
+    if (schoolGrade === null) {
+      setSaving(false);
+      setError("נא לבחור כיתה.");
+      return;
+    }
+
     const { error: updateError } = await createClient()
       .from("children")
       .update({
         full_name: form.name.trim(),
         birth_date: form.birth || null,
         gender: (form.gender || null) as Enums<"gender_type"> | null,
+        school_grade: schoolGrade,
+        grade_school_year: currentSchoolYear(),
         notes: form.notes.trim() || null,
       })
       .eq("id", editingChild.id)
@@ -328,6 +360,15 @@ export function ChildrenPanel({
               <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                 <Detail label="תאריך לידה" value={formatDate(child.birth_date)} />
                 <Detail
+                  label="כיתה"
+                  value={
+                    formatSchoolGrade(
+                      child.school_grade,
+                      child.grade_school_year,
+                    ) ?? "לא צוינה"
+                  }
+                />
+                <Detail
                   label="מין"
                   value={child.gender ? GENDER[child.gender] : "לא צוין"}
                 />
@@ -385,7 +426,22 @@ export function ChildrenPanel({
               onChange={(e) => setForm({ ...form, birth: e.target.value })}
             />
           </Field>
-          <Field label="מין" htmlFor="childGender">
+          <Field label="כיתה" htmlFor="childGrade" required>
+            <Select
+              id="childGrade"
+              value={form.grade}
+              onChange={(e) => setForm({ ...form, grade: e.target.value })}
+              required
+            >
+              <option value="">בחרו כיתה...</option>
+              {SCHOOL_GRADES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="מין" htmlFor="childGender" className="sm:col-span-2">
             <Select
               id="childGender"
               value={form.gender}
@@ -418,7 +474,10 @@ export function ChildrenPanel({
           )}
 
           <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" disabled={saving || !form.name.trim()}>
+            <Button
+              type="submit"
+              disabled={saving || !form.name.trim() || !form.grade}
+            >
               {saving ? "שומר..." : "שמירה"}
             </Button>
             <Button type="button" variant="outline" onClick={closeAdd}>
@@ -455,7 +514,22 @@ export function ChildrenPanel({
               onChange={(e) => setForm({ ...form, birth: e.target.value })}
             />
           </Field>
-          <Field label="מין" htmlFor="editChildGender">
+          <Field label="כיתה" htmlFor="editChildGrade" required>
+            <Select
+              id="editChildGrade"
+              value={form.grade}
+              onChange={(e) => setForm({ ...form, grade: e.target.value })}
+              required
+            >
+              <option value="">בחרו כיתה...</option>
+              {SCHOOL_GRADES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="מין" htmlFor="editChildGender" className="sm:col-span-2">
             <Select
               id="editChildGender"
               value={form.gender}
@@ -488,7 +562,10 @@ export function ChildrenPanel({
           )}
 
           <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" disabled={saving || !form.name.trim()}>
+            <Button
+              type="submit"
+              disabled={saving || !form.name.trim() || !form.grade}
+            >
               {saving ? "שומר..." : "שמירת שינויים"}
             </Button>
             <Button type="button" variant="outline" onClick={closeEdit}>
@@ -600,10 +677,21 @@ function Detail({ label, value }: { label: string; value: string }) {
 function childMeta(child: {
   birth_date: string | null;
   gender: Enums<"gender_type"> | null;
+  school_grade: number | null;
+  grade_school_year: number | null;
 }): string {
+  const parts: string[] = [];
+  const grade = formatSchoolGrade(child.school_grade, child.grade_school_year);
+  if (grade) parts.push(grade);
+
   const age = calcAge(child.birth_date);
-  if (age === null) return "לא צוין תאריך לידה";
-  const prefix =
-    child.gender === "female" ? "בת" : child.gender === "male" ? "בן" : "גיל";
-  return `${prefix} ${age}`;
+  if (age !== null) {
+    const prefix =
+      child.gender === "female" ? "בת" : child.gender === "male" ? "בן" : "גיל";
+    parts.push(`${prefix} ${age}`);
+  } else if (!grade) {
+    return "לא צוין תאריך לידה";
+  }
+
+  return parts.join(" · ");
 }

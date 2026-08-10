@@ -43,6 +43,6 @@ export const INSTRUCTOR_NAV: NavItem[] = [
 export const PUBLIC_NAV: NavItem[] = [
   { href: "/", label: "בית", icon: "" },
   { href: "/classes", label: "חוגים", icon: "" },
-  { href: "/programs", label: "מסלולים", icon: "" },
+  { href: "/programs", label: "הבריכה", icon: "" },
   { href: "/contact", label: "צור קשר", icon: "" },
 ];

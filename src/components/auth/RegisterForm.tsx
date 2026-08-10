@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  currentSchoolYear,
+  parseSchoolGradeInput,
+  SCHOOL_GRADES,
+} from "@/lib/school-grade";
 import { BirthDateInput } from "@/components/ui/BirthDateInput";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { OtpInput, OTP_CODE_LENGTH } from "@/components/auth/OtpInput";
@@ -26,6 +31,7 @@ type ChildDraft = {
   name: string;
   birth: string;
   gender: string;
+  grade: string;
 };
 
 let childKey = 0;
@@ -34,6 +40,7 @@ const newChild = (): ChildDraft => ({
   name: "",
   birth: "",
   gender: "",
+  grade: "",
 });
 
 export function RegisterForm() {
@@ -88,7 +95,11 @@ export function RegisterForm() {
     (k: keyof typeof credentials) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setCredentials((f) => ({ ...f, [k]: e.target.value }));
 
-  function updateChild(key: number, field: "name" | "birth" | "gender", value: string) {
+  function updateChild(
+    key: number,
+    field: "name" | "birth" | "gender" | "grade",
+    value: string,
+  ) {
     setChildren((list) =>
       list.map((c) => (c.key === key ? { ...c, [field]: value } : c))
     );
@@ -134,6 +145,12 @@ export function RegisterForm() {
         return setError("בחרו אם להוסיף ילדים לחשבון.");
       if (wantsChildren && namedChildren.length === 0)
         return setError("נא למלא שם של ילד/ה אחד לפחות, או לבחור 'לא'.");
+      if (wantsChildren) {
+        const missingGrade = namedChildren.some(
+          (child) => parseSchoolGradeInput(child.grade) === null,
+        );
+        if (missingGrade) return setError("נא לבחור כיתה לכל ילד/ה.");
+      }
       setStep(3);
       return;
     }
@@ -213,6 +230,8 @@ export function RegisterForm() {
             full_name: c.name.trim(),
             birth_date: c.birth || null,
             gender: c.gender || null,
+            school_grade: parseSchoolGradeInput(c.grade),
+            grade_school_year: currentSchoolYear(),
           })),
         },
       },
@@ -502,9 +521,33 @@ export function RegisterForm() {
                       />
                     </Field>
                     <Field
+                      label="כיתה"
+                      htmlFor={`childGrade-${child.key}`}
+                      required
+                      variant="ds"
+                    >
+                      <Select
+                        id={`childGrade-${child.key}`}
+                        variant="ds"
+                        value={child.grade}
+                        onChange={(e) =>
+                          updateChild(child.key, "grade", e.target.value)
+                        }
+                        required
+                      >
+                        <option value="">בחרו כיתה...</option>
+                        {SCHOOL_GRADES.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field
                       label="מין"
                       htmlFor={`childGender-${child.key}`}
                       variant="ds"
+                      className="sm:col-span-2"
                     >
                       <Select
                         id={`childGender-${child.key}`}
@@ -537,7 +580,7 @@ export function RegisterForm() {
                     הוספת ילד/ה נוסף/ת
                   </span>
                   <span className="block text-xs text-ink-500">
-                    שם, תאריך לידה ומין - זה כל מה שצריך
+                    שם, כיתה, תאריך לידה ומין
                   </span>
                 </span>
               </button>

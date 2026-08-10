@@ -1,4 +1,5 @@
-﻿import { ClassCard } from "@/components/classes/ClassCard";
+﻿import Link from "next/link";
+import { ClassCard } from "@/components/classes/ClassCard";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getPublicClasses } from "@/lib/public-data";
@@ -52,6 +53,47 @@ export default async function ClassesPage() {
             </p>
           </div>
         )}
+
+        <ScrollReveal className="mt-12 sm:mt-14">
+          <aside
+            aria-labelledby="pool-cta-heading"
+            className="relative overflow-hidden rounded-3xl border border-ink-100 bg-white"
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(0,174,239,0.10)_0%,rgba(13,82,133,0.06)_45%,rgba(236,0,140,0.07)_100%)]"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -start-16 top-1/2 h-48 w-48 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(0,174,239,0.18),transparent_70%)]"
+            />
+
+            <div className="relative flex flex-col gap-6 p-7 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:p-9">
+              <div className="min-w-0 max-w-xl">
+                <p className="text-xs font-bold tracking-wide text-[var(--logo-cyan)]">
+                  גם בלי חוג קבוע
+                </p>
+                <h2
+                  id="pool-cta-heading"
+                  className="mt-1.5 font-display text-[22px] font-extrabold leading-snug text-ink-900 sm:text-[26px]"
+                >
+                  מנויים, כרטיסיות ושיעורים פרטיים בבריכה
+                </h2>
+                <p className="mt-2 text-[15px] leading-relaxed text-ink-600 sm:text-base">
+                  רוצים שחייה חופשית, כרטיסיית כניסות או שיעור פרטי? בעמוד הבריכה
+                  תמצאו את כל האפשרויות — ותוכלו לבחור מה שמתאים לקצב שלכם.
+                </p>
+              </div>
+
+              <Link
+                href="/programs"
+                className="hero-cta-primary ah-btn ah-btn--lg shrink-0 self-start sm:self-center"
+              >
+                לעמוד הבריכה
+              </Link>
+            </div>
+          </aside>
+        </ScrollReveal>
       </div>
     </div>
   );

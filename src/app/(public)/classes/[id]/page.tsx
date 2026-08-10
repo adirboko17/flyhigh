@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
+import { formatClassAudience, formatClassGenderPolicy } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import {
   getPublicClasses,
@@ -99,9 +100,14 @@ export default async function ClassDetailPage({
                 value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
               />
               <DetailRow
+                icon="👥"
+                label="מיועד ל"
+                value={formatClassGenderPolicy(cls.gender_policy)}
+              />
+              <DetailRow
                 icon="🎂"
-                label="גילאים"
-                value={cls.age_min || cls.age_max ? `${cls.age_min}–${cls.age_max}` : "כל הגילאים"}
+                label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
+                value={formatClassAudience(cls)}
               />
               <DetailRow icon="🗓️" label="תאריך התחלה" value={formatDate(cls.start_date)} />
               <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />

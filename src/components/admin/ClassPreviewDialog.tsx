@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CLASS_SESSION_STATUS, CLASS_STATUS, dayLabel } from "@/lib/constants";
+import {
+  formatClassAudience,
+  formatClassGenderPolicy,
+} from "@/lib/class-audience";
 import { describeTier, parseSiblingTiers } from "@/lib/finance/siblingDiscount";
 import { createClient } from "@/lib/supabase/client";
 import type { Enums } from "@/types/database.types";
@@ -67,10 +71,8 @@ export function ClassPreviewDialog({
     (session) => session.status === "scheduled"
   );
 
-  const ageLabel =
-    cls.age_min !== null || cls.age_max !== null
-      ? `${cls.age_min ?? "—"}–${cls.age_max ?? "—"}`
-      : "כל הגילאים";
+  const audienceLabel = formatClassAudience(cls);
+  const genderLabel = formatClassGenderPolicy(cls.gender_policy);
 
   const scheduleLabel =
     cls.schedule_type === "custom"
@@ -134,10 +136,15 @@ export function ClassPreviewDialog({
           />
           <DetailBox icon="📅" label="לוח זמנים" value={scheduleLabel} />
           <DetailBox icon="🕒" label="שעות" value={hoursLabel} />
-          <DetailBox icon="🎂" label="גילאים" value={ageLabel} />
+          <DetailBox icon="👥" label="מיועד ל" value={genderLabel} />
+          <DetailBox
+            icon="🎂"
+            label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
+            value={audienceLabel}
+          />
           <DetailBox icon="💰" label="מחיר" value={formatCurrency(cls.price)} />
           <DetailBox
-            icon="👥"
+            icon="👨‍👩‍👧"
             label="תפוסה"
             value={`${registered} מתוך ${cls.capacity}`}
             hint={available > 0 ? `${available} מקומות פנויים` : "אין מקומות פנויים"}

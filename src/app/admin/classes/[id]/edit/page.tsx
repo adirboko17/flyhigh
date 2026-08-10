@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassForm } from "@/components/admin/ClassForm";
+import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
 import { buildInitialSchedule } from "@/lib/scheduling/classSchedule";
 import { createClient } from "@/lib/supabase/server";
@@ -17,17 +18,13 @@ export default async function EditClassPage({
 
   const [
     { data: classItem },
-    { data: instructors },
+    instructors,
     { data: slots },
     { data: sessions },
     defaultSiblingTiers,
   ] = await Promise.all([
     supabase.from("classes").select("*").eq("id", id).single(),
-    supabase
-      .from("instructors")
-      .select("id, full_name")
-      .eq("status", "active")
-      .order("full_name"),
+    getClassInstructorOptions(),
     supabase.from("class_weekly_slots").select("*").eq("class_id", id),
     supabase
       .from("class_sessions")
@@ -49,7 +46,7 @@ export default async function EditClassPage({
     <div className="mx-auto max-w-6xl">
       <PageHeader title="עריכת חוג" description={classItem.title} />
       <ClassForm
-        instructors={instructors ?? []}
+        instructors={instructors}
         existing={classItem}
         initialSchedule={initialSchedule}
         defaultSiblingTiers={defaultSiblingTiers}

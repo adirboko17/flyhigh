@@ -23,14 +23,20 @@ const STATUS_OPTIONS: { value: Status; label: string; active: string }[] = [
 
 interface ClassAttendanceFormProps {
   classId: string;
-  instructorId: string;
+  /** מדריכת החוג; אצל מנהל יכול להיות null אם אין שיוך. */
+  instructorId: string | null;
   students: { id: string; full_name: string }[];
+  /** הודעה כשאין מפגשים — ברירת מחדל מתאימה למדריכה. */
+  emptySessionsHint?: string;
+  onSaved?: () => void;
 }
 
 export function ClassAttendanceForm({
   classId,
   instructorId,
   students,
+  emptySessionsHint = "לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.",
+  onSaved,
 }: ClassAttendanceFormProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<ClassSessionOption[]>([]);
@@ -136,6 +142,7 @@ export function ClassAttendanceForm({
 
     setSaving(false);
     setSaved(true);
+    onSaved?.();
     router.refresh();
   }
 
@@ -163,7 +170,7 @@ export function ClassAttendanceForm({
 
       {!sessionsLoading && sessions.length === 0 ? (
         <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/50 p-4 text-center text-sm text-ink-500">
-          לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.
+          {emptySessionsHint}
         </p>
       ) : loading ? (
         <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>

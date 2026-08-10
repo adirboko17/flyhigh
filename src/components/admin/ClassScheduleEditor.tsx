@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/icons/Icon";
 import { Field, Input } from "@/components/ui/Input";
@@ -12,6 +13,7 @@ import {
   type ClassSessionDraft,
 } from "@/lib/scheduling/classSchedule";
 import { formatDate, formatTime } from "@/utils/format";
+import { cn } from "@/utils/cn";
 
 interface Props {
   value: ClassScheduleState;
@@ -39,18 +41,24 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
           ...value.weeklySlots,
           {
             dayOfWeek,
-            startTime: defaultTime.startTime,
-            endTime: defaultTime.endTime,
+            startTime: defaultTime.startTime || "16:00",
+            endTime: defaultTime.endTime || "17:00",
           },
         ].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
 
     onChange({ ...value, weeklySlots });
   }
 
-  function setSharedTime(field: "startTime" | "endTime", time: string) {
+  function updateSlotTime(
+    dayOfWeek: number,
+    field: "startTime" | "endTime",
+    time: string,
+  ) {
     onChange({
       ...value,
-      weeklySlots: value.weeklySlots.map((s) => ({ ...s, [field]: time })),
+      weeklySlots: value.weeklySlots.map((slot) =>
+        slot.dayOfWeek === dayOfWeek ? { ...slot, [field]: time } : slot,
+      ),
     });
   }
 
@@ -58,7 +66,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
     const generated = generateWeeklySessions(
       value.weeklySlots,
       value.rangeStart,
-      value.rangeEnd
+      value.rangeEnd,
     );
     onChange({
       ...value,
@@ -68,7 +76,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
 
   function updateSession(index: number, patch: Partial<ClassSessionDraft>) {
     const sessions = value.sessions.map((s, i) =>
-      i === index ? { ...s, ...patch } : s
+      i === index ? { ...s, ...patch } : s,
     );
     onChange({ ...value, sessions });
   }
@@ -123,7 +131,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
             <div className="flex flex-wrap gap-2">
               {DAYS_OF_WEEK.map((label, dayOfWeek) => {
                 const selected = value.weeklySlots.some(
-                  (s) => s.dayOfWeek === dayOfWeek
+                  (s) => s.dayOfWeek === dayOfWeek,
                 );
                 return (
                   <button
@@ -145,25 +153,46 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
           </Field>
 
           {value.weeklySlots.length > 0 && (
-            <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="שעת התחלה (לכל הימים)">
-                <ScheduleInput
-                  type="time"
-                  placeholder="בחרו שעת התחלה"
-                  value={value.weeklySlots[0]?.startTime ?? ""}
-                  onChange={(e) => setSharedTime("startTime", e.target.value)}
-                  disabled={disabled}
-                />
-              </Field>
-              <Field label="שעת סיום (לכל הימים)">
-                <ScheduleInput
-                  type="time"
-                  placeholder="בחרו שעת סיום"
-                  value={value.weeklySlots[0]?.endTime ?? ""}
-                  onChange={(e) => setSharedTime("endTime", e.target.value)}
-                  disabled={disabled}
-                />
-              </Field>
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-ink-800">
+                שעות לפי יום
+              </p>
+              <p className="text-xs text-ink-500">
+                אפשר להגדיר שעה שונה לכל יום. אחרי יצירת הרשימה אפשר גם לשנות
+                שעה לכל מפגש בנפרד.
+              </p>
+              {value.weeklySlots.map((slot) => (
+                <div
+                  key={slot.dayOfWeek}
+                  className="grid grid-cols-[minmax(4.5rem,auto)_1fr_1fr] items-end gap-2 rounded-xl border border-ink-100 bg-ink-50/60 p-3 sm:gap-3"
+                >
+                  <p className="pb-2.5 text-sm font-bold text-ink-800">
+                    {DAYS_OF_WEEK[slot.dayOfWeek]}
+                  </p>
+                  <Field label="התחלה">
+                    <ScheduleInput
+                      type="time"
+                      placeholder="התחלה"
+                      value={slot.startTime}
+                      onChange={(e) =>
+                        updateSlotTime(slot.dayOfWeek, "startTime", e.target.value)
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field label="סיום">
+                    <ScheduleInput
+                      type="time"
+                      placeholder="סיום"
+                      value={slot.endTime}
+                      onChange={(e) =>
+                        updateSlotTime(slot.dayOfWeek, "endTime", e.target.value)
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
+              ))}
             </div>
           )}
 
@@ -222,7 +251,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
           {formatScheduleSummary(
             value.scheduleType,
             value.weeklySlots,
-            value.sessions
+            value.sessions,
           )}
         </p>
       )}
@@ -260,15 +289,22 @@ function ScheduleTypeOption({
   );
 }
 
+/**
+ * שדה תאריך/שעה עם תצוגה בעברית. לוחצים על כל השורה כדי לפתוח את הבורר
+ * המקורי של הדפדפן — כולל שינוי שעה לכל מפגש.
+ */
 function ScheduleInput({
   className,
   placeholder,
   type,
   value,
+  disabled,
+  onChange,
   ...props
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
   type: "date" | "time";
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const empty = value === "" || value == null;
   const displayValue = empty
     ? placeholder
@@ -276,26 +312,50 @@ function ScheduleInput({
       ? formatDate(String(value))
       : formatTime(String(value));
 
+  function openPicker() {
+    if (disabled) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    try {
+      input.showPicker?.();
+    } catch {
+      // חלק מהדפדפנים חוסמים showPicker מחוץ ללחיצה ישירה על ה-input.
+    }
+  }
+
   return (
     <div
-      className={`schedule-input-shell group relative h-11 w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-ink-200 bg-white transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200 ${
-        className ?? ""
-      }`}
+      className={cn(
+        "schedule-input-shell group relative h-11 w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-ink-200 bg-white transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200",
+        disabled && "cursor-not-allowed bg-ink-50 opacity-60",
+        !disabled && "cursor-pointer",
+        className,
+      )}
+      onClick={openPicker}
     >
       <Input
         {...props}
+        ref={inputRef}
         type={type}
         dir="ltr"
         value={value}
-        className="schedule-native-input block !h-full !w-full min-w-0 max-w-full appearance-none !border-0 !bg-transparent !px-4 !text-transparent !shadow-none !outline-none !ring-0 [-webkit-text-fill-color:transparent]"
+        disabled={disabled}
+        onChange={onChange}
+        onClick={(e) => {
+          e.stopPropagation();
+          openPicker();
+        }}
+        className="schedule-native-input absolute inset-0 z-[1] !h-full !w-full min-w-0 max-w-full cursor-pointer appearance-none !border-0 !bg-transparent !px-4 !opacity-0 !shadow-none !outline-none !ring-0"
       />
       <span
         aria-hidden
-        className={`pointer-events-none absolute inset-0 flex items-center justify-between gap-3 px-4 ${
+        className={cn(
+          "pointer-events-none absolute inset-0 z-0 flex items-center justify-between gap-3 px-4",
           empty
             ? "text-ink-400 group-focus-within:hidden"
-            : "font-medium text-ink-800"
-        }`}
+            : "font-medium text-ink-800",
+        )}
       >
         <span className="min-w-0 truncate" dir="rtl">
           {displayValue}
@@ -348,9 +408,9 @@ function SessionList({
   return (
     <Field
       label="מפגשים"
-      hint="ניתן לבטל מפגש (חג), לשנות תאריך/שעה, או להוסיף מפגש מחליף"
+      hint="לחצו על השעה של כל מפגש כדי לשנות אותה. אפשר גם לשנות תאריך, לבטל מפגש או להוסיף מפגש"
     >
-      <div className="space-y-2">
+      <div className="space-y-3">
         {sessions.map((session, index) => (
           <div
             key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
@@ -360,63 +420,72 @@ function SessionList({
                 : "border-ink-100 bg-white"
             }`}
           >
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_auto_auto_auto] md:gap-3">
-              <ScheduleInput
-                className="col-span-2 md:col-span-1"
-                type="date"
-                placeholder="תאריך המפגש"
-                value={session.sessionDate}
-                onChange={(e) =>
-                  onUpdate(index, { sessionDate: e.target.value })
-                }
-                disabled={disabled || session.status === "cancelled"}
-              />
-              <ScheduleInput
-                type="time"
-                placeholder="שעת התחלה"
-                value={session.startTime}
-                onChange={(e) => onUpdate(index, { startTime: e.target.value })}
-                disabled={disabled || session.status === "cancelled"}
-              />
-              <ScheduleInput
-                type="time"
-                placeholder="שעת סיום"
-                value={session.endTime}
-                onChange={(e) => onUpdate(index, { endTime: e.target.value })}
-                disabled={disabled || session.status === "cancelled"}
-              />
-              <div className="col-span-2 flex gap-2 md:col-span-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 md:flex-none"
-                  disabled={disabled}
-                  onClick={() =>
-                    onUpdate(index, {
-                      status:
-                        session.status === "cancelled" ? "scheduled" : "cancelled",
-                      notes:
-                        session.status === "cancelled"
-                          ? undefined
-                          : session.notes ?? "בוטל",
-                    })
+            <div className="grid gap-2 sm:grid-cols-[1.2fr_0.9fr_0.9fr]">
+              <Field label="תאריך">
+                <ScheduleInput
+                  type="date"
+                  placeholder="תאריך המפגש"
+                  value={session.sessionDate}
+                  onChange={(e) =>
+                    onUpdate(index, { sessionDate: e.target.value })
                   }
-                >
-                  {session.status === "cancelled" ? "שחזור" : "ביטול"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 md:flex-none"
-                  disabled={disabled}
-                  onClick={() => onRemove(index)}
-                >
-                  מחיקה
-                </Button>
-              </div>
+                  disabled={disabled || session.status === "cancelled"}
+                />
+              </Field>
+              <Field label="שעת התחלה">
+                <ScheduleInput
+                  type="time"
+                  placeholder="התחלה"
+                  value={session.startTime}
+                  onChange={(e) =>
+                    onUpdate(index, { startTime: e.target.value })
+                  }
+                  disabled={disabled || session.status === "cancelled"}
+                />
+              </Field>
+              <Field label="שעת סיום">
+                <ScheduleInput
+                  type="time"
+                  placeholder="סיום"
+                  value={session.endTime}
+                  onChange={(e) => onUpdate(index, { endTime: e.target.value })}
+                  disabled={disabled || session.status === "cancelled"}
+                />
+              </Field>
             </div>
+
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                disabled={disabled}
+                onClick={() =>
+                  onUpdate(index, {
+                    status:
+                      session.status === "cancelled" ? "scheduled" : "cancelled",
+                    notes:
+                      session.status === "cancelled"
+                        ? undefined
+                        : session.notes ?? "בוטל",
+                  })
+                }
+              >
+                {session.status === "cancelled" ? "שחזור" : "ביטול"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                disabled={disabled}
+                onClick={() => onRemove(index)}
+              >
+                מחיקה
+              </Button>
+            </div>
+
             {session.status === "cancelled" && (
               <p className="mt-2 text-xs font-medium text-red-600">
                 מפגש מבוטל · {formatDate(session.sessionDate)}{" "}

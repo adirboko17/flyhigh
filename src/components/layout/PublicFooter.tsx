@@ -13,7 +13,7 @@ const FOOTER_TAGLINE =
 const NAV_LINKS = [
   { href: "/", label: "בית" },
   { href: "/classes", label: "חוגים" },
-  { href: "/programs", label: "מסלולים" },
+  { href: "/programs", label: "הבריכה" },
   { href: "/contact", label: "צור קשר" },
   { href: "/register", label: "הרשמה", guestOnly: true },
   { href: "/login", label: "התחברות", guestOnly: true },

@@ -15,6 +15,7 @@ import {
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
+import { ClassAttendanceForm } from "@/components/instructor/ClassAttendanceForm";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -23,6 +24,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { createClient } from "@/lib/supabase/client";
 import { setClassStatus } from "@/lib/admin/classStatus";
+import {
+  formatClassAudience,
+  formatClassGenderPolicy,
+} from "@/lib/class-audience";
 import {
   ATTENDANCE_STATUS,
   CLASS_STATUS,
@@ -78,8 +83,12 @@ export type AdminClassRow = {
   day_of_week: number | null;
   start_time: string | null;
   end_time: string | null;
+  gender_policy: Enums<"class_gender_policy">;
+  audience_type: Enums<"class_audience_type">;
   age_min: number | null;
   age_max: number | null;
+  grade_min: number | null;
+  grade_max: number | null;
   price: number;
   capacity: number;
   status: keyof typeof CLASS_STATUS;
@@ -88,12 +97,14 @@ export type AdminClassRow = {
   end_date: string | null;
   sibling_discount_tiers: Json | null;
   instructors: { full_name: string } | null;
+  instructor_id: string | null;
   enrollments: AdminClassEnrollment[];
   waitlist: AdminClassWaitlistEntry[];
   attendance: AdminClassAttendance[];
 };
 
 type PanelTab = "enrollments" | "waitlist" | "attendance";
+type AttendanceMode = "mark" | "history";
 
 interface ClassListProps {
   classes: AdminClassRow[];
@@ -131,11 +142,12 @@ function attendanceRate(item: AdminClassRow) {
   return Math.round((present / item.attendance.length) * 100);
 }
 
-function ageRangeLabel(min: number | null, max: number | null) {
-  if (min !== null && max !== null) return `גילאי ${min}–${max}`;
-  if (min !== null) return `מגיל ${min}`;
-  if (max !== null) return `עד גיל ${max}`;
-  return null;
+function audienceLabel(item: AdminClassRow) {
+  const parts = [
+    formatClassGenderPolicy(item.gender_policy),
+    formatClassAudience(item),
+  ];
+  return parts.filter(Boolean).join(" · ");
 }
 
 function scheduleLabel(item: AdminClassRow) {
@@ -154,6 +166,7 @@ export function ClassList({ classes }: ClassListProps) {
   const [selected, setSelected] = useState<{
     cls: AdminClassRow;
     tab: PanelTab;
+    attendanceMode?: AttendanceMode;
   } | null>(null);
   const [previewed, setPreviewed] = useState<AdminClassRow | null>(null);
   const [manualAssign, setManualAssign] = useState<AdminClassRow | null>(null);
@@ -206,7 +219,9 @@ export function ClassList({ classes }: ClassListProps) {
             <ClassCard
               key={cls.id}
               cls={cls}
-              onOpenPanel={(tab) => setSelected({ cls, tab })}
+              onOpenPanel={(tab, attendanceMode) =>
+                setSelected({ cls, tab, attendanceMode })
+              }
               onPreview={() => setPreviewed(cls)}
               onAssign={() => setManualAssign(cls)}
             />
@@ -216,8 +231,9 @@ export function ClassList({ classes }: ClassListProps) {
 
       {selected && (
         <ClassDetailPanel
-          cls={selected.cls}
+          cls={classes.find((c) => c.id === selected.cls.id) ?? selected.cls}
           initialTab={selected.tab}
+          initialAttendanceMode={selected.attendanceMode ?? "mark"}
           onClose={() => setSelected(null)}
         />
       )}
@@ -249,7 +265,7 @@ function ClassCard({
   onAssign,
 }: {
   cls: AdminClassRow;
-  onOpenPanel: (tab: PanelTab) => void;
+  onOpenPanel: (tab: PanelTab, attendanceMode?: AttendanceMode) => void;
   onPreview: () => void;
   onAssign: () => void;
 }) {
@@ -259,7 +275,7 @@ function ClassCard({
   const waiting = openWaitlist(cls).length;
   const rate = attendanceRate(cls);
   const ratio = cls.capacity > 0 ? registered / cls.capacity : 0;
-  const ageLabel = ageRangeLabel(cls.age_min, cls.age_max);
+  const ageLabel = audienceLabel(cls);
 
   const barTone =
     ratio >= 1 ? "bg-red-500" : ratio >= 0.75 ? "bg-amber-500" : "bg-aqua-500";
@@ -296,6 +312,11 @@ function ClassCard({
                   label: "שיבוץ לחוג",
                   icon: <UserPlusMenuIcon className="text-brand-600" />,
                   onClick: onAssign,
+                },
+                {
+                  label: "סימון נוכחות",
+                  icon: <AttendanceMenuIcon className="text-brand-600" />,
+                  onClick: () => onOpenPanel("attendance", "mark"),
                 },
                 ...(cls.status === "inactive"
                   ? [
@@ -405,7 +426,7 @@ function ClassCard({
             <StatButton
               value={rate === null ? "—" : `${rate}%`}
               label="נוכחות"
-              onClick={() => onOpenPanel("attendance")}
+              onClick={() => onOpenPanel("attendance", "mark")}
             />
           </div>
         </div>
@@ -469,27 +490,115 @@ function DetailLine({
   );
 }
 
+function personSearchHaystack(...parts: Array<string | null | undefined>) {
+  return normalizeSearch(parts.filter(Boolean).join(" "));
+}
+
 function ClassDetailPanel({
   cls,
   initialTab,
+  initialAttendanceMode = "mark",
   onClose,
 }: {
   cls: AdminClassRow;
   initialTab: PanelTab;
+  initialAttendanceMode?: AttendanceMode;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<PanelTab>(initialTab);
+  const [attendanceMode, setAttendanceMode] =
+    useState<AttendanceMode>(initialAttendanceMode);
   const [assigning, setAssigning] = useState<AssignMode | null>(null);
+  const [listQuery, setListQuery] = useState("");
 
-  const enrollments = activeEnrollments(cls);
-  const cancelled = cls.enrollments.filter((e) => e.status === "cancelled");
+  const enrollments = useMemo(() => {
+    const rows = activeEnrollments(cls);
+    return [...rows].sort((a, b) =>
+      (a.children?.full_name ?? "").localeCompare(
+        b.children?.full_name ?? "",
+        "he"
+      )
+    );
+  }, [cls]);
+
+  const cancelled = useMemo(() => {
+    const rows = cls.enrollments.filter((e) => e.status === "cancelled");
+    return [...rows].sort((a, b) =>
+      (a.children?.full_name ?? "").localeCompare(
+        b.children?.full_name ?? "",
+        "he"
+      )
+    );
+  }, [cls.enrollments]);
+
   const waiting = openWaitlist(cls);
+
+  const students = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; full_name: string }[] = [];
+    for (const e of enrollments) {
+      if (!e.child_id || !e.children?.full_name || seen.has(e.child_id)) continue;
+      seen.add(e.child_id);
+      list.push({ id: e.child_id, full_name: e.children.full_name });
+    }
+    return list;
+  }, [enrollments]);
 
   const tabs: { id: PanelTab; label: string; count: number | null }[] = [
     { id: "enrollments", label: "נרשמים", count: enrollments.length },
     { id: "waitlist", label: "המתנה", count: waiting.length },
     { id: "attendance", label: "נוכחות", count: null },
   ];
+
+  useEffect(() => {
+    setListQuery("");
+  }, [tab, cls.id]);
+
+  useEffect(() => {
+    setAttendanceMode(initialAttendanceMode);
+  }, [cls.id, initialAttendanceMode]);
+
+  const q = normalizeSearch(listQuery);
+
+  const filteredEnrollments = useMemo(() => {
+    if (!q) return enrollments;
+    return enrollments.filter((e) =>
+      personSearchHaystack(
+        e.children?.full_name,
+        e.profiles?.full_name,
+        e.profiles?.phone
+      ).includes(q)
+    );
+  }, [enrollments, q]);
+
+  const filteredCancelled = useMemo(() => {
+    if (!q) return cancelled;
+    return cancelled.filter((e) =>
+      personSearchHaystack(
+        e.children?.full_name,
+        e.profiles?.full_name,
+        e.profiles?.phone
+      ).includes(q)
+    );
+  }, [cancelled, q]);
+
+  const filteredWaiting = useMemo(() => {
+    if (!q) return waiting;
+    return waiting.filter((e) =>
+      personSearchHaystack(
+        e.children?.full_name,
+        e.profiles?.full_name,
+        e.profiles?.phone
+      ).includes(q)
+    );
+  }, [waiting, q]);
+
+  const showListSearch =
+    (tab === "enrollments" && enrollments.length + cancelled.length >= 6) ||
+    (tab === "waitlist" && waiting.length >= 6) ||
+    (tab === "attendance" &&
+      attendanceMode === "history" &&
+      cls.attendance.length >= 8);
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -504,12 +613,12 @@ function ClassDetailPanel({
         aria-modal="true"
         aria-labelledby="class-panel-title"
         className={cn(
-          "relative z-10 ms-auto flex h-full w-full max-w-lg flex-col",
+          "relative z-10 ms-auto flex h-full w-full max-w-xl flex-col",
           "border-s border-ink-100 bg-white shadow-card animate-fade-in"
         )}
       >
-        <div className="bg-brand-gradient px-6 pb-6 pt-6 text-white">
-          <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="shrink-0 bg-brand-gradient px-5 pb-5 pt-5 text-white sm:px-6">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -529,7 +638,7 @@ function ClassDetailPanel({
           </p>
         </div>
 
-        <div className="flex gap-1.5 border-b border-ink-100 bg-ink-50/60 p-2">
+        <div className="flex shrink-0 gap-1 border-b border-ink-100 bg-ink-50/70 p-1.5">
           {tabs.map((t) => {
             const active = t.id === tab;
             return (
@@ -539,7 +648,7 @@ function ClassDetailPanel({
                 onClick={() => setTab(t.id)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all sm:px-3 sm:text-sm",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-all sm:text-sm",
                   active
                     ? "bg-white text-brand-700 shadow-soft"
                     : "text-ink-500 hover:bg-white/70 hover:text-ink-800"
@@ -549,8 +658,10 @@ function ClassDetailPanel({
                 {t.count !== null && (
                   <span
                     className={cn(
-                      "rounded-full px-1.5 text-xs font-bold",
-                      active ? "bg-brand-100 text-brand-700" : "bg-ink-200 text-ink-600"
+                      "min-w-[1.25rem] rounded-md px-1.5 text-center text-[11px] font-bold tabular-nums",
+                      active
+                        ? "bg-brand-100 text-brand-700"
+                        : "bg-ink-200/80 text-ink-600"
                     )}
                   >
                     {t.count}
@@ -561,52 +672,72 @@ function ClassDetailPanel({
           })}
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
-          {tab === "enrollments" && (
-            <>
-              {enrollments.length === 0 ? (
-                <EmptyState title="אין נרשמים לחוג זה" />
-              ) : (
-                enrollments.map((enrollment) => (
-                  <EnrollmentCard key={enrollment.id} enrollment={enrollment} />
-                ))
-              )}
+        {showListSearch && (
+          <div className="shrink-0 border-b border-ink-100 bg-white px-4 py-2.5">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-ink-400" />
+              <Input
+                type="search"
+                value={listQuery}
+                onChange={(e) => setListQuery(e.target.value)}
+                placeholder="חיפוש לפי שם או טלפון..."
+                className="h-9 border-ink-100 bg-ink-50/60 ps-9 text-sm shadow-none"
+                aria-label="חיפוש ברשימה"
+              />
+            </div>
+          </div>
+        )}
 
-              {cancelled.length > 0 && (
-                <>
-                  <p className="mt-3 text-sm font-semibold text-ink-500">
-                    הרשמות שבוטלו ({cancelled.length})
-                  </p>
-                  {cancelled.map((enrollment) => (
-                    <EnrollmentCard
-                      key={enrollment.id}
-                      enrollment={enrollment}
-                      muted
-                    />
-                  ))}
-                </>
-              )}
-            </>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-ink-50/40">
+          {tab === "enrollments" && (
+            <EnrollmentsTab
+              active={filteredEnrollments}
+              cancelled={filteredCancelled}
+              totalActive={enrollments.length}
+              searching={Boolean(q)}
+            />
           )}
 
           {tab === "waitlist" &&
             (waiting.length === 0 ? (
-              <EmptyState
-                title="אין ממתינים לחוג זה"
-                description="כשהחוג יתמלא, הורים שיירשמו יופיעו כאן לפי סדר ההצטרפות."
-              />
-            ) : (
-              waiting.map((entry, index) => (
-                <WaitlistCard
-                  key={entry.id}
-                  entry={entry}
-                  position={index + 1}
-                  onAssign={() => setAssigning({ kind: "waitlist", entry })}
+              <div className="p-5">
+                <EmptyState
+                  title="אין ממתינים לחוג זה"
+                  description="כשהחוג יתמלא, הורים שיירשמו יופיעו כאן לפי סדר ההצטרפות."
                 />
-              ))
+              </div>
+            ) : filteredWaiting.length === 0 ? (
+              <div className="p-5">
+                <EmptyState title="לא נמצאו ממתינים לפי החיפוש" />
+              </div>
+            ) : (
+              <ul className="divide-y divide-ink-100 border-b border-ink-100 bg-white">
+                {filteredWaiting.map((entry) => {
+                  const position =
+                    waiting.findIndex((w) => w.id === entry.id) + 1;
+                  return (
+                    <WaitlistRow
+                      key={entry.id}
+                      entry={entry}
+                      position={position}
+                      onAssign={() =>
+                        setAssigning({ kind: "waitlist", entry })
+                      }
+                    />
+                  );
+                })}
+              </ul>
             ))}
 
-          {tab === "attendance" && <AttendanceTab records={cls.attendance} />}
+          {tab === "attendance" && (
+            <AttendanceTab
+              cls={cls}
+              students={students}
+              mode={attendanceMode}
+              onModeChange={setAttendanceMode}
+              query={listQuery}
+            />
+          )}
         </div>
       </aside>
 
@@ -622,60 +753,145 @@ function ClassDetailPanel({
   );
 }
 
-function EnrollmentCard({
+function EnrollmentsTab({
+  active,
+  cancelled,
+  totalActive,
+  searching,
+}: {
+  active: AdminClassEnrollment[];
+  cancelled: AdminClassEnrollment[];
+  totalActive: number;
+  searching: boolean;
+}) {
+  if (totalActive === 0 && cancelled.length === 0 && !searching) {
+    return (
+      <div className="p-5">
+        <EmptyState title="אין נרשמים לחוג זה" />
+      </div>
+    );
+  }
+
+  if (active.length === 0 && cancelled.length === 0) {
+    return (
+      <div className="p-5">
+        <EmptyState title="לא נמצאו נרשמים לפי החיפוש" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {active.length > 0 && (
+        <ul className="divide-y divide-ink-100 border-b border-ink-100 bg-white">
+          {active.map((enrollment, index) => (
+            <EnrollmentRow
+              key={enrollment.id}
+              enrollment={enrollment}
+              index={index + 1}
+            />
+          ))}
+        </ul>
+      )}
+
+      {cancelled.length > 0 && (
+        <div className="mt-3">
+          <p className="sticky top-0 z-[1] bg-ink-50/95 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink-400 backdrop-blur-sm">
+            הרשמות שבוטלו · {cancelled.length}
+          </p>
+          <ul className="divide-y divide-ink-100 border-y border-ink-100 bg-white">
+            {cancelled.map((enrollment) => (
+              <EnrollmentRow
+                key={enrollment.id}
+                enrollment={enrollment}
+                muted
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EnrollmentRow({
   enrollment,
+  index,
   muted = false,
 }: {
   enrollment: AdminClassEnrollment;
+  index?: number;
   muted?: boolean;
 }) {
   const childName = enrollment.children?.full_name ?? "—";
   const age = calcAge(enrollment.children?.birth_date);
   const status = ENROLLMENT_STATUS[enrollment.status];
   const payment = ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status];
+  const parentLine = enrollment.profiles
+    ? [enrollment.profiles.full_name, enrollment.profiles.phone]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   return (
-    <Card className={cn("overflow-hidden", muted && "opacity-60")}>
-      <CardContent className="flex items-start gap-3 p-4">
-        <Avatar name={childName} className="h-10 w-10 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-            <p className="min-w-0 break-words font-semibold text-ink-900">
-              {childName}
-              {age !== null && (
-                <span className="mr-1.5 text-xs font-normal text-ink-400">
-                  גיל {age}
-                </span>
-              )}
-            </p>
-            <span className="shrink-0 text-xs text-ink-400">
-              {formatDate(enrollment.created_at)}
-            </span>
-          </div>
-
-          {enrollment.profiles && (
-            <p className="mt-0.5 break-words text-sm text-ink-500">
-              הורה: {enrollment.profiles.full_name}
-              {enrollment.profiles.phone && (
-                <span dir="ltr" className="mr-1.5 text-ink-400">
-                  {enrollment.profiles.phone}
-                </span>
-              )}
-            </p>
+    <li
+      className={cn(
+        "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-ink-50/80",
+        muted && "opacity-55"
+      )}
+    >
+      {typeof index === "number" ? (
+        <span className="w-5 shrink-0 text-center text-[11px] font-semibold tabular-nums text-ink-300">
+          {index}
+        </span>
+      ) : (
+        <span className="w-5 shrink-0" />
+      )}
+      <Avatar name={childName} className="h-8 w-8 text-[11px]" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
+            {childName}
+          </p>
+          {age !== null && (
+            <span className="shrink-0 text-[11px] text-ink-400">גיל {age}</span>
           )}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Badge tone={status.tone}>{status.label}</Badge>
-            <Badge tone={payment.tone}>{payment.label}</Badge>
-            {enrollment.admin_assigned && <Badge tone="info">שיבוץ ידני</Badge>}
-          </div>
         </div>
-      </CardContent>
-    </Card>
+        {parentLine && (
+          <p className="mt-0.5 truncate text-xs text-ink-500">
+            {parentLine}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <div className="flex flex-wrap justify-end gap-1">
+          <Badge tone={payment.tone} className="px-1.5 py-0 text-[10px]">
+            {payment.label}
+          </Badge>
+          {(enrollment.status !== "active" || enrollment.admin_assigned) && (
+            <>
+              {enrollment.status !== "active" && (
+                <Badge tone={status.tone} className="px-1.5 py-0 text-[10px]">
+                  {status.label}
+                </Badge>
+              )}
+              {enrollment.admin_assigned && (
+                <Badge tone="info" className="px-1.5 py-0 text-[10px]">
+                  ידני
+                </Badge>
+              )}
+            </>
+          )}
+        </div>
+        <span className="text-[10px] tabular-nums text-ink-400">
+          {formatDate(enrollment.created_at)}
+        </span>
+      </div>
+    </li>
   );
 }
 
-function WaitlistCard({
+function WaitlistRow({
   entry,
   position,
   onAssign,
@@ -686,100 +902,196 @@ function WaitlistCard({
 }) {
   const childName = entry.children?.full_name ?? "—";
   const status = WAITLIST_STATUS[entry.status];
+  const parentLine = entry.profiles
+    ? [entry.profiles.full_name, entry.profiles.phone]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="flex items-start gap-3 p-4">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 font-display text-sm font-bold text-amber-700">
-          {position}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-ink-900">{childName}</p>
-            <span className="shrink-0 text-xs text-ink-400">
-              {formatDate(entry.created_at)}
-            </span>
-          </div>
-
-          {entry.profiles && (
-            <p className="mt-0.5 text-sm text-ink-500">
-              הורה: {entry.profiles.full_name}
-              {entry.profiles.phone && (
-                <span dir="ltr" className="mr-1.5 text-ink-400">
-                  {entry.profiles.phone}
-                </span>
-              )}
-            </p>
-          )}
-
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <Badge tone={status.tone}>{status.label}</Badge>
-            <Button type="button" size="sm" onClick={onAssign}>
-              שיבוץ לחוג
-            </Button>
-          </div>
+    <li className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-ink-50/80">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold tabular-nums text-amber-700">
+        {position}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
+            {childName}
+          </p>
+          <Badge tone={status.tone} className="px-1.5 py-0 text-[10px]">
+            {status.label}
+          </Badge>
         </div>
-      </CardContent>
-    </Card>
+        {parentLine && (
+          <p className="mt-0.5 truncate text-xs text-ink-500">{parentLine}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          onClick={onAssign}
+          className="h-7 px-2.5 text-xs"
+        >
+          שיבוץ
+        </Button>
+        <span className="text-[10px] tabular-nums text-ink-400">
+          {formatDate(entry.created_at)}
+        </span>
+      </div>
+    </li>
   );
 }
 
-function AttendanceTab({ records }: { records: AdminClassAttendance[] }) {
+function AttendanceTab({
+  cls,
+  students,
+  mode,
+  onModeChange,
+  query,
+}: {
+  cls: AdminClassRow;
+  students: { id: string; full_name: string }[];
+  mode: AttendanceMode;
+  onModeChange: (mode: AttendanceMode) => void;
+  query: string;
+}) {
+  const records = cls.attendance;
+  const q = normalizeSearch(query);
+
   const byDate = useMemo(() => {
+    const filtered = q
+      ? records.filter((r) =>
+          personSearchHaystack(r.children?.full_name).includes(q)
+        )
+      : records;
+
     const map = new Map<string, AdminClassAttendance[]>();
-    for (const record of records) {
+    for (const record of filtered) {
       const list = map.get(record.date);
       if (list) list.push(record);
       else map.set(record.date, [record]);
     }
-    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [records]);
 
-  if (byDate.length === 0) {
-    return (
-      <EmptyState
-        title="אין רישומי נוכחות"
-        description="הנוכחות נרשמת על ידי המדריכה ותופיע כאן לפי תאריכים."
-      />
-    );
-  }
+    return [...map.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, rows]) => [
+        date,
+        [...rows].sort((a, b) =>
+          (a.children?.full_name ?? "").localeCompare(
+            b.children?.full_name ?? "",
+            "he"
+          )
+        ),
+      ] as const);
+  }, [records, q]);
 
   return (
-    <>
-      {byDate.map(([date, rows]) => {
-        const present = rows.filter((r) => r.status === "present").length;
-        const late = rows.filter((r) => r.status === "late").length;
-        const absent = rows.filter((r) => r.status === "absent").length;
+    <div className="flex min-h-full flex-col">
+      <div className="sticky top-0 z-[1] flex gap-1 border-b border-ink-100 bg-white/95 p-2 backdrop-blur-sm">
+        {(
+          [
+            { id: "mark", label: "סימון" },
+            { id: "history", label: "היסטוריה" },
+          ] as const
+        ).map((item) => {
+          const active = mode === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onModeChange(item.id)}
+              className={cn(
+                "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+                active
+                  ? "bg-brand-100 text-brand-800"
+                  : "text-ink-500 hover:bg-ink-50 hover:text-ink-800"
+              )}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
 
-        return (
-          <Card key={date} className="overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 bg-ink-50/60 px-4 py-3">
-              <p className="font-semibold text-ink-900">{formatDate(date)}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {present > 0 && <Badge tone="success">{present} נוכחים</Badge>}
-                {late > 0 && <Badge tone="warning">{late} איחורים</Badge>}
-                {absent > 0 && <Badge tone="danger">{absent} נעדרים</Badge>}
-              </div>
-            </div>
-            <ul className="divide-y divide-ink-100">
-              {rows.map((record) => (
-                <li
-                  key={record.id}
-                  className="flex items-center justify-between gap-3 px-4 py-2.5"
-                >
-                  <span className="min-w-0 truncate text-sm text-ink-700">
-                    {record.children?.full_name ?? "—"}
-                  </span>
-                  <Badge tone={ATTENDANCE_STATUS[record.status].tone}>
-                    {ATTENDANCE_STATUS[record.status].label}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        );
-      })}
-    </>
+      {mode === "mark" ? (
+        <div className="space-y-3 p-4">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">
+              סימון נוכחות
+            </h3>
+            <p className="mt-0.5 text-sm text-ink-500">
+              בחרו מפגש וסמנו נוכחות לכל תלמיד רשום.
+            </p>
+          </div>
+          <ClassAttendanceForm
+            classId={cls.id}
+            instructorId={cls.instructor_id}
+            students={students}
+            emptySessionsHint="לא נמצאו מפגשים מתוכננים. עדכנו את לוח המפגשים בעריכת החוג."
+          />
+        </div>
+      ) : records.length === 0 ? (
+        <div className="p-5">
+          <EmptyState
+            title="אין רישומי נוכחות"
+            description="עדיין לא סומנה נוכחות לחוג זה. אפשר לסמן דרך לשונית הסימון."
+          />
+        </div>
+      ) : byDate.length === 0 ? (
+        <div className="p-5">
+          <EmptyState title="לא נמצאו רשומות לפי החיפוש" />
+        </div>
+      ) : (
+        <div className="space-y-3 p-3 sm:p-4">
+          {byDate.map(([date, rows]) => {
+            const present = rows.filter((r) => r.status === "present").length;
+            const late = rows.filter((r) => r.status === "late").length;
+            const absent = rows.filter((r) => r.status === "absent").length;
+
+            return (
+              <section
+                key={date}
+                className="overflow-hidden rounded-xl border border-ink-100 bg-white"
+              >
+                <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 bg-ink-50/70 px-3 py-2">
+                  <p className="text-sm font-semibold text-ink-900">
+                    {formatDate(date)}
+                  </p>
+                  <p className="text-[11px] tabular-nums text-ink-500">
+                    {[
+                      present > 0 ? `${present} נוכחים` : null,
+                      late > 0 ? `${late} איחור` : null,
+                      absent > 0 ? `${absent} נעדרים` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </header>
+                <ul className="divide-y divide-ink-50">
+                  {rows.map((record) => (
+                    <li
+                      key={record.id}
+                      className="flex items-center justify-between gap-3 px-3 py-1.5"
+                    >
+                      <span className="min-w-0 truncate text-sm text-ink-800">
+                        {record.children?.full_name ?? "—"}
+                      </span>
+                      <Badge
+                        tone={ATTENDANCE_STATUS[record.status].tone}
+                        className="px-1.5 py-0 text-[10px]"
+                      >
+                        {ATTENDANCE_STATUS[record.status].label}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -866,6 +1178,26 @@ function SearchIcon({ className }: { className?: string }) {
     >
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function AttendanceMenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
     </svg>
   );
 }

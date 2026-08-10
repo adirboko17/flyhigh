@@ -10,7 +10,7 @@ interface SiblingDiscountEditorProps {
   disabled?: boolean;
 }
 
-/** עורך מדרגות הנחת אחים — "מ־X ילדים ומעלה, Y% הנחה על ההזמנה". */
+/** עורך מדרגות הנחת אחים — "מ־X ילדים ומעלה, Y% הנחה על הילד השני ומעלה בלבד". */
 export function SiblingDiscountEditor({
   tiers,
   onChange,
@@ -68,7 +68,7 @@ export function SiblingDiscountEditor({
               className="w-24"
               aria-label="אחוז הנחה"
             />
-            <span className="text-sm text-ink-600">% הנחה</span>
+            <span className="text-sm text-ink-600">% הנחה מהילד הזה ומעלה</span>
             <button
               type="button"
               onClick={() => remove(index)}
@@ -106,7 +106,8 @@ export function SiblingDiscountSummary({ tiers }: { tiers: SiblingDiscountTier[]
         .sort((a, b) => a.minChildren - b.minChildren)
         .map((tier) => (
           <li key={tier.minChildren}>
-            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה
+            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה מהילד ה־
+            {tier.minChildren} ומעלה
           </li>
         ))}
     </ul>
