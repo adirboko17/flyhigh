@@ -1,3 +1,4 @@
+import { AboutGallery } from "@/components/home/AboutGallery";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { SectionHead } from "@/components/home/SectionHead";
 
@@ -124,6 +125,8 @@ export function AboutSection() {
             </div>
           </ScrollReveal>
         </div>
+
+        <AboutGallery />
       </div>
     </section>
   );

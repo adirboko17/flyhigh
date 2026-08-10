@@ -12,13 +12,12 @@ const FOOTER_TAGLINE =
 
 const MOBILE_BRAND_TAGLINE = "שחייה, ביטחון והנאה בגובה העיניים";
 
+/** ניווט פוטר — רק לינקים ציבוריים מרכזיים. */
 const NAV_LINKS = [
   { href: "/", label: "בית" },
   { href: "/classes", label: "חוגים" },
   { href: "/programs", label: "הבריכה" },
   { href: "/contact", label: "צור קשר" },
-  { href: "/register", label: "הרשמה", guestOnly: true },
-  { href: "/login", label: "התחברות", guestOnly: true },
 ] as const;
 
 /** קישורים משפטיים בשורה התחתונה. עמוד התקנון עדיין לא נבנה. */
@@ -27,8 +26,9 @@ const LEGAL_LINKS = [
   { href: "/terms", label: "תקנון" },
 ] as const;
 
+/** גרדיאנט כחול־עמוק בסגנון ההירו — מותג אחד מקצה לקצה. */
 const FOOTER_GRADIENT =
-  "linear-gradient(110deg, #2c2054 0%, #1b3164 40%, #10456f 70%, #0d5285 100%)";
+  "linear-gradient(155deg, #06314f 0%, #0a4a71 42%, #0072b8 78%, #0c97cc 100%)";
 
 /**
  * הגל נחתך מתוך רקע הפוטר בעזרת צורה בצבע רקע העמוד, כדי שהגרדיאנט יימשך
@@ -51,20 +51,20 @@ function FooterWaveCutout() {
   );
 }
 
-/**
- * במובייל כל בלוק מוצג ככרטיס נפרד כדי לתחום את הרשימות הארוכות,
- * ומדסקטופ ומעלה הוא חוזר להיות עמודה שטוחה בתוך הגריד.
- */
 function FooterPanel({
   title,
   children,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl bg-white/[0.06] p-5 sm:rounded-none sm:bg-transparent sm:p-0">
-      <h4 className="font-display text-sm font-bold text-white">{title}</h4>
+    <div className={className}>
+      <h4 className="font-display text-[13px] font-bold uppercase tracking-wide text-white/90 sm:text-sm sm:normal-case sm:tracking-normal sm:text-white lg:text-[13px] lg:uppercase lg:tracking-wide lg:text-white/90">
+        {title}
+      </h4>
       {children}
     </div>
   );
@@ -82,9 +82,9 @@ function ContactRow({
   return (
     <a
       href={href}
-      className="-mx-2 flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm text-white/75 transition-colors hover:text-white sm:mx-0 sm:min-h-0 sm:px-0"
+      className="flex min-h-12 items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 text-sm text-white/80 transition-colors active:bg-white/[0.12] sm:min-h-0 sm:rounded-none sm:bg-transparent sm:px-0 sm:text-white/75 sm:hover:text-white lg:gap-3.5 lg:min-h-0"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white sm:h-8 sm:w-8">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/12 text-white sm:h-8 sm:w-8 sm:bg-white/10 lg:h-9 lg:w-9">
         <Icon name={icon} size={16} />
       </span>
       <span dir="ltr" className="[overflow-wrap:anywhere] text-start">
@@ -95,14 +95,13 @@ function ContactRow({
 }
 
 interface PublicFooterProps {
-  /** קיים רק כשיש משתמש מחובר — מסתיר את קריאות ההרשמה/התחברות. */
+  /** קיים רק כשיש משתמש מחובר — משנה את טקסט/כפתורי ה-CTA. */
   user?: { home: string } | null;
 }
 
 export function PublicFooter({ user = null }: PublicFooterProps) {
   const year = new Date().getFullYear();
   const phoneHref = `tel:${CONTACT.phone.replace(/[^\d+]/g, "")}`;
-  const navLinks = NAV_LINKS.filter((link) => !("guestOnly" in link) || !user);
 
   return (
     <footer
@@ -112,17 +111,17 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
     >
       <FooterWaveCutout />
 
-      <section className="container-page pb-10 pt-4 text-center sm:pb-16 sm:pt-6">
-        <h2 className="font-display text-[22px] font-extrabold tracking-tight sm:text-[2rem]">
+      {/* CTA */}
+      <section className="container-page pb-7 pt-3 text-center sm:pb-10 sm:pt-5 lg:pb-11 lg:pt-4">
+        <h2 className="font-display text-[1.55rem] font-extrabold leading-tight tracking-tight sm:text-[1.75rem] lg:text-[1.85rem]">
           מוכנים לקפוץ למים?
         </h2>
-        <p className="mx-auto mt-2.5 max-w-xl text-sm leading-relaxed text-white/85 sm:mt-3 sm:text-base">
+        <p className="mx-auto mt-2 max-w-[20rem] text-[14px] leading-relaxed text-white/85 sm:mt-2.5 sm:max-w-xl sm:text-[15px] lg:max-w-lg">
           {user
             ? "בוחרים את החוג המתאים ומשלימים את ההרשמה תוך דקות."
             : "פותחים חשבון, מוסיפים את הילדים ונרשמים לחוג המתאים תוך דקות."}
         </p>
-        {/* במובייל הכפתורים חולקים את רוחב השורה בשווה, ומ־sm הם חוזרים לרוחב תוכן. */}
-        <div className="mt-6 flex items-center justify-center gap-3 sm:mt-7">
+        <div className="mt-5 flex flex-col items-stretch gap-2.5 sm:mt-6 sm:flex-row sm:items-center sm:justify-center sm:gap-3 lg:mt-6">
           {user ? (
             <Link
               href="/classes"
@@ -133,116 +132,129 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
           ) : (
             <>
               <Link
-                href="/classes"
-                className="hero-cta-glass ah-btn ah-btn--lg flex-1 sm:flex-none"
-              >
-                עיון בחוגים
-              </Link>
-              <Link
                 href="/register"
-                className="hero-cta-primary ah-btn ah-btn--lg flex-1 sm:flex-none"
+                className="hero-cta-primary ah-btn ah-btn--lg w-full sm:w-auto sm:flex-none"
               >
                 הרשמה עכשיו
+              </Link>
+              <Link
+                href="/classes"
+                className="hero-cta-glass ah-btn ah-btn--lg w-full sm:w-auto sm:flex-none"
+              >
+                עיון בחוגים
               </Link>
             </>
           )}
         </div>
       </section>
 
-      <div className="container-page grid gap-4 pb-10 sm:grid-cols-2 sm:gap-10 sm:py-12 lg:grid-cols-4">
-        <div className="col-span-full flex items-center gap-3 sm:hidden">
-          <Link
-            href="/"
-            className="shrink-0 transition-opacity hover:opacity-90"
-          >
+      <div className="container-page border-t border-white/10 pb-9 pt-7 sm:py-11 lg:pb-12 lg:pt-12">
+        {/* מותג — ממורכז במובייל */}
+        <div className="mb-7 flex flex-col items-center text-center sm:mb-0 sm:hidden">
+          <Link href="/" className="transition-opacity active:opacity-80">
             <Image
               src={FOOTER_LOGO}
               alt={BRAND.name}
-              width={72}
-              height={36}
-              className="h-9 w-auto object-contain brightness-0 invert"
+              width={96}
+              height={48}
+              className="h-11 w-auto object-contain brightness-0 invert"
             />
           </Link>
-          <div className="min-w-0 flex-1 text-right">
-            <p className="font-display text-2xl font-bold leading-tight tracking-tight text-white/95">
-              {BRAND.name}
-            </p>
-            <p className="mt-1 text-sm font-medium leading-snug text-white/65">
-              {MOBILE_BRAND_TAGLINE}
-            </p>
-          </div>
-        </div>
-
-        <div className="hidden text-center sm:col-span-2 sm:block sm:text-start lg:col-span-1">
-          <Link
-            href="/"
-            className="inline-block transition-opacity hover:opacity-90"
-          >
-            {/* brightness-0 invert מרנדר את הלוגו כצללית לבנה מלאה על רקע הפוטר
-                הכהה, אותה גישה שמשמשת ב-BrandLogo במצב light. */}
-            <Image
-              src={FOOTER_LOGO}
-              alt={BRAND.name}
-              width={180}
-              height={72}
-              className="h-auto w-[150px] max-w-full object-contain brightness-0 invert sm:w-[170px]"
-            />
-          </Link>
-          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-white/70 sm:mx-0 sm:mt-4">
-            {FOOTER_TAGLINE}
+          <p className="mt-3 font-display text-[1.65rem] font-extrabold leading-none tracking-tight text-white">
+            {BRAND.name}
+          </p>
+          <p className="mt-2 max-w-[16rem] text-[13.5px] font-medium leading-snug text-white/70">
+            {MOBILE_BRAND_TAGLINE}
           </p>
         </div>
 
-        <FooterPanel title="ניווט">
-          <ul className="mt-3 grid grid-cols-2 gap-x-4 text-sm text-white/75 sm:mt-4 sm:grid-cols-1 sm:gap-y-2.5">
-            {navLinks.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="flex min-h-10 items-center transition-colors hover:text-white sm:min-h-0"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </FooterPanel>
-
-        <FooterPanel title="צור קשר">
-          <div className="mt-2 flex flex-col gap-1 sm:mt-4 sm:gap-3">
-            <ContactRow icon="phone" href={phoneHref}>
-              {CONTACT.phone}
-            </ContactRow>
-            <ContactRow icon="mail" href={`mailto:${CONTACT.email}`}>
-              {CONTACT.email}
-            </ContactRow>
+        <div className="grid gap-7 sm:grid-cols-2 sm:gap-10 lg:grid-cols-4 lg:gap-12">
+          <div className="hidden text-center sm:col-span-2 sm:block sm:text-start lg:col-span-1">
+            <Link
+              href="/"
+              className="inline-block transition-opacity hover:opacity-90"
+            >
+              <Image
+                src={FOOTER_LOGO}
+                alt={BRAND.name}
+                width={200}
+                height={80}
+                className="h-auto w-[150px] max-w-full object-contain brightness-0 invert sm:w-[170px] lg:w-[188px]"
+              />
+            </Link>
+            <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-white/70 sm:mx-0 sm:mt-4 lg:mt-5 lg:text-[14.5px] lg:leading-[1.7]">
+              {FOOTER_TAGLINE}
+            </p>
           </div>
-        </FooterPanel>
 
-        <FooterPanel title="שעות פעילות">
-          <ul className="mt-3 space-y-2 text-sm text-white/75 sm:mt-4 sm:space-y-2.5">
-            {CONTACT.hours.map((row) => (
-              <li key={row.days} className="flex items-center justify-between gap-4">
-                <span className="font-semibold text-white/90">{row.days}</span>
-                <span dir="ltr">{row.time}</span>
-              </li>
-            ))}
-          </ul>
-        </FooterPanel>
+          <FooterPanel title="ניווט">
+            <ul className="mt-3.5 grid grid-cols-2 gap-2 sm:mt-4 sm:grid-cols-1 sm:gap-y-2.5 lg:mt-5 lg:gap-y-3">
+              {NAV_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="flex min-h-11 items-center justify-center rounded-xl bg-white/[0.07] px-3 text-sm font-medium text-white/85 transition-colors active:bg-white/[0.12] sm:min-h-0 sm:justify-start sm:rounded-none sm:bg-transparent sm:px-0 sm:font-normal sm:text-white/75 sm:hover:text-white lg:underline-offset-4 lg:hover:underline"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </FooterPanel>
+
+          <FooterPanel title="צור קשר">
+            <div className="mt-3.5 flex flex-col gap-2 sm:mt-4 sm:gap-3 lg:mt-5 lg:gap-3.5">
+              <ContactRow icon="phone" href={phoneHref}>
+                {CONTACT.phone}
+              </ContactRow>
+              <ContactRow icon="mail" href={`mailto:${CONTACT.email}`}>
+                {CONTACT.email}
+              </ContactRow>
+            </div>
+          </FooterPanel>
+
+          <FooterPanel title="שעות פעילות">
+            <ul className="mt-3.5 space-y-2.5 rounded-2xl bg-white/[0.07] px-4 py-3.5 text-sm text-white/80 sm:mt-4 sm:space-y-2.5 sm:rounded-none sm:bg-transparent sm:p-0 sm:text-white/75 lg:mt-5 lg:space-y-3">
+              {CONTACT.hours.map((row) => (
+                <li
+                  key={row.days}
+                  className="flex items-baseline justify-start gap-2.5"
+                >
+                  <span className="shrink-0 font-semibold text-white/90">
+                    {row.days}
+                  </span>
+                  <span aria-hidden className="text-white/35">
+                    ·
+                  </span>
+                  <span dir="ltr" className="tabular-nums text-white/75">
+                    {row.time}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </FooterPanel>
+        </div>
       </div>
 
-      <div className="border-t border-white/[0.08] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-5">
-        <div className="container-page flex flex-col items-center justify-between gap-3 text-center text-xs text-white/55 sm:flex-row sm:text-start">
+      <div className="border-t border-white/10 pb-[calc(1.35rem+env(safe-area-inset-bottom,0px))] pt-5 lg:pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] lg:pt-6">
+        <div className="container-page flex flex-col items-center gap-2.5 text-center text-[12px] text-white/55 sm:flex-row sm:justify-between sm:gap-3 sm:text-start sm:text-xs lg:text-[13px] lg:text-white/60">
           <p>
             © {year} {BRAND.name}. כל הזכויות שמורות.
           </p>
-          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:justify-end">
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:justify-end lg:gap-x-4">
             {LEGAL_LINKS.map((link, index) => (
-              <span key={link.href} className="flex items-center gap-x-3">
-                {index > 0 && <span aria-hidden>/</span>}
+              <span
+                key={link.href}
+                className="flex items-center gap-x-3 lg:gap-x-4"
+              >
+                {index > 0 && (
+                  <span aria-hidden className="text-white/30">
+                    /
+                  </span>
+                )}
                 <Link
                   href={link.href}
-                  className="transition-colors hover:text-white"
+                  className="transition-colors hover:text-white active:text-white"
                 >
                   {link.label}
                 </Link>

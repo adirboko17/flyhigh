@@ -94,6 +94,11 @@
     pointer-events: auto;
   }
 
+  /* מאפשר החלקה על רקע הקרוסלה בלי לחסום קישורים מעל. */
+  .hero-bleed-top [data-hero-carousel-bg] {
+    pointer-events: auto;
+  }
+
   .container-page {
     @apply mx-auto w-full max-w-7xl;
     /* עם viewport-fit=cover התוכן עלול לרוץ מתחת ל-notch בסיבוב לרוחב. */

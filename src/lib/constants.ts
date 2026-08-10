@@ -23,6 +23,20 @@ export const MIN_PASSWORD_LENGTH = 8;
 /** תמונת הירו — בריכה ריקה (בלי דמויות), צנועה ומתאימה לקהל דתי. */
 export const HERO_POOL_IMAGE = "/images/hero-pool.jpg";
 
+/** תמונות קרוסלת ההירו (מתוך assets/carusle). */
+export const HERO_CAROUSEL_IMAGES = [
+  "/images/carousel/slide-01.jpg",
+  "/images/carousel/slide-02.jpg",
+  "/images/carousel/slide-03.jpg",
+  "/images/carousel/slide-04.jpg",
+  "/images/carousel/slide-05.jpg",
+  "/images/carousel/slide-06.jpg",
+  "/images/carousel/slide-07.jpg",
+  "/images/carousel/slide-08.jpg",
+  "/images/carousel/slide-09.jpg",
+  "/images/carousel/slide-10.jpg",
+] as const;
+
 export const DAYS_OF_WEEK = [
   "ראשון",
   "שני",
