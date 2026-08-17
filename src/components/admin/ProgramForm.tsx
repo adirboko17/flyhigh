@@ -13,6 +13,7 @@ export type ProgramFormData = {
   title: string;
   description: string | null;
   price: number;
+  duration_months: number;
   status: "draft" | "active" | "inactive";
 };
 
@@ -20,6 +21,7 @@ const emptyForm = {
   title: "",
   description: "",
   price: "",
+  duration_months: "1",
   status: "active",
 };
 
@@ -29,6 +31,7 @@ function toFormState(existing?: ProgramFormData) {
     title: existing.title,
     description: existing.description ?? "",
     price: existing.price.toString(),
+    duration_months: String(existing.duration_months || 1),
     status: existing.status,
   };
 }
@@ -62,10 +65,18 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
     setLoading(true);
     const supabase = createClient();
 
+    const durationMonths = Math.floor(Number(form.duration_months));
+    if (!Number.isFinite(durationMonths) || durationMonths < 1 || durationMonths > 36) {
+      setError("נא לבחור משך מנוי בין חודש אחד ל־36 חודשים.");
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       title: form.title,
       description: form.description || null,
       price: Number(form.price) || 0,
+      duration_months: durationMonths,
       // מסלול חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
@@ -112,7 +123,7 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
           placeholder="תיאור קצר של המסלול..."
         />
       </Field>
-      <div className={cn("grid gap-5", isEdit && "sm:grid-cols-2")}>
+      <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <Field label="מחיר (₪)" required>
           <Input
             type="number"
@@ -122,6 +133,18 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
             onChange={set("price")}
             required
           />
+        </Field>
+        <Field label="משך המנוי" required hint="לפי זה תחושב התראת הסיום למנהל">
+          <Select value={form.duration_months} onChange={set("duration_months")}>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((months) => (
+              <option key={months} value={months}>
+                {months === 1 ? "חודש אחד" : `${months} חודשים`}
+              </option>
+            ))}
+            <option value="18">18 חודשים</option>
+            <option value="24">24 חודשים</option>
+            <option value="36">36 חודשים</option>
+          </Select>
         </Field>
         {isEdit && (
           <Field label="סטטוס">

@@ -4,18 +4,13 @@ export const BRAND = {
   name: "על הגובה",
   tagline: "חוגים, מסלולים וכניסות לבריכה",
   phone: "03-5556677",
-  email: "info@al-hagova.co.il",
+  email: "office@al-hagova.co.il",
 };
 
-/** Demo contact details — replace with real values when ready. */
 export const CONTACT = {
   phone: BRAND.phone,
   email: BRAND.email,
-  address: "רחוב הבריכה 12, רמת גן",
-  hours: [
-    { days: "א׳–ה׳", time: "08:00–21:00" },
-    { days: "ו׳", time: "08:00–14:00" },
-  ],
+  address: "דרך הגת, מצודת יהודה",
 };
 
 export const MIN_PASSWORD_LENGTH = 8;

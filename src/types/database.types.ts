@@ -440,12 +440,14 @@ export type Database = {
           class_id: string | null
           created_at: string
           discount_percent: number
+          ends_on: string | null
           id: string
           parent_id: string
           payment_status: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id: string | null
           private_lesson_id: string | null
           program_id: string | null
+          starts_on: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
         }
@@ -455,12 +457,14 @@ export type Database = {
           class_id?: string | null
           created_at?: string
           discount_percent?: number
+          ends_on?: string | null
           id?: string
           parent_id: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id?: string | null
           private_lesson_id?: string | null
           program_id?: string | null
+          starts_on?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
         }
@@ -470,12 +474,14 @@ export type Database = {
           class_id?: string | null
           created_at?: string
           discount_percent?: number
+          ends_on?: string | null
           id?: string
           parent_id?: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id?: string | null
           private_lesson_id?: string | null
           program_id?: string | null
+          starts_on?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type?: Database["public"]["Enums"]["enrollment_type"]
         }
@@ -909,6 +915,7 @@ export type Database = {
           capacity: number
           created_at: string
           description: string | null
+          duration_months: number
           id: string
           price: number
           status: Database["public"]["Enums"]["listing_status"]
@@ -918,6 +925,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          duration_months?: number
           id?: string
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]
@@ -927,6 +935,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          duration_months?: number
           id?: string
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]

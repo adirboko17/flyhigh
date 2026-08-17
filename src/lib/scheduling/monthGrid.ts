@@ -41,6 +41,16 @@ export function addDays(date: string, days: number): string {
   return toIsoDate(shifted);
 }
 
+/** מזיז תאריך "YYYY-MM-DD" במספר חודשים, בלי לחרוג מיום סוף החודש. */
+export function addMonths(date: string, months: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const targetMonthIndex = month - 1 + months;
+  const lastDay = new Date(Date.UTC(year, targetMonthIndex + 1, 0)).getUTCDate();
+  return toIsoDate(
+    new Date(Date.UTC(year, targetMonthIndex, Math.min(day, lastDay)))
+  );
+}
+
 /** מאמת פרמטר חודש מה־URL; מחזיר את ברירת המחדל אם הוא לא תקין. */
 export function parseMonthParam(value: string | undefined, fallback: string): string {
   return value && MONTH_PATTERN.test(value) ? value : fallback;

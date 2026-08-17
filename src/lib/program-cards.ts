@@ -34,6 +34,10 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
   },
 ];
 
+export function programDurationLabel(months: number): string {
+  return months === 1 ? "/ חודש" : `/ ${months} חודשים`;
+}
+
 /** מספר חודשים שמוצג בשבב התוקף על כרטיס המנוי. */
 export function programStubMonths(period?: string, index = 0): number {
   if (period) {

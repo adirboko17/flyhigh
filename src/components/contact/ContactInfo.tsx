@@ -79,34 +79,6 @@ export function ContactInfo() {
         label="כתובת"
         value={CONTACT.address}
       />
-
-      <div className="feat-card rounded-[20px] border border-ink-100 bg-white p-5 shadow-card">
-        <div className="flex items-start gap-4">
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-white"
-            style={{
-              background: "var(--brand-600)",
-              boxShadow: "0 12px 26px -10px var(--brand-600)",
-            }}
-          >
-            <Icon name="clock" size={20} />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-ink-400">שעות פעילות</p>
-            <ul className="mt-2 space-y-1.5">
-              {CONTACT.hours.map((row) => (
-                <li
-                  key={row.days}
-                  className="flex items-center justify-between gap-6 text-sm text-ink-700"
-                >
-                  <span className="font-semibold text-ink-800">{row.days}</span>
-                  <span dir="ltr">{row.time}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

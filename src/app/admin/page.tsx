@@ -11,6 +11,11 @@ import {
   ENROLLMENT_TYPE,
 } from "@/lib/constants";
 import {
+  membershipExpiryLabel,
+  membershipExpiryStatus,
+  MEMBERSHIP_EXPIRY_WARNING_DAYS,
+} from "@/lib/memberships";
+import {
   addDays,
   dayLabelLong,
   israelDateOf,
@@ -22,7 +27,7 @@ import {
 } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/utils/cn";
-import { formatCurrency } from "@/utils/format";
+import { formatCurrency, formatDate } from "@/utils/format";
 
 export const metadata = { title: "דשבורד ניהול" };
 
@@ -52,6 +57,7 @@ export default async function AdminDashboard() {
     { count: waitlistCount },
     { count: awaitingPrivateLessons },
     { data: recentEnrollments },
+    { data: memberships },
   ] = await Promise.all([
     // חלון של חודשיים לחישוב המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
     supabase
@@ -106,6 +112,16 @@ export default async function AdminDashboard() {
       )
       .order("created_at", { ascending: false })
       .limit(6),
+    supabase
+      .from("enrollments")
+      .select(
+        "id, ends_on, parent_id, programs(title), children(full_name), profiles(full_name, phone)"
+      )
+      .eq("type", "program")
+      .eq("status", "active")
+      .not("ends_on", "is", null)
+      .lte("ends_on", addDays(today, MEMBERSHIP_EXPIRY_WARNING_DAYS))
+      .order("ends_on"),
   ]);
 
   const allPayments = payments ?? [];
@@ -180,6 +196,14 @@ export default async function AdminDashboard() {
       (instructor.hourly_rate === null || Number(instructor.hourly_rate) <= 0)
   ).length;
 
+  const expiringMemberships = (memberships ?? []).filter(
+    (row): row is typeof row & { ends_on: string } => Boolean(row.ends_on)
+  );
+  const expiredCount = expiringMemberships.filter(
+    (row) => membershipExpiryStatus(row.ends_on, today) === "expired"
+  ).length;
+  const endingSoonCount = expiringMemberships.length - expiredCount;
+
   const tasks: TaskItem[] = [
     openCharges.length > 0 && {
       icon: "🧾",
@@ -229,6 +253,18 @@ export default async function AdminDashboard() {
       title: `${instructorsWithoutRate} ${instructorsWithoutRate === 1 ? "מדריכה ללא תעריף" : "מדריכות ללא תעריף"} שעתי`,
       detail: "השכר שלהן לא נכלל בדוח הכספים",
       href: "/admin/instructors",
+    },
+    expiringMemberships.length > 0 && {
+      icon: "🎫",
+      tone: expiredCount > 0 ? ("rose" as const) : ("amber" as const),
+      title:
+        expiredCount > 0 && endingSoonCount > 0
+          ? `${endingSoonCount} מנויים לפני סיום · ${expiredCount} שפג תוקפם`
+          : expiredCount > 0
+            ? `${expiredCount} ${expiredCount === 1 ? "מנוי שפג תוקפו" : "מנויים שפג תוקפם"}`
+            : `${endingSoonCount} ${endingSoonCount === 1 ? "מנוי מסתיים" : "מנויים מסתיימים"} בקרוב`,
+      detail: `התראה עד ${MEMBERSHIP_EXPIRY_WARNING_DAYS} ימים לפני תום המנוי`,
+      href: "#expiring-memberships",
     },
   ].filter(Boolean) as TaskItem[];
 
@@ -394,6 +430,51 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {expiringMemberships.length > 0 && (
+        <Card id="expiring-memberships">
+          <CardHeader>
+            <CardTitle>מנויים שעומדים להסתיים</CardTitle>
+            <Badge tone={expiredCount > 0 ? "danger" : "warning"}>
+              {expiringMemberships.length}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-ink-100">
+              {expiringMemberships.map((row) => {
+                const status = membershipExpiryStatus(row.ends_on, today);
+                return (
+                  <li
+                    key={row.id}
+                    className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-ink-900">
+                        {row.profiles?.full_name ?? "לקוח"}
+                        {row.children?.full_name
+                          ? ` · ${row.children.full_name}`
+                          : ""}
+                      </p>
+                      <p className="truncate text-sm text-ink-500">
+                        {row.programs?.title ?? "מנוי"}
+                        {row.profiles?.phone ? ` · ${row.profiles.phone}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={status === "expired" ? "danger" : "warning"}>
+                        {membershipExpiryLabel(row.ends_on, today)}
+                      </Badge>
+                      <span className="text-xs text-ink-400">
+                        עד {formatDate(row.ends_on)}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

@@ -73,25 +73,43 @@ function FooterPanel({
 function ContactRow({
   icon,
   href,
+  ltr = false,
   children,
 }: {
   icon: IconName;
-  href: string;
+  href?: string;
+  ltr?: boolean;
   children: React.ReactNode;
 }) {
-  return (
-    <a
-      href={href}
-      className="flex min-h-12 items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 text-sm text-white/80 transition-colors active:bg-white/[0.12] sm:min-h-0 sm:rounded-none sm:bg-transparent sm:px-0 sm:text-white/75 sm:hover:text-white lg:gap-3.5 lg:min-h-0"
-    >
+  const content = (
+    <>
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/12 text-white sm:h-8 sm:w-8 sm:bg-white/10 lg:h-9 lg:w-9">
         <Icon name={icon} size={16} />
       </span>
-      <span dir="ltr" className="[overflow-wrap:anywhere] text-start">
+      <span
+        dir={ltr ? "ltr" : undefined}
+        className="[overflow-wrap:anywhere] text-start"
+      >
         {children}
       </span>
-    </a>
+    </>
   );
+
+  const className =
+    "flex min-h-12 items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 text-sm text-white/80 transition-colors sm:min-h-0 sm:rounded-none sm:bg-transparent sm:px-0 sm:text-white/75 lg:gap-3.5 lg:min-h-0";
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        className={`${className} active:bg-white/[0.12] sm:hover:text-white`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return <p className={className}>{content}</p>;
 }
 
 interface PublicFooterProps {
@@ -168,7 +186,7 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
           </p>
         </div>
 
-        <div className="grid gap-7 sm:grid-cols-2 sm:gap-10 lg:grid-cols-4 lg:gap-12">
+        <div className="grid gap-7 sm:grid-cols-2 sm:gap-10 lg:grid-cols-3 lg:gap-12">
           <div className="hidden text-center sm:col-span-2 sm:block sm:text-start lg:col-span-1">
             <Link
               href="/"
@@ -204,34 +222,14 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
 
           <FooterPanel title="צור קשר">
             <div className="mt-3.5 flex flex-col gap-2 sm:mt-4 sm:gap-3 lg:mt-5 lg:gap-3.5">
-              <ContactRow icon="phone" href={phoneHref}>
+              <ContactRow icon="phone" href={phoneHref} ltr>
                 {CONTACT.phone}
               </ContactRow>
-              <ContactRow icon="mail" href={`mailto:${CONTACT.email}`}>
+              <ContactRow icon="mail" href={`mailto:${CONTACT.email}`} ltr>
                 {CONTACT.email}
               </ContactRow>
+              <ContactRow icon="pin">{CONTACT.address}</ContactRow>
             </div>
-          </FooterPanel>
-
-          <FooterPanel title="שעות פעילות">
-            <ul className="mt-3.5 space-y-2.5 rounded-2xl bg-white/[0.07] px-4 py-3.5 text-sm text-white/80 sm:mt-4 sm:space-y-2.5 sm:rounded-none sm:bg-transparent sm:p-0 sm:text-white/75 lg:mt-5 lg:space-y-3">
-              {CONTACT.hours.map((row) => (
-                <li
-                  key={row.days}
-                  className="flex items-baseline justify-start gap-2.5"
-                >
-                  <span className="shrink-0 font-semibold text-white/90">
-                    {row.days}
-                  </span>
-                  <span aria-hidden className="text-white/35">
-                    ·
-                  </span>
-                  <span dir="ltr" className="tabular-nums text-white/75">
-                    {row.time}
-                  </span>
-                </li>
-              ))}
-            </ul>
           </FooterPanel>
         </div>
       </div>

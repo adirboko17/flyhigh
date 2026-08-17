@@ -749,6 +749,7 @@ type EnrollmentRowData = {
   status: Enums<"enrollment_status">;
   payment_status: Enums<"enrollment_payment_status">;
   created_at: string;
+  ends_on?: string | null;
   classes: {
     title: string;
     day_of_week: number | null;
@@ -908,6 +909,9 @@ function PlanRow({
         </p>
         <p className="mt-0.5 text-xs text-ink-400">
           נרכש ב-{formatDate(enrollment.created_at)}
+          {enrollment.type === "program" && enrollment.ends_on
+            ? ` · בתוקף עד ${formatDate(enrollment.ends_on)}`
+            : ""}
         </p>
         {isPrivate && awaitingSlots.length > 0 && (
           <p className="mt-1 text-xs font-medium text-amber-700">

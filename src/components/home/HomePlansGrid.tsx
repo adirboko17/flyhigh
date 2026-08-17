@@ -12,7 +12,7 @@ import {
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
-  programStubMonths,
+  programDurationLabel,
 } from "@/lib/program-cards";
 import { formatCurrency } from "@/utils/format";
 
@@ -23,6 +23,7 @@ type Program = {
   title: string;
   description: string | null;
   price: number;
+  duration_months: number;
 };
 
 type PoolPass = {
@@ -92,10 +93,10 @@ export function HomePlansGrid({
                       name={p.title}
                       desc={p.description}
                       price={formatCurrency(p.price)}
-                      period={template.period}
+                      period={programDurationLabel(p.duration_months)}
                       stub={{
                         kind: "months",
-                        count: programStubMonths(template.period, index),
+                        count: p.duration_months,
                       }}
                       features={template.features}
                       icon={template.icon}

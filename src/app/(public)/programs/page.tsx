@@ -11,7 +11,7 @@ import {
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
-  programStubMonths,
+  programDurationLabel,
 } from "@/lib/program-cards";
 import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
@@ -95,10 +95,10 @@ export default async function ProgramsPage() {
                       name={program.title}
                       desc={program.description}
                       price={formatCurrency(program.price)}
-                      period={template.period}
+                      period={programDurationLabel(program.duration_months)}
                       stub={{
                         kind: "months",
-                        count: programStubMonths(template.period, index),
+                        count: program.duration_months,
                       }}
                       features={template.features}
                       icon={template.icon}

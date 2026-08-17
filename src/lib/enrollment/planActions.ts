@@ -2,6 +2,7 @@
 
 import { requireRole } from "@/lib/auth";
 import { DEFERRED_PAYMENT_METHODS, isDeferredPaymentMethod } from "@/lib/constants";
+import { addMonths, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
 import {
   isValidCouponCode,
@@ -37,7 +38,12 @@ export type CompletePlanPurchaseResult =
     }
   | { success: false; error: string };
 
-type PlanRecord = { id: string; title: string; price: number };
+type PlanRecord = {
+  id: string;
+  title: string;
+  price: number;
+  durationMonths: number | null;
+};
 
 function normalizeQuantity(kind: PlanKind, quantity?: number) {
   if (kind !== "private_lesson") return 1;
@@ -55,12 +61,17 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price")
+      .select("id, title, price, duration_months")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
     return data
-      ? { id: data.id, title: data.title, price: Number(data.price) }
+      ? {
+          id: data.id,
+          title: data.title,
+          price: Number(data.price),
+          durationMonths: data.duration_months,
+        }
       : null;
   }
 
@@ -72,7 +83,7 @@ async function loadActivePlan(
       .eq("status", "active")
       .maybeSingle();
     return data
-      ? { id: data.id, title: data.title, price: Number(data.price) }
+      ? { id: data.id, title: data.title, price: Number(data.price), durationMonths: null }
       : null;
   }
 
@@ -83,7 +94,7 @@ async function loadActivePlan(
     .eq("status", "active")
     .maybeSingle();
   return data
-    ? { id: data.id, title: data.title, price: Number(data.price) }
+    ? { id: data.id, title: data.title, price: Number(data.price), durationMonths: null }
     : null;
 }
 
@@ -234,15 +245,18 @@ export async function completePlanPurchase(input: {
   // מסלול הוא מנוי מתמשך, ולכן אין טעם לרכוש אותו פעמיים לאותו משתתף.
   // כרטיסייה ושיעור פרטי ניתנים לרכישה חוזרת ללא הגבלה.
   if (kind === "program") {
+    const today = todayInIsrael();
     const { data: existing } = await supabase
       .from("enrollments")
-      .select("child_id")
+      .select("child_id, ends_on")
       .eq("program_id", planId)
       .eq("parent_id", profile.id)
-      .neq("status", "cancelled");
+      .eq("status", "active");
 
     const taken = new Set(
-      (existing ?? []).map((row) => row.child_id as string | null)
+      (existing ?? [])
+        .filter((row) => !row.ends_on || row.ends_on >= today)
+        .map((row) => row.child_id as string | null)
     );
     if (participants.some((participant) => taken.has(participant))) {
       return {
@@ -347,6 +361,11 @@ export async function completePlanPurchase(input: {
   }
 
   const paidAt = new Date().toISOString();
+  const membershipStart = kind === "program" ? todayInIsrael() : null;
+  const membershipEnd =
+    kind === "program" && plan.durationMonths
+      ? addMonths(membershipStart!, plan.durationMonths)
+      : null;
   const enrollmentRows = participants.map((childId) => ({
     parent_id: profile.id,
     child_id: childId,
@@ -357,6 +376,8 @@ export async function completePlanPurchase(input: {
     type: kind,
     status: "active" as const,
     payment_status: deferred ? ("unpaid" as const) : ("paid" as const),
+    starts_on: membershipStart,
+    ends_on: membershipEnd,
   }));
 
   const { data: createdEnrollments, error: enrollmentError } = await supabase

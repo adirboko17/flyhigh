@@ -18,6 +18,7 @@ export type AdminProgramRow = {
   title: string;
   description: string | null;
   price: number;
+  duration_months: number;
   status: keyof typeof LISTING_STATUS;
 };
 
@@ -71,6 +72,7 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
               <TR>
                 <TH>שם המסלול</TH>
                 <TH>מחיר</TH>
+                <TH>משך</TH>
                 <TH>סטטוס</TH>
                 <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
@@ -88,6 +90,11 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
                   </TD>
                   <TD className="whitespace-nowrap font-medium">
                     {formatCurrency(p.price)}
+                  </TD>
+                  <TD className="whitespace-nowrap text-ink-600">
+                    {p.duration_months === 1
+                      ? "חודש"
+                      : `${p.duration_months} חודשים`}
                   </TD>
                   <TD>
                     <Badge tone={LISTING_STATUS[p.status].tone}>

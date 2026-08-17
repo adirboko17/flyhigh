@@ -31,7 +31,7 @@ export default function ContactPage() {
                 איך מגיעים אלינו
               </h2>
               <p className="mt-1.5 text-ink-500">
-                אפשר לפנות אלינו בכל דרך שנוחה לכם. נשמח לענות בשעות הפעילות.
+                אפשר לפנות אלינו בכל דרך שנוחה לכם. נשמח לענות בהקדם.
               </p>
               <div className="mt-8">
                 <ContactInfo />

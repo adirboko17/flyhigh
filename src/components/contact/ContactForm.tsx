@@ -80,7 +80,7 @@ export function ContactForm() {
           הפנייה נשלחה בהצלחה
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-ink-600">
-          תודה שפניתם אלינו. נחזור אליכם בהקדם בשעות הפעילות.
+          תודה שפניתם אלינו. נחזור אליכם בהקדם.
         </p>
         <button
           type="button"
