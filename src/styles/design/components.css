@@ -222,10 +222,7 @@
 }
 
 /* -------------------------------------------------------- Plan ticket ---- */
-/*
-  כרטיס טיקט: חריצי ניקוב אמיתיים (mask) + הצללה שעוקבת אחרי הצורה (drop-shadow).
-  בלי עיגולים לבנים מדומים — הם יצרו גם צל ריבועי וגם חצי/שלם לא עקבי.
-*/
+/* כרטיס כניסה לבריכה: גוף + קצה עם ברקוד. בלי חריצי כרטיס טיסה. */
 .plan-ticket-shadow {
   filter: drop-shadow(0 18px 28px rgba(15, 40, 70, 0.28));
   transition: transform 0.3s ease, filter 0.3s ease;
@@ -241,84 +238,13 @@
 }
 
 .plan-ticket {
-  --ticket-radius: 20px;
-  --notch: 10px;
-  /* קצה תלישה + רוחב ניקוב — חייבים להתאים ל־markup */
-  --stub-w: 7.5rem;
-  --perf-w: 1rem;
-  --stub-h: 5.5rem;
-  --perf-h: 1rem;
-  border-radius: var(--ticket-radius);
-  /* מובייל: חריצים בצדדים על קו הניקוב האופקי */
-  -webkit-mask:
-    radial-gradient(
-        circle var(--notch) at 0 calc(100% - var(--stub-h) - var(--perf-h) / 2),
-        #0000 98%,
-        #000
-      )
-      left / 51% 100% no-repeat,
-    radial-gradient(
-        circle var(--notch) at 100% calc(100% - var(--stub-h) - var(--perf-h) / 2),
-        #0000 98%,
-        #000
-      )
-      right / 51% 100% no-repeat;
-  mask:
-    radial-gradient(
-        circle var(--notch) at 0 calc(100% - var(--stub-h) - var(--perf-h) / 2),
-        #0000 98%,
-        #000
-      )
-      left / 51% 100% no-repeat,
-    radial-gradient(
-        circle var(--notch) at 100% calc(100% - var(--stub-h) - var(--perf-h) / 2),
-        #0000 98%,
-        #000
-      )
-      right / 51% 100% no-repeat;
+  border-radius: 20px;
 }
 .plan-ticket--compact {
-  --ticket-radius: 18px;
-  --notch: 8px;
-  --stub-w: 5.75rem;
-  --perf-w: 0.75rem;
-  --stub-h: 4.25rem;
-  --perf-h: 0.75rem;
+  border-radius: 18px;
 }
 
-@media (min-width: 640px) {
-  .plan-ticket {
-    /* דסקטופ: stub בצד שמאל הפיזי (RTL flex), חריצים למעלה ולמטה */
-    -webkit-mask:
-      radial-gradient(
-          circle var(--notch) at calc(var(--stub-w) + var(--perf-w) / 2) 0,
-          #0000 98%,
-          #000
-        )
-        top / 100% 51% no-repeat,
-      radial-gradient(
-          circle var(--notch) at calc(var(--stub-w) + var(--perf-w) / 2) 100%,
-          #0000 98%,
-          #000
-        )
-        bottom / 100% 51% no-repeat;
-    mask:
-      radial-gradient(
-          circle var(--notch) at calc(var(--stub-w) + var(--perf-w) / 2) 0,
-          #0000 98%,
-          #000
-        )
-        top / 100% 51% no-repeat,
-      radial-gradient(
-          circle var(--notch) at calc(var(--stub-w) + var(--perf-w) / 2) 100%,
-          #0000 98%,
-          #000
-        )
-        bottom / 100% 51% no-repeat;
-  }
-}
-
-/* כרטיס חוג ציבורי — צל עדין והרמה בהובר, בסגנון קרוב לטיקטים של הבריכה */
+/* כרטיס חוג ציבורי — צל עדין והרמה בהובר, בסגנון קרוב לכרטיסי הבריכה */
 .class-card {
   border-radius: 22px;
   border: 1px solid rgba(15, 40, 70, 0.08);

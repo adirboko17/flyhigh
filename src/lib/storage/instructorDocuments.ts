@@ -7,7 +7,7 @@ export const MAX_INSTRUCTOR_DOCUMENT_BYTES = 10 * 1024 * 1024;
 export const INSTRUCTOR_DOC_CATEGORIES = [
   { value: "form_101", label: "טופס 101" },
   { value: "employment", label: "הסכם העסקה" },
-  { value: "id", label: "תעודת זהות" },
+  { value: "id", label: "צילום תעודת זהות" },
   { value: "bank", label: "פרטי בנק" },
   { value: "other", label: "אחר" },
 ] as const;

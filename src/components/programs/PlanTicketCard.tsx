@@ -21,12 +21,12 @@ interface PlanTicketCardProps {
   badge?: string;
   cta?: React.ReactNode;
   /**
-   * גרסה קומפקטית לדף הבית — אותו טיקט בלי רשימת יתרונות ובלי גובה מינימלי גדול.
+   * גרסה קומפקטית לדף הבית — אותו כרטיס בלי רשימת יתרונות ובלי גובה מינימלי גדול.
    */
   compact?: boolean;
 }
 
-/** כרטיס מנוי/כניסה בסגנון טיקט — גוף ראשי, ניקוב וקצה תלישה. */
+/** כרטיס כניסה לבריכה — גוף, קו גלים, קצה עם מספר וברקוד. */
 export function PlanTicketCard({
   name,
   desc,
@@ -139,9 +139,7 @@ export function PlanTicketCard({
             <p
               className={cn(
                 "relative mt-1.5 leading-relaxed",
-                compact
-                  ? "line-clamp-2 text-[13px] sm:text-sm"
-                  : "text-sm",
+                compact ? "line-clamp-2 text-[13px] sm:text-sm" : "text-sm",
                 featured ? "text-white/80" : "text-ink-500"
               )}
             >
@@ -225,51 +223,35 @@ export function PlanTicketCard({
           )}
         </div>
 
-        {/* ניקוב — קו מקווקו בלבד; החריצים נחתכים ב־mask של .plan-ticket */}
-        <div
-          aria-hidden
-          className={cn(
-            "relative shrink-0",
-            compact
-              ? "h-3 sm:h-auto sm:w-3"
-              : "h-4 sm:h-auto sm:w-4"
-          )}
-        >
-          <div
-            className={cn(
-              "absolute border-dashed",
-              "start-5 end-5 top-1/2 border-t",
-              "sm:start-1/2 sm:end-auto sm:top-5 sm:bottom-5 sm:w-0 sm:border-s sm:border-t-0",
-              featured ? "border-white/40" : "border-ink-300"
-            )}
-          />
-        </div>
+        <WavePerforation featured={featured} compact={compact} />
 
         <div
           className={cn(
-            "relative flex shrink-0 flex-row items-center justify-between gap-4",
+            "relative flex shrink-0 flex-row items-center justify-between gap-4 overflow-hidden",
             compact
               ? "h-[4.25rem] px-4 sm:h-auto sm:w-[5.75rem] sm:flex-col sm:justify-between sm:px-2.5 sm:py-4"
               : "h-[5.5rem] px-5 sm:h-auto sm:w-[7.5rem] sm:flex-col sm:justify-between sm:px-3 sm:py-6",
-            featured ? "bg-black/20" : "bg-[#e8f0f6]"
+            featured ? "bg-black/20" : "bg-[#d7eef6]"
           )}
         >
+          <StubWaves featured={featured} />
+
           <p
             className={cn(
-              "font-bold tracking-[0.14em]",
-              compact ? "text-[9px]" : "text-[10px]",
-              featured ? "text-white/55" : "text-ink-400"
+              "relative font-bold",
+              compact ? "text-[10px]" : "text-[11px]",
+              featured ? "text-white/60" : "text-ink-500"
             )}
           >
-            על הגובה
+            בריכה
           </p>
 
-          <div className="text-center">
+          <div className="relative text-center">
             <p
               className={cn(
-                "font-bold uppercase tracking-[0.16em]",
-                compact ? "text-[9px]" : "text-[10px]",
-                featured ? "text-white/55" : "text-ink-400"
+                "font-bold",
+                compact ? "text-[10px]" : "text-[11px]",
+                featured ? "text-white/60" : "text-ink-500"
               )}
             >
               {stubMeta.eyebrow}
@@ -302,10 +284,8 @@ export function PlanTicketCard({
           <div
             aria-hidden
             className={cn(
-              "flex items-end gap-[2px] sm:flex-col sm:items-stretch sm:justify-center sm:gap-[2px]",
-              compact
-                ? "h-5 sm:h-auto sm:w-5"
-                : "h-7 sm:h-auto sm:w-7"
+              "relative flex items-end gap-[2px] sm:flex-col sm:items-stretch sm:justify-center sm:gap-[2px]",
+              compact ? "h-5 sm:h-auto sm:w-5" : "h-7 sm:h-auto sm:w-7"
             )}
           >
             {[3, 1, 2, 1, 3, 2, 1, 1, 3, 1, 2, 3, 1, 2, 1].map((w, i) => (
@@ -328,6 +308,71 @@ export function PlanTicketCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function WavePerforation({
+  featured,
+  compact,
+}: {
+  featured: boolean;
+  compact: boolean;
+}) {
+  const stroke = featured ? "rgba(255,255,255,0.45)" : "rgba(15, 40, 70, 0.28)";
+
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "relative shrink-0",
+        compact ? "h-3 sm:h-auto sm:w-3" : "h-4 sm:h-auto sm:w-4"
+      )}
+    >
+      <svg
+        viewBox="0 0 12 200"
+        preserveAspectRatio="none"
+        className="absolute inset-0 hidden h-full w-full sm:block"
+      >
+        <path
+          d="M6 0c0 8-5 8-5 16s5 8 5 16-5 8-5 16 5 8 5 16-5 8-5 16 5 8 5 16-5 8-5 16 5 8 5 16-5 8-5 16 5 8 5 16-5 8-5 16 5 8 5 16-5 8-5 16 5 8 5 8"
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1.25"
+        />
+      </svg>
+      <svg
+        viewBox="0 0 200 12"
+        preserveAspectRatio="none"
+        className="absolute inset-0 h-full w-full sm:hidden"
+      >
+        <path
+          d="M0 6c8 0 8-5 16-5s8 5 16 5 8-5 16-5 8 5 16 5 8-5 16-5 8 5 16 5 8-5 16-5 8 5 16 5 8-5 16-5 8 5 16 5 8-5 16-5 8 5 16 5 8-5 16-5 8 5 8 5"
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1.25"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function StubWaves({ featured }: { featured: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 80 200"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-40"
+    >
+      <path
+        d="M0 40c20-8 40-8 60 0s40 8 60 0v20c-20 8-40 8-60 0s-40-8-60 0Z"
+        fill={featured ? "rgba(255,255,255,0.16)" : "rgba(14,160,196,0.22)"}
+      />
+      <path
+        d="M0 150c20-8 40-8 60 0s40 8 60 0v16c-20 8-40 8-60 0s-40-8-60 0Z"
+        fill={featured ? "rgba(255,255,255,0.1)" : "rgba(14,160,196,0.16)"}
+      />
+    </svg>
   );
 }
 

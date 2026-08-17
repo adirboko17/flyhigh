@@ -34,7 +34,7 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
   },
 ];
 
-/** מספר חודשים לקצה התלישה בכרטיס הטיקט של מנוי. */
+/** מספר חודשים שמוצג בשבב התוקף על כרטיס המנוי. */
 export function programStubMonths(period?: string, index = 0): number {
   if (period) {
     if (period.includes("הפוגה")) return 1;
