@@ -18,11 +18,13 @@ import {
   type AssignChargeMethod,
 } from "@/lib/admin/assignment";
 import { DEFERRED_PAYMENT_METHODS, PAYMENT_METHOD } from "@/lib/constants";
+import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
   parseSiblingTiers,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
 import { calcAge, formatCurrency } from "@/utils/format";
@@ -61,6 +63,8 @@ export function AssignToClassDialog({
     isWaitlist ? [] : null
   );
   const [tiers, setTiers] = useState<SiblingDiscountTier[]>([]);
+  const [unitPrice, setUnitPrice] = useState(Number(cls.price));
+  const [prorationNote, setProrationNote] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [parentId, setParentId] = useState<string | null>(
     isWaitlist ? mode.entry.parent_id : null
@@ -83,6 +87,27 @@ export function AssignToClassDialog({
       .rpc("class_sibling_discount_tiers", { p_class_id: cls.id })
       .then(({ data }) => {
         if (active) setTiers(parseSiblingTiers(data));
+      });
+
+    supabase
+      .from("class_sessions")
+      .select("session_date, start_time, status")
+      .eq("class_id", cls.id)
+      .then(({ data }) => {
+        if (!active) return;
+        const proration = prorateClassPrice(
+          Number(cls.price),
+          data ?? [],
+          todayInIsrael()
+        );
+        setUnitPrice(proration.unitPrice);
+        setProrationNote(
+          proration.isLate
+            ? `החוג כבר התחיל — מחיר מוצע ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount} (${proration.remainingCount} מפגשים × ${formatCurrency(proration.pricePerSession)})`
+            : proration.hasEnded
+              ? "כל המפגשים כבר התקיימו. אפשר עדיין לשבץ בסכום ידני."
+              : null
+        );
       });
 
     if (!isWaitlist) {
@@ -121,7 +146,7 @@ export function AssignToClassDialog({
     : 0;
 
   const orderPreview = calculateOrderTotal(
-    Number(cls.price),
+    unitPrice,
     childIds.length,
     tiers,
     siblingsInClass + childIds.length,
@@ -220,9 +245,20 @@ export function AssignToClassDialog({
           <div className="mt-1.5 flex justify-between gap-3">
             <span className="text-ink-500">מחיר לילד/ה</span>
             <span className="font-semibold text-ink-900">
-              {formatCurrency(cls.price)}
+              {formatCurrency(unitPrice)}
             </span>
           </div>
+          {unitPrice !== Number(cls.price) && (
+            <div className="mt-1 flex justify-between gap-3 text-ink-400">
+              <span>מחיר מלא לתקופה</span>
+              <span className="line-through">{formatCurrency(cls.price)}</span>
+            </div>
+          )}
+          {prorationNote && (
+            <p className="mt-2 text-xs leading-relaxed text-amber-800">
+              {prorationNote}
+            </p>
+          )}
         </div>
 
         {isWaitlist ? (

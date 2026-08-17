@@ -8,7 +8,7 @@ import {
   parseSiblingTiers,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
-import { formatCurrency } from "@/utils/format";
+import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import type { PublicClass } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -16,16 +16,24 @@ import {
   GuestEnrollmentActions,
   NonParentEnrollmentNotice,
 } from "./ClassEnrollmentActions";
+import {
+  ClassLateRegistrationBanner,
+  ClassPriceAmount,
+  classPriceLabel,
+} from "./ClassPrice";
 
 interface ClassEnrollmentPanelProps {
   cls: PublicClass;
   soldOut: boolean;
+  proration: ProratedClassPrice;
 }
 
 export async function ClassEnrollmentPanel({
   cls,
   soldOut,
+  proration,
 }: ClassEnrollmentPanelProps) {
+  const registrationClosed = soldOut || proration.hasEnded;
   const profile = await getSessionProfile();
 
   const supabase = await createClient();
@@ -35,7 +43,11 @@ export async function ClassEnrollmentPanel({
   const siblingTiers = parseSiblingTiers(tiersJson);
 
   let enrollmentContent = (
-    <GuestEnrollmentActions classId={cls.id} soldOut={soldOut} />
+    <GuestEnrollmentActions
+      classId={cls.id}
+      soldOut={soldOut}
+      ended={proration.hasEnded}
+    />
   );
 
   if (profile) {
@@ -71,10 +83,12 @@ export async function ClassEnrollmentPanel({
         <ClassEnrollmentActions
           classId={cls.id}
           classTitle={cls.title}
-          classPrice={Number(cls.price)}
+          classPrice={proration.unitPrice}
+          proration={proration}
           ageMin={cls.age_min}
           ageMax={cls.age_max}
           soldOut={soldOut}
+          ended={proration.hasEnded}
           availableSpots={cls.available}
           kids={children ?? []}
           enrollments={enrollments ?? []}
@@ -88,10 +102,19 @@ export async function ClassEnrollmentPanel({
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-sm text-ink-500">מחיר החוג</p>
-        <p className="mt-1 font-display text-3xl font-extrabold text-brand-700 sm:text-4xl">
-          {formatCurrency(cls.price)}
-        </p>
+        <p className="text-sm text-ink-500">{classPriceLabel(proration)}</p>
+        <div className="mt-1">
+          <ClassPriceAmount
+            proration={proration}
+            soldOut={registrationClosed}
+            size="panel"
+          />
+        </div>
+        {(proration.isLate || proration.hasEnded) && (
+          <div className="mt-3">
+            <ClassLateRegistrationBanner proration={proration} />
+          </div>
+        )}
 
         <SiblingDiscountNote tiers={siblingTiers} />
 
@@ -120,8 +143,12 @@ export async function ClassEnrollmentPanel({
           {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
           <Badge tone="neutral">{formatClassGenderPolicy(cls.gender_policy)}</Badge>
           <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
-          {cls.session_count != null && cls.session_count > 0 && (
-            <Badge tone="neutral">{cls.session_count} מפגשים</Badge>
+          {proration.billableCount > 0 && (
+            <Badge tone="neutral">
+              {proration.isLate
+                ? `${proration.remainingCount} מתוך ${proration.billableCount} מפגשים`
+                : `${proration.billableCount} מפגשים`}
+            </Badge>
           )}
         </div>
 
@@ -131,22 +158,32 @@ export async function ClassEnrollmentPanel({
   );
 }
 
+function siblingOrdinal(n: number): string {
+  if (n === 2) return "השני";
+  if (n === 3) return "השלישי";
+  return `ה־${n}`;
+}
+
 function SiblingDiscountNote({ tiers }: { tiers: SiblingDiscountTier[] }) {
   if (tiers.length === 0) return null;
 
   const sorted = [...tiers].sort((a, b) => a.minChildren - b.minChildren);
 
   return (
-    <div className="mt-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3">
-      <p className="text-sm font-semibold text-aqua-800">הנחת אחים</p>
-      <ul className="mt-1 space-y-0.5 text-sm text-aqua-700">
-        {sorted.map((tier) => (
-          <li key={tier.minChildren}>
-            {tier.minChildren} ילדים ומעלה — {tier.percent}% הנחה על הילד ה־
-            {tier.minChildren} ומעלה (לא על הראשון)
-          </li>
-        ))}
-      </ul>
+    <div className="mt-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
+      {sorted.length === 1 ? (
+        <p>
+          הנחת אחים · {sorted[0].percent}% מהילד {siblingOrdinal(sorted[0].minChildren)}
+        </p>
+      ) : (
+        <ul className="space-y-0.5">
+          {sorted.map((tier) => (
+            <li key={tier.minChildren}>
+              {tier.percent}% מהילד {siblingOrdinal(tier.minChildren)}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

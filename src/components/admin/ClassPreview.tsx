@@ -17,8 +17,14 @@ import {
   formToPreviewClass,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
-import { formatCurrency, formatDate, formatTime } from "@/utils/format";
+import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
+import { formatDate, formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
+import {
+  ClassPriceAmount,
+  ClassPriceNote,
+  classPriceLabel,
+} from "@/components/classes/ClassPrice";
 
 export type ClassPreviewForm = {
   title: string;
@@ -209,10 +215,7 @@ function ClassPagePreview({
         )}
 
         <div className="rounded-2xl border border-ink-100 bg-white p-4 shadow-sm">
-          <p className="text-xs text-ink-500">מחיר החוג</p>
-          <p className="font-display text-2xl font-extrabold text-brand-700">
-            {formatCurrency(cls.price)}
-          </p>
+          <ClassPreviewPrice cls={cls} />
           <div className="mt-3 rounded-xl bg-ink-50 p-3 text-xs">
             <div className="flex justify-between">
               <span className="text-ink-500">מקומות פנויים</span>
@@ -220,10 +223,12 @@ function ClassPagePreview({
                 {cls.available} מתוך {cls.capacity}
               </span>
             </div>
-            {cls.session_count != null && cls.session_count > 0 && (
+            {(cls.billable_session_count ?? cls.session_count) > 0 && (
               <div className="mt-1 flex justify-between">
                 <span className="text-ink-500">מפגשים</span>
-                <span className="font-bold text-ink-900">{cls.session_count}</span>
+                <span className="font-bold text-ink-900">
+                  {cls.billable_session_count ?? cls.session_count}
+                </span>
               </div>
             )}
           </div>
@@ -233,6 +238,24 @@ function ClassPagePreview({
         </div>
       </div>
     </div>
+  );
+}
+
+function ClassPreviewPrice({ cls }: { cls: PublicClass }) {
+  const proration = classPriceFromPublicCounts(
+    Number(cls.price),
+    cls.billable_session_count,
+    cls.remaining_session_count
+  );
+
+  return (
+    <>
+      <p className="text-xs text-ink-500">{classPriceLabel(proration)}</p>
+      <ClassPriceAmount proration={proration} />
+      <div className="mt-1">
+        <ClassPriceNote proration={proration} />
+      </div>
+    </>
   );
 }
 

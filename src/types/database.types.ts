@@ -1224,6 +1224,8 @@ export type Database = {
           schedule_days: string | null
           schedule_type: Database["public"]["Enums"]["schedule_type"]
           session_count: number
+          billable_session_count: number
+          remaining_session_count: number
           start_date: string | null
           start_time: string | null
           status: Database["public"]["Enums"]["class_status"]

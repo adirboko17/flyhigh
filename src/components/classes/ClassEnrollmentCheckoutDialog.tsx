@@ -24,12 +24,14 @@ import {
   EMPTY_RECEIPT_LABEL_CHOICE,
   type ReceiptLabelChoice,
 } from "@/lib/receipt-labels";
-import { formatCurrency } from "@/utils/format";
+import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
+import { formatCurrency, formatDate } from "@/utils/format";
 import {
   completeClassEnrollmentPayment,
   previewClassCoupon,
   type CheckoutPaymentMethod,
 } from "@/lib/enrollment/actions";
+import { ClassLateRegistrationBanner } from "./ClassPrice";
 
 type Child = { id: string; full_name: string };
 
@@ -39,6 +41,7 @@ interface ClassEnrollmentCheckoutDialogProps {
   classId: string;
   classTitle: string;
   unitPrice: number;
+  proration: ProratedClassPrice;
   selectedChildren: Child[];
   siblingTiers: SiblingDiscountTier[];
   /** אחים שכבר רשומים לחוג — נספרים למדרגת ההנחה. */
@@ -51,6 +54,7 @@ export function ClassEnrollmentCheckoutDialog({
   classId,
   classTitle,
   unitPrice,
+  proration,
   selectedChildren,
   siblingTiers,
   enrolledSiblings,
@@ -185,6 +189,8 @@ export function ClassEnrollmentCheckoutDialog({
     >
       {step === "summary" && (
         <div className="space-y-5">
+          <ClassLateRegistrationBanner proration={proration} />
+
           <div className="rounded-2xl bg-ink-50 p-4">
             <p className="text-sm font-semibold text-ink-700">ילדים להרשמה</p>
             <ul className="mt-2 space-y-1.5">
@@ -221,8 +227,31 @@ export function ClassEnrollmentCheckoutDialog({
           />
 
           <div className="space-y-2 border-t border-ink-100 pt-4 text-sm">
+            {proration.isLate && (
+              <>
+                <div className="flex justify-between gap-3 text-ink-500">
+                  <span>מחיר מלא לתקופה</span>
+                  <span className="shrink-0 line-through">
+                    {formatCurrency(proration.fullPrice)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 text-ink-600">
+                  <span>
+                    נרשמים ממפגש {proration.firstSessionNumber} מתוך{" "}
+                    {proration.billableCount}
+                    {proration.firstRemainingDate
+                      ? ` · ${formatDate(proration.firstRemainingDate)}`
+                      : ""}
+                  </span>
+                  <span className="shrink-0">
+                    {proration.remainingCount} ×{" "}
+                    {formatCurrency(proration.pricePerSession)}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between gap-3 text-ink-600">
-              <span>מחיר לילד/ה</span>
+              <span>{proration.isLate ? "מחיר לילד/ה מעכשיו" : "מחיר לילד/ה"}</span>
               <span className="shrink-0">{formatCurrency(unitPrice)}</span>
             </div>
             <div className="flex justify-between gap-3 text-ink-600">
@@ -300,6 +329,8 @@ export function ClassEnrollmentCheckoutDialog({
             </div>
             <p className="mt-1 break-words text-brand-700">
               {count} {count === 1 ? "ילד/ה" : "ילדים"} · {classTitle}
+              {proration.isLate &&
+                ` · ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount}`}
               {order.percent > 0 &&
                 ` · כולל ${order.percent}% הנחת אחים על הילד השני ומעלה`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}

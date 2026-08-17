@@ -16,12 +16,14 @@ import {
   normalizeCouponCode,
   type AppliedCoupon,
 } from "@/lib/finance/coupon";
+import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
   parseSiblingTiers,
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
@@ -116,6 +118,19 @@ export async function previewClassCoupon(input: {
   };
 }
 
+async function loadClassUnitPrice(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  classId: string,
+  fullPrice: number
+) {
+  const { data: sessions } = await supabase
+    .from("class_sessions")
+    .select("session_date, start_time, status")
+    .eq("class_id", classId);
+
+  return prorateClassPrice(fullPrice, sessions ?? [], todayInIsrael());
+}
+
 /** סכום ההזמנה אחרי הנחת אחים — הבסיס שעליו חל הקופון. */
 async function classSubtotal(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -142,8 +157,11 @@ async function classSubtotal(
 
   if (!cls) return null;
 
+  const proration = await loadClassUnitPrice(supabase, classId, Number(cls.price));
+  if (proration.hasEnded) return null;
+
   return calculateOrderTotal(
-    Number(cls.price),
+    proration.unitPrice,
     childCount,
     parseSiblingTiers(tiersJson),
     (existingEnrollments?.length ?? 0) + childCount
@@ -255,7 +273,12 @@ export async function completeClassEnrollmentPayment(input: {
     p_class_id: classId,
   });
 
-  const unitPrice = Number(cls.price);
+  const proration = await loadClassUnitPrice(supabase, classId, Number(cls.price));
+  if (proration.hasEnded) {
+    return { success: false, error: "החוג כבר הסתיים ולא ניתן להירשם אליו." };
+  }
+
+  const unitPrice = proration.unitPrice;
   const alreadyEnrolledCount = alreadyEnrolled.size;
   const order = calculateOrderTotal(
     unitPrice,
@@ -456,6 +479,19 @@ export async function joinClassWaitlist(input: {
 
   if (!cls) {
     return { success: false, error: "החוג לא נמצא." };
+  }
+
+  const { data: sessions } = await supabase
+    .from("class_sessions")
+    .select("session_date, start_time, status")
+    .eq("class_id", input.classId);
+  const waitlistProration = prorateClassPrice(
+    0,
+    sessions ?? [],
+    todayInIsrael()
+  );
+  if (waitlistProration.hasEnded) {
+    return { success: false, error: "החוג כבר הסתיים ולא ניתן להצטרף לרשימת ההמתנה." };
   }
 
   if (!children || children.length !== uniqueChildIds.length) {

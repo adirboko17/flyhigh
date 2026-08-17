@@ -1,4 +1,6 @@
 import { DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
+import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import type { PublicClass } from "@/types";
 
 export type ScheduleType = "weekly" | "custom";
@@ -255,6 +257,15 @@ export function formToPreviewClass(
     schedule.sessions
   );
   const activeSessions = schedule.sessions.filter((s) => s.status !== "cancelled");
+  const proration = prorateClassPrice(
+    Number(form.price) || 0,
+    schedule.sessions.map((session) => ({
+      session_date: session.sessionDate,
+      start_time: session.startTime,
+      status: session.status,
+    })),
+    todayInIsrael()
+  );
   const isGrade = form.audience_type === "grade";
 
   return {
@@ -287,6 +298,8 @@ export function formToPreviewClass(
         ? null
         : formatWeeklyDays(schedule.weeklySlots.map((s) => s.dayOfWeek)) || null,
     session_count: activeSessions.length,
+    billable_session_count: proration.billableCount,
+    remaining_session_count: proration.remainingCount,
   };
 }
 

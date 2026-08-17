@@ -9,6 +9,12 @@ import {
   getPublicClasses,
   getPublicClassSessions,
 } from "@/lib/public-data";
+import {
+  billableClassSessions,
+  isElapsedClassSession,
+  prorateClassPrice,
+} from "@/lib/finance/proratedClassPrice";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { formatTime, formatDate } from "@/utils/format";
 
 export const revalidate = 60;
@@ -32,14 +38,13 @@ export default async function ClassDetailPage({
     getPublicClassSessions(id),
   ]);
 
-  const sessions = allSessions.filter(
-    (session) => session.status === "scheduled"
-  );
-
   const cls = classes.find((candidate) => candidate.id === id);
 
   if (!cls) notFound();
 
+  const today = todayInIsrael();
+  const proration = prorateClassPrice(Number(cls.price), allSessions, today);
+  const sessions = billableClassSessions(allSessions);
   const soldOut = cls.available <= 0 || cls.status === "full";
   const scheduleLabel = cls.schedule_days
     ? `ימים ${cls.schedule_days}`
@@ -116,35 +121,64 @@ export default async function ClassDetailPage({
             {sessions.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
                 <h2 className="font-display text-lg font-bold text-ink-900">
-                  מפגשים מתוכננים
+                  מפגשים
                 </h2>
                 <p className="mt-1 text-sm text-ink-500">
-                  {cls.schedule_type === "custom"
-                    ? "תאריכים מותאמים לחוג זה"
-                    : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
+                  {proration.isLate
+                    ? `ההרשמה כוללת ממפגש ${proration.firstSessionNumber} והלאה`
+                    : cls.schedule_type === "custom"
+                      ? "תאריכים מותאמים לחוג זה"
+                      : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
                 </p>
                 <ul className="mt-4 divide-y divide-ink-100">
-                  {sessions.map((session) => (
-                    <li
-                      key={session.id}
-                      className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
-                    >
-                      <span className="font-semibold text-ink-900">
-                        {formatDate(session.session_date)}
-                      </span>
-                      <span className="text-ink-600">
-                        {formatTime(session.start_time)}–{formatTime(session.end_time)}
-                      </span>
-                      {session.substitute_instructor_name && (
-                        <Badge tone="warning" className="w-full justify-center sm:w-auto">
-                          מדריכה מחליפה: {session.substitute_instructor_name}
-                        </Badge>
-                      )}
-                      {session.notes && (
-                        <span className="w-full text-xs text-ink-400">{session.notes}</span>
-                      )}
-                    </li>
-                  ))}
+                  {sessions.map((session, index) => {
+                    const sessionNumber = index + 1;
+                    const elapsed = isElapsedClassSession(session, today);
+                    const startsHere =
+                      proration.isLate &&
+                      sessionNumber === proration.firstSessionNumber;
+
+                    return (
+                      <li
+                        key={session.id}
+                        className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
+                      >
+                        <span
+                          className={
+                            elapsed
+                              ? "font-semibold text-ink-400"
+                              : "font-semibold text-ink-900"
+                          }
+                        >
+                          <span className="ms-1 text-xs font-medium text-ink-400">
+                            מפגש {sessionNumber}
+                          </span>{" "}
+                          {formatDate(session.session_date)}
+                        </span>
+                        <span className={elapsed ? "text-ink-400" : "text-ink-600"}>
+                          {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                        </span>
+                        {elapsed && (
+                          <Badge tone="neutral" className="w-full justify-center sm:w-auto">
+                            התקיים
+                          </Badge>
+                        )}
+                        {startsHere && (
+                          <Badge tone="brand" className="w-full justify-center sm:w-auto">
+                            נרשמים מכאן
+                          </Badge>
+                        )}
+                        {session.substitute_instructor_name && !elapsed && (
+                          <Badge tone="warning" className="w-full justify-center sm:w-auto">
+                            מדריכה מחליפה: {session.substitute_instructor_name}
+                          </Badge>
+                        )}
+                        {session.notes && (
+                          <span className="w-full text-xs text-ink-400">{session.notes}</span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -152,7 +186,11 @@ export default async function ClassDetailPage({
         </div>
 
         <div className="order-2">
-          <ClassEnrollmentPanel cls={cls} soldOut={soldOut} />
+          <ClassEnrollmentPanel
+            cls={cls}
+            soldOut={soldOut}
+            proration={proration}
+          />
         </div>
       </div>
     </div>

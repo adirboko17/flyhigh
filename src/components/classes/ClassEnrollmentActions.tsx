@@ -17,6 +17,7 @@ import {
 } from "@/lib/enrollment/ageValidation";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
+import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import type { Enums } from "@/types/database.types";
 
 type Child = { id: string; full_name: string; birth_date: string | null };
@@ -41,9 +42,11 @@ interface ClassEnrollmentActionsProps {
   classId: string;
   classTitle: string;
   classPrice: number;
+  proration: ProratedClassPrice;
   ageMin: number | null;
   ageMax: number | null;
   soldOut: boolean;
+  ended?: boolean;
   availableSpots: number;
   kids: Child[];
   enrollments: ExistingEnrollment[];
@@ -55,9 +58,11 @@ export function ClassEnrollmentActions({
   classId,
   classTitle,
   classPrice,
+  proration,
   ageMin,
   ageMax,
   soldOut,
+  ended = false,
   availableSpots,
   kids,
   enrollments,
@@ -217,7 +222,7 @@ export function ClassEnrollmentActions({
     setCheckoutOpen(true);
   }
 
-  if (kids.length === 0) {
+  if (kids.length === 0 && !ended) {
     return (
       <div className="mt-5 space-y-3">
         <p className="text-sm text-ink-600">
@@ -300,7 +305,7 @@ export function ClassEnrollmentActions({
           </div>
         )}
 
-        {availableChildren.length > 0 || ineligibleChildren.length > 0 ? (
+        {!ended && (availableChildren.length > 0 || ineligibleChildren.length > 0) ? (
           <div className="space-y-3">
             {enrollments.length > 0 && availableChildren.length > 0 && (
               <p className="text-sm text-ink-600">
@@ -450,21 +455,24 @@ export function ClassEnrollmentActions({
           enrollments.length === 0 &&
           waitlist.length === 0 && (
             <p className="text-sm text-ink-500">
-              {ineligibleChildren.length > 0
-                ? "אף אחד מהילדים אינו בטווח הגילאים של החוג."
-                : "כל הילדים כבר רשומים לחוג זה."}
+              {ended
+                ? "לא ניתן להירשם לחוג שהסתיים."
+                : ineligibleChildren.length > 0
+                  ? "אף אחד מהילדים אינו בטווח הגילאים של החוג."
+                  : "כל הילדים כבר רשומים לחוג זה."}
             </p>
           )
         )}
       </div>
 
-      {!soldOut && (
+      {!soldOut && !ended && (
         <ClassEnrollmentCheckoutDialog
           open={checkoutOpen}
           onClose={() => setCheckoutOpen(false)}
           classId={classId}
           classTitle={classTitle}
           unitPrice={classPrice}
+          proration={proration}
           selectedChildren={selectedChildren}
           siblingTiers={siblingTiers}
           enrolledSiblings={enrollments.length}
@@ -477,10 +485,16 @@ export function ClassEnrollmentActions({
 export function GuestEnrollmentActions({
   classId,
   soldOut,
+  ended = false,
 }: {
   classId: string;
   soldOut: boolean;
+  ended?: boolean;
 }) {
+  if (ended) {
+    return null;
+  }
+
   const loginHref = `/login?redirect=${encodeURIComponent(`/classes/${classId}`)}`;
   const registerHref = soldOut
     ? `/register?class=${classId}&waitlist=1`

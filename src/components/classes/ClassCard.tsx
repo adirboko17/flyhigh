@@ -6,8 +6,10 @@ import type { IconName } from "@/components/icons/paths";
 import { formatClassAudience } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
-import { formatCurrency, formatTime } from "@/utils/format";
+import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
+import { formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
+import { ClassPriceAmount, ClassPriceNote, classPriceLabel } from "./ClassPrice";
 
 const ACCENTS = [
   "var(--logo-cyan)",
@@ -32,8 +34,15 @@ export function ClassCard({
   cls: PublicClass;
   preview?: boolean;
 }) {
-  const soldOut = cls.available <= 0 || cls.status === "full";
-  const lastSpot = !soldOut && cls.available === 1;
+  const proration = classPriceFromPublicCounts(
+    Number(cls.price),
+    cls.billable_session_count,
+    cls.remaining_session_count
+  );
+  const ended = proration.hasEnded;
+  const soldOut = !ended && (cls.available <= 0 || cls.status === "full");
+  const lastSpot = !ended && !soldOut && cls.available === 1;
+  const closed = ended || soldOut;
   const isBlob = cls.image_url?.startsWith("blob:") ?? false;
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
   const href = `/classes/${cls.id}`;
@@ -60,11 +69,13 @@ export function ClassCard({
         : "נקבה"
       : null;
 
-  const availability = soldOut
-    ? { text: "אין מקומות פנויים", tone: "danger" as const }
-    : lastSpot
-      ? { text: "מקום אחרון פנוי", tone: "accent" as const }
-      : { text: `${cls.available} מקומות פנויים`, tone: "muted" as const };
+  const availability = ended
+    ? { text: "החוג הסתיים", tone: "danger" as const }
+    : soldOut
+      ? { text: "אין מקומות פנויים", tone: "danger" as const }
+      : lastSpot
+        ? { text: "מקום אחרון פנוי", tone: "accent" as const }
+        : { text: `${cls.available} מקומות פנויים`, tone: "muted" as const };
 
   const card = (
     <article
@@ -108,14 +119,14 @@ export function ClassCard({
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(7,30,48,0.08)_0%,rgba(7,30,48,0.0)_42%,rgba(7,30,48,0.55)_100%)]"
         />
 
-        {(soldOut || lastSpot) && (
+        {(ended || soldOut || lastSpot) && (
           <span
             className="absolute end-3 top-3 rounded-lg px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-sm"
             style={{
-              background: soldOut ? "#c0364a" : "var(--logo-magenta)",
+              background: ended || soldOut ? "#c0364a" : "var(--logo-magenta)",
             }}
           >
-            {soldOut ? "מלא" : "מקום אחרון"}
+            {ended ? "הסתיים" : soldOut ? "מלא" : "מקום אחרון"}
           </span>
         )}
 
@@ -184,29 +195,27 @@ export function ClassCard({
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">
-              מחיר
+              {classPriceLabel(proration)}
             </p>
-            <p
-              className="mt-0.5 font-display text-[26px] font-extrabold leading-none tabular-nums"
-              style={{ color: soldOut ? undefined : "var(--brand-700)" }}
-            >
-              <span className={soldOut ? "text-ink-400" : undefined}>
-                {formatCurrency(cls.price)}
-              </span>
-            </p>
+            <div className="mt-0.5">
+              <ClassPriceAmount proration={proration} soldOut={closed} />
+            </div>
+            <div className="mt-1 max-w-[12rem]">
+              <ClassPriceNote proration={proration} compact />
+            </div>
           </div>
 
           <span
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-bold tracking-wide transition-colors",
-              soldOut
+              closed
                 ? "bg-ink-100 text-ink-500"
                 : "text-white shadow-sm group-hover:brightness-110"
             )}
-            style={soldOut ? undefined : { background: accent }}
+            style={closed ? undefined : { background: accent }}
           >
-            {soldOut ? "לפרטים" : "לפרטים והרשמה"}
-            {!soldOut && <Icon name="arrow" size={13} className="opacity-80" />}
+            {closed ? "לפרטים" : "לפרטים והרשמה"}
+            {!closed && <Icon name="arrow" size={13} className="opacity-80" />}
           </span>
         </div>
       </div>
