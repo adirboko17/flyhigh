@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import AdminLoading from "./loading";
@@ -33,6 +34,9 @@ export default function AdminLayout({
 
 async function AdminSidebar() {
   const profile = await requireRole("admin");
+  const cookieStore = await cookies();
+  const defaultCollapsed =
+    cookieStore.get("admin-sidebar-collapsed")?.value === "1";
 
   return (
     <Sidebar
@@ -42,6 +46,8 @@ async function AdminSidebar() {
       logoHeight={64}
       logoWidth={210}
       logoHref="/admin"
+      collapsible
+      defaultCollapsed={defaultCollapsed}
     />
   );
 }

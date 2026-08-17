@@ -8,10 +8,13 @@ import { cn } from "@/utils/cn";
 export function LogoutButton({
   className,
   overlay = false,
+  compact = false,
 }: {
   className?: string;
   /** מצב הדר שקוף בראש העמוד — טקסט לבן עם קו תחתון */
   overlay?: boolean;
+  /** רק אייקון — לסרגל צד מצומצם. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -33,11 +36,16 @@ export function LogoutButton({
         overlay
           ? "text-white underline decoration-white underline-offset-4 hover:bg-white/10 hover:text-white"
           : "text-ink-600 hover:bg-red-50 hover:text-red-600",
+        compact && "justify-center px-0 py-2.5",
         className
       )}
+      aria-label={compact ? (loading ? "מתנתק..." : "התנתקות") : undefined}
+      title={compact ? "התנתקות" : undefined}
     >
       {!overlay && <span aria-hidden>🚪</span>}
-      {loading ? "מתנתק..." : "התנתקות"}
+      <span className={cn(compact && "lg:hidden")}>
+        {loading ? "מתנתק..." : "התנתקות"}
+      </span>
     </button>
   );
 }

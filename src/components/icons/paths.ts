@@ -42,6 +42,7 @@ export const ICON_PATHS = {
   trash:
     "M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5",
   arrow: "M19 12H5M12 19l-7-7 7-7",
+  chevron: "M15 6l-6 6 6 6",
   money:
     "M12 3v18M16 7a4 4 0 0 0-4-1.5C9.8 5.5 8 6.6 8 8.5S10 11 12 11s4 1 4 2.8-1.8 2.7-4 2.7A4 4 0 0 1 8 15",
 } as const;

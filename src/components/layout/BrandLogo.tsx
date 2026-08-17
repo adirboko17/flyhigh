@@ -18,6 +18,8 @@ interface BrandLogoProps {
   className?: string;
   /** לוגו לבן - לשימוש על רקע כהה/שקוף */
   light?: boolean;
+  /** ריבוע קטן — חיתוך לאייקון בראש הלוגו, לסרגל מצומצם. */
+  compact?: boolean;
 }
 
 export function BrandLogo({
@@ -28,13 +30,17 @@ export function BrandLogo({
   href = "/",
   className,
   light = false,
+  compact = false,
 }: BrandLogoProps) {
-  const width = widthProp ?? Math.round(height * 2.05);
+  const width = compact ? height : (widthProp ?? Math.round(height * 2.05));
 
   const logo = (
     <div className={cn("flex items-center gap-3", className)}>
       <div
-        className="relative shrink-0"
+        className={cn(
+          "relative shrink-0 overflow-hidden",
+          compact && "rounded-2xl"
+        )}
         style={{ height, width }}
       >
         <Image
@@ -43,13 +49,16 @@ export function BrandLogo({
           fill
           sizes={`${width}px`}
           className={cn(
-            "object-contain object-center transition-[filter] duration-300",
+            "transition-[filter] duration-300",
+            compact
+              ? "object-cover object-right"
+              : "object-contain object-center",
             light && "brightness-0 invert"
           )}
           priority
         />
       </div>
-      {subtitle && (
+      {subtitle && !compact && (
         <span className="leading-tight">
           <span className="block text-xs font-medium text-ink-400">{subtitle}</span>
         </span>
