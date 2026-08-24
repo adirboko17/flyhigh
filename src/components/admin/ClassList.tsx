@@ -27,6 +27,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { setClassStatus } from "@/lib/admin/classStatus";
 import {
@@ -343,6 +344,7 @@ function ClassCard({
                             window.alert(result.error);
                             return;
                           }
+                          await revalidatePublicCatalog();
                           router.refresh();
                         },
                       },
@@ -361,6 +363,7 @@ function ClassCard({
                             window.alert(result.error);
                             return;
                           }
+                          await revalidatePublicCatalog();
                           router.refresh();
                         },
                       },
@@ -372,7 +375,10 @@ function ClassCard({
                   "classes",
                   cls.id
                 );
-                if (!result.error) router.refresh();
+                if (!result.error) {
+                  await revalidatePublicCatalog();
+                  router.refresh();
+                }
                 return result;
               }}
             />

@@ -9,6 +9,7 @@ import { PrivateLessonForm } from "@/components/admin/PrivateLessonForm";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
 import { formatCurrency } from "@/utils/format";
@@ -114,7 +115,10 @@ export function PrivateLessonList({
                           "private_lessons",
                           lesson.id
                         );
-                        if (!result.error) router.refresh();
+                        if (!result.error) {
+                          await revalidatePublicCatalog();
+                          router.refresh();
+                        }
                         return result;
                       }}
                     />

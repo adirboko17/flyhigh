@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -91,6 +92,7 @@ export function PoolPassForm({ existing, onClose }: PoolPassFormProps) {
       return;
     }
 
+    await revalidatePublicCatalog();
     setLoading(false);
     router.refresh();
 

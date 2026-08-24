@@ -9,6 +9,7 @@ import { ProgramForm } from "@/components/admin/ProgramForm";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
 import { isActivityProgram, type ProgramKind } from "@/lib/programs";
@@ -120,7 +121,10 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
                           "programs",
                           p.id
                         );
-                        if (!result.error) router.refresh();
+                        if (!result.error) {
+                          await revalidatePublicCatalog();
+                          router.refresh();
+                        }
                         return result;
                       }}
                     />

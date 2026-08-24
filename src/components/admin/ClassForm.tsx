@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { uploadClassImage } from "@/lib/storage/classImage";
 import {
@@ -337,6 +338,7 @@ export function ClassForm({
       return;
     }
 
+    await revalidatePublicCatalog();
     router.push("/admin/classes");
     router.refresh();
   }
