@@ -129,7 +129,7 @@ export function AssignToClassDialog({
     return () => {
       active = false;
     };
-  }, [cls.id, isWaitlist]);
+  }, [cls.id, cls.price, isWaitlist]);
 
   useEffect(() => {
     if (!parentId) {

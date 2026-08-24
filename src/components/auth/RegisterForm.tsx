@@ -750,7 +750,7 @@ export function RegisterForm() {
 
       {showChildrenDock && (
         <div className="hidden lg:block">
-          <ChildrenLiveSummary children={children} />
+          <ChildrenLiveSummary items={children} />
         </div>
       )}
 
@@ -847,7 +847,7 @@ export function RegisterForm() {
           >
             <div className="mx-auto flex w-full max-w-[440px] flex-col gap-3 lg:max-w-none">
               <div className="lg:hidden">
-                <ChildrenLiveSummary children={children} />
+                <ChildrenLiveSummary items={children} />
               </div>
               <FormError error={error} />
               <FormActions
@@ -943,14 +943,14 @@ function FormActions({
   );
 }
 
-function ChildrenLiveSummary({ children }: { children: ChildDraft[] }) {
-  const namedCount = children.filter((child) => child.name.trim()).length;
+function ChildrenLiveSummary({ items }: { items: ChildDraft[] }) {
+  const namedCount = items.filter((child) => child.name.trim()).length;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-brand-200/90 bg-gradient-to-bl from-brand-50 via-white to-brand-50/40 shadow-sm">
       <div className="flex items-center gap-3 px-3.5 py-3">
         <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 px-2 text-xs font-bold tabular-nums text-white shadow-sm">
-          {children.length}
+          {items.length}
         </span>
         <div className="min-w-0 text-right">
           <p className="text-sm font-semibold leading-tight text-brand-900">
@@ -966,7 +966,7 @@ function ChildrenLiveSummary({ children }: { children: ChildDraft[] }) {
         </div>
       </div>
       <ul className="max-h-36 divide-y divide-brand-100 overflow-y-auto border-t border-brand-200/60">
-        {children.map((child, index) => (
+        {items.map((child, index) => (
           <ChildSummaryRow key={child.key} child={child} index={index} />
         ))}
       </ul>
