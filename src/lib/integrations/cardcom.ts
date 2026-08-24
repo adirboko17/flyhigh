@@ -22,6 +22,8 @@ export type CardcomLpResult = {
   LowProfileId?: string;
   ReturnValue?: string;
   TransactionId?: number | string;
+  /** איות של קארדקום ב־API v11 */
+  TranzactionId?: number | string;
   Amount?: number;
   DocumentInfo?: {
     ResponseCode?: number;
@@ -31,6 +33,14 @@ export type CardcomLpResult = {
   TransactionInfo?: {
     ResponseCode?: number;
     TransactionId?: number | string;
+    TranzactionId?: number | string;
+    Amount?: number;
+    ApprovalNumber?: string;
+  };
+  TranzactionInfo?: {
+    ResponseCode?: number;
+    TransactionId?: number | string;
+    TranzactionId?: number | string;
     Amount?: number;
     ApprovalNumber?: string;
   };
@@ -245,33 +255,35 @@ export async function getLowProfileResult(
   });
 }
 
+function cardcomTransactionRecord(result: CardcomLpResult) {
+  return (
+    asRecord(result.TransactionInfo) ??
+    asRecord(result.TranzactionInfo) ??
+    result
+  );
+}
+
 export function cardcomChargeSucceeded(result: CardcomLpResult) {
   if (Number(result.ResponseCode ?? -1) !== 0) return false;
 
-  const tx = asRecord(result.TransactionInfo) ?? result;
+  const tx = cardcomTransactionRecord(result);
   const txCode = tx.ResponseCode;
   if (txCode !== undefined && Number(txCode) !== 0) return false;
 
-  const transactionId =
-    result.TransactionId ??
-    (typeof tx.TransactionId === "number" || typeof tx.TransactionId === "string"
-      ? tx.TransactionId
-      : null);
-
-  return Boolean(transactionId);
+  return Boolean(cardcomTransactionId(result));
 }
 
 export function cardcomTransactionId(result: CardcomLpResult) {
-  const tx = asRecord(result.TransactionInfo);
+  const tx = cardcomTransactionRecord(result);
   return pickString(
-    { ...result, ...(tx ?? {}) },
-    ["TransactionId", "transactionId"]
+    { ...result, ...tx },
+    ["TransactionId", "TranzactionId", "transactionId", "tranzactionId"]
   );
 }
 
 export function cardcomChargedAmount(result: CardcomLpResult) {
-  const tx = asRecord(result.TransactionInfo);
-  const raw = tx?.Amount ?? result.Amount;
+  const tx = cardcomTransactionRecord(result);
+  const raw = tx.Amount ?? result.Amount;
   const amount = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(amount) ? amount : null;
 }

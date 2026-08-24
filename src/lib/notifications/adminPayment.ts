@@ -73,11 +73,16 @@ export async function notifyAdminPayment(notice: AdminPaymentNotice) {
     : `לקוח נרשם וצריך לשלם — ${notice.parentName} · ${formatCurrency(notice.amount)}`;
 
   try {
-    await getEmailProvider().send({
+    const sent = await getEmailProvider().send({
       to,
       subject,
       html: buildHtml(notice),
     });
+    if (!sent.success) {
+      console.error("[admin-payment-email] send failed", {
+        provider: getEmailProvider().name,
+      });
+    }
   } catch (error) {
     console.error("[admin-payment-email]", error);
   }

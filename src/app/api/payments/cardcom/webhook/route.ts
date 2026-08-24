@@ -33,7 +33,6 @@ async function handle(request: Request) {
   const result = await settleCardcomCheckout({
     checkoutId,
     lowProfileId,
-    markFailedIfUnpaid: true,
   });
 
   if (!result.success) {
