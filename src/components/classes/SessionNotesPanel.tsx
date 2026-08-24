@@ -83,7 +83,13 @@ export function SessionNotesList({
   );
 }
 
-export function SessionNotesPanel({ sessionId }: { sessionId: string }) {
+export function SessionNotesPanel({
+  sessionId,
+  classId,
+}: {
+  sessionId: string;
+  classId: string;
+}) {
   const [notes, setNotes] = useState<SessionNoteView[]>([]);
   const [body, setBody] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
@@ -153,6 +159,7 @@ export function SessionNotesPanel({ sessionId }: { sessionId: string }) {
       .from("class_session_notes")
       .insert({
         session_id: sessionId,
+        class_id: classId,
         body: trimmed,
         created_by: userId,
       })
@@ -320,7 +327,9 @@ export function SessionNotesWorkspace({ classId }: { classId: string }) {
         selectedIndex={selectedIndex}
         onSelectIndex={setSelectedIndex}
       />
-      {selectedSession && <SessionNotesPanel sessionId={selectedSession.id} />}
+      {selectedSession && (
+        <SessionNotesPanel sessionId={selectedSession.id} classId={classId} />
+      )}
     </div>
   );
 }

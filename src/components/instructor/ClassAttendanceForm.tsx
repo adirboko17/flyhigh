@@ -167,7 +167,9 @@ export function ClassAttendanceForm({
         </p>
       ) : (
         <>
-          {selectedSession && <SessionNotesPanel sessionId={selectedSession.id} />}
+          {selectedSession && (
+            <SessionNotesPanel sessionId={selectedSession.id} classId={classId} />
+          )}
 
           {students.length === 0 ? (
             <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
