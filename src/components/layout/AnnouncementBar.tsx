@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Icon } from "@/components/icons/Icon";
 import { THEME_COLOR } from "@/lib/theme-color";
 
@@ -12,7 +11,7 @@ export function AnnouncementBar() {
       <div
         className="announcement-marquee min-h-9 py-1.5 text-xs sm:hidden"
         role="note"
-        aria-label="5% הנחת משפחה בהרשמה לשני בני משפחה"
+        aria-label="5% הנחת משפחה בהרשמה לשני בני משפחה לחוגי הילדים"
       >
         <div className="announcement-marquee__track">
           {Array.from({ length: 3 }, (_, groupIndex) => (
@@ -30,7 +29,7 @@ export function AnnouncementBar() {
                   <Icon name="users" size={14} stroke={2} />
                   <strong>5% הנחת משפחה</strong>
                   <span className="text-ink-300">•</span>
-                  בהרשמה לשני בני משפחה
+                  בהרשמה לשני בני משפחה לחוגי הילדים
                 </span>
               ))}
             </div>
@@ -47,14 +46,8 @@ export function AnnouncementBar() {
           <span className="mx-1 text-ink-300" aria-hidden>
             •
           </span>
-          בהרשמה לשני בני משפחה
+          בהרשמה לשני בני משפחה לחוגי הילדים
         </p>
-        <Link
-          href="/programs"
-          className="whitespace-nowrap font-bold text-brand-600 underline decoration-brand-200 underline-offset-4 transition-colors hover:text-brand-800"
-        >
-          לבריכה
-        </Link>
       </div>
     </aside>
   );

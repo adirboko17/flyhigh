@@ -103,23 +103,3 @@
 .hero-orb--c {
   animation: orb-drift-c 13s ease-in-out infinite;
 }
-
-@keyframes hero-carousel-ken {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(1.06);
-  }
-}
-
-.hero-carousel-ken {
-  animation: hero-carousel-ken 5.2s ease-out forwards;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-carousel-ken {
-    animation: none;
-  }
-}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@/utils/cn";
 import {
   A11Y_DEFAULTS,
@@ -86,6 +87,9 @@ function countActive(settings: A11ySettings): number {
 }
 
 export function AccessibilityWidget() {
+  const pathname = usePathname();
+  const hideOnStaff =
+    pathname.startsWith("/admin") || pathname.startsWith("/instructor");
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<A11ySettings>(A11Y_DEFAULTS);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -149,6 +153,8 @@ export function AccessibilityWidget() {
   const activeCount = countActive(settings);
   const fontScale = A11Y_FONT_STEPS[settings.fontStep] ?? 100;
   const maxStep = A11Y_FONT_STEPS.length - 1;
+
+  if (hideOnStaff) return null;
 
   return (
     <div className="a11y-ui">

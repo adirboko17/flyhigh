@@ -17,7 +17,7 @@ export default async function NewClassPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="יצירת חוג חדש"
-        description="מלאו את פרטי החוג. ניתן לשמור כטיוטה ולפרסם בהמשך."
+        description="ארבעה שלבים קצרים. אפשר לחזור אחורה בכל רגע."
       />
       <ClassForm
         instructors={instructors}

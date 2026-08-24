@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import {
+  BankTransferDetails,
   CardcomRedirectHint,
   CouponField,
   PaymentMethodPicker,
@@ -389,6 +390,9 @@ export function ClassEnrollmentCheckoutDialog({
                 {DEFERRED_PAYMENT_HINT[method]} ההרשמה נשמרת מיד והמקום בחוג נשמר
                 לכם.
               </p>
+              {method === "bank_transfer" && (
+                <BankTransferDetails className="mt-3" />
+              )}
             </div>
           ) : nothingToCharge ? (
             <div className="rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import {
+  BankTransferDetails,
   CardcomRedirectHint,
   CouponField,
   PaymentMethodPicker,
@@ -220,18 +221,35 @@ export function PlanPurchaseTrigger({
     setOpen(true);
   }
 
+  function isDisclosureTarget(target: EventTarget | null) {
+    return (
+      target instanceof Element && Boolean(target.closest("[data-card-disclosure]"))
+    );
+  }
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          if (isDisclosureTarget(event.target)) return;
+          handleClick();
+        }}
+        onKeyDown={(event) => {
+          if (isDisclosureTarget(event.target)) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleClick();
+          }
+        }}
         className={cn(
           "w-full cursor-pointer text-start transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2",
           className
         )}
       >
         {children}
-      </button>
+      </div>
 
       {viewer.kind === "parent" && (
         <PlanCheckoutDialog
@@ -832,6 +850,9 @@ function PlanCheckoutDialog({
               <p className="mt-1">
                 {DEFERRED_PAYMENT_HINT[method]} הרכישה נרשמת מיד בחשבון שלכם.
               </p>
+              {method === "bank_transfer" && (
+                <BankTransferDetails className="mt-3" />
+              )}
             </div>
           ) : nothingToCharge ? (
             <div className="rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">

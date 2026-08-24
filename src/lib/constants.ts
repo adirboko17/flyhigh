@@ -15,10 +15,10 @@ export const CONTACT = {
 
 export const MIN_PASSWORD_LENGTH = 8;
 
-/** תמונת הירו — בריכה ריקה (בלי דמויות), צנועה ומתאימה לקהל דתי. */
-export const HERO_POOL_IMAGE = "/images/hero-pool.jpg";
+/** תמונת רקע קבועה להירו — בריכה עם המבנה המקושת. */
+export const HERO_POOL_IMAGE = "/images/carousel/slide-03.jpg";
 
-/** תמונות קרוסלת ההירו (מתוך assets/carusle). */
+/** תמונות גלריית הבית (מתוך assets/carusle). */
 export const HERO_CAROUSEL_IMAGES = [
   "/images/carousel/slide-01.jpg",
   "/images/carousel/slide-02.jpg",
@@ -29,30 +29,6 @@ export const HERO_CAROUSEL_IMAGES = [
   "/images/carousel/slide-09.jpg",
   "/images/carousel/slide-10.jpg",
 ] as const;
-
-/**
- * תמונות שלא מוצגות בהירו בדסקטופ
- * (WhatsApp …08.21.18 (1) ו־…08.21.19 (4)).
- */
-const HERO_CAROUSEL_DESKTOP_EXCLUDE = new Set<string>([
-  "/images/carousel/slide-01.jpg",
-  "/images/carousel/slide-02.jpg",
-]);
-
-/** תמונות שלא מוצגות בהירו במובייל (WhatsApp …08.21.19 (4)). */
-const HERO_CAROUSEL_MOBILE_EXCLUDE = new Set<string>([
-  "/images/carousel/slide-02.jpg",
-]);
-
-/** קרוסלת הירו לדסקטופ — בלי שתי התמונות שהוסרו. */
-export const HERO_CAROUSEL_IMAGES_DESKTOP = HERO_CAROUSEL_IMAGES.filter(
-  (src) => !HERO_CAROUSEL_DESKTOP_EXCLUDE.has(src)
-);
-
-/** קרוסלת הירו למובייל. */
-export const HERO_CAROUSEL_IMAGES_MOBILE = HERO_CAROUSEL_IMAGES.filter(
-  (src) => !HERO_CAROUSEL_MOBILE_EXCLUDE.has(src)
-);
 
 export const DAYS_OF_WEEK = [
   "ראשון",
@@ -227,11 +203,18 @@ export const DEFERRED_PAYMENT_METHODS = [
 export type DeferredPaymentMethod = (typeof DEFERRED_PAYMENT_METHODS)[number];
 
 export const DEFERRED_PAYMENT_HINT: Record<DeferredPaymentMethod, string> = {
-  cash: "התשלום יימסר במזומן במשרד.",
-  bank_transfer: "פרטי החשבון להעברה יישלחו אליכם, והתשלום יסומן עם קליטתו.",
-  maccabi: "התשלום יבוצע דרך אפליקציית מכבי מול המשרד.",
-  amit: "התשלום יבוצע דרך עמית מול המשרד.",
+  cash: "התשלום יימסר במזומן למורית.",
+  bank_transfer: "העבירו לפי פרטי החשבון הבאים. התשלום יסומן עם קליטתו.",
+  maccabi: "התשלום יבוצע דרך אפליקציית מכבי.",
+  amit: "התשלום יבוצע דרך עמית.",
 };
+
+export const BANK_TRANSFER_ACCOUNT = {
+  bank: "מזרחי מרכז מסחרי ערד",
+  branch: "489",
+  account: "302095",
+  holder: "ראם ומורית שפירא",
+} as const;
 
 export function isDeferredPaymentMethod(
   method: Enums<"payment_method"> | null

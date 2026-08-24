@@ -1,5 +1,6 @@
 import { Icon } from "@/components/icons/Icon";
 import type { IconName } from "@/components/icons/paths";
+import { CollapsiblePriceRows } from "@/components/programs/CollapsiblePriceRows";
 import { cn } from "@/utils/cn";
 
 export type PlanTicketStub =
@@ -178,58 +179,25 @@ export function PlanTicketCard({
             </p>
           )}
 
-          {priceRows.length > 0 && (
-            <div
-              className={cn(
-                "relative mt-3 rounded-xl px-3 py-2.5",
-                compact ? "text-[12px]" : "text-[13px]",
-                featured ? "bg-white/10" : "bg-ink-50/80"
-              )}
-            >
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {priceRows.map((row) => (
-                  <div
-                    key={`${row.range}-${row.price}`}
-                    className="flex items-baseline justify-between gap-2"
-                  >
-                    <span
-                      className={cn(
-                        "min-w-0 truncate",
-                        featured ? "text-white/70" : "text-ink-500"
-                      )}
-                    >
-                      {row.range}
-                      {row.note ? (
-                        <span className="ms-1 text-[10px] opacity-80">
-                          {row.note}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span
-                      className={cn(
-                        "shrink-0 font-bold tabular-nums",
-                        featured ? "text-white" : "text-ink-800"
-                      )}
-                    >
-                      {row.price}
-                    </span>
-                  </div>
-                ))}
+          {priceRows.length > 0 &&
+            (compact ? (
+              <CollapsiblePriceRows featured={featured} compact>
+                <PriceRowsTable
+                  rows={priceRows}
+                  extraLine={extraLine}
+                  featured={featured}
+                  compact
+                />
+              </CollapsiblePriceRows>
+            ) : (
+              <div className="relative mt-3">
+                <PriceRowsTable
+                  rows={priceRows}
+                  extraLine={extraLine}
+                  featured={featured}
+                />
               </div>
-              {extraLine && (
-                <p
-                  className={cn(
-                    "mt-2 border-t pt-1.5 text-[11px]",
-                    featured
-                      ? "border-white/15 text-white/70"
-                      : "border-ink-100 text-ink-500"
-                  )}
-                >
-                  {extraLine}
-                </p>
-              )}
-            </div>
-          )}
+            ))}
 
           <div
             className={cn(
@@ -407,6 +375,75 @@ export function PlanTicketCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function PriceRowsTable({
+  rows,
+  extraLine,
+  featured,
+  compact = false,
+}: {
+  rows: PlanPriceRow[];
+  extraLine?: string | null;
+  featured: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl px-3 py-2.5",
+        compact ? "text-[12px]" : "text-[13px]",
+        featured ? "bg-white/10" : "bg-ink-50/80"
+      )}
+    >
+      <div className="grid grid-cols-2 gap-y-1.5">
+        {rows.map((row, index) => (
+          <div
+            key={`${row.range}-${row.price}`}
+            className={cn(
+              "flex items-baseline justify-between gap-2 px-2.5",
+              index % 2 === 1 &&
+                (featured
+                  ? "border-s border-white/20"
+                  : "border-s border-ink-200/70")
+            )}
+          >
+            <span
+              className={cn(
+                "min-w-0 truncate",
+                featured ? "text-white/70" : "text-ink-500"
+              )}
+            >
+              {row.range}
+              {row.note ? (
+                <span className="ms-1 text-[10px] opacity-80">{row.note}</span>
+              ) : null}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 font-bold tabular-nums",
+                featured ? "text-white" : "text-ink-800"
+              )}
+            >
+              {row.price}
+            </span>
+          </div>
+        ))}
+      </div>
+      {extraLine && (
+        <p
+          className={cn(
+            "mt-2 border-t pt-1.5 text-[11px]",
+            featured
+              ? "border-white/15 text-white/70"
+              : "border-ink-100 text-ink-500"
+          )}
+        >
+          {extraLine}
+        </p>
+      )}
+    </div>
   );
 }
 

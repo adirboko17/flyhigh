@@ -11,7 +11,7 @@ interface AuthBrandPanelProps {
 }
 
 export function AuthBrandPanel({
-  heading = "שחייה, ביטחון והנאה - בגובה העיניים",
+  heading = "כושר, שחייה והנאה - בגובה העיניים",
   points,
 }: AuthBrandPanelProps) {
   return (
@@ -25,7 +25,7 @@ export function AuthBrandPanel({
           <span style={{ color: ORG }}>
             <Icon name="waves" size={16} />
           </span>
-          בית הספר לשחייה ופעילות מים
+          מרכז ספורט וכושר
         </span>
 
         <h2 className="mt-5 font-display text-[52px] font-extrabold leading-[0.98] tracking-tight">

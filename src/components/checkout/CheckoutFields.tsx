@@ -3,7 +3,11 @@
 import { useId } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
-import { DEFERRED_PAYMENT_METHODS, PAYMENT_METHOD } from "@/lib/constants";
+import {
+  BANK_TRANSFER_ACCOUNT,
+  DEFERRED_PAYMENT_METHODS,
+  PAYMENT_METHOD,
+} from "@/lib/constants";
 import { normalizeCouponCode, type AppliedCoupon } from "@/lib/finance/coupon";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
 import { cn } from "@/utils/cn";
@@ -147,6 +151,25 @@ export function PaymentMethodPicker({
         })}
       </div>
     </fieldset>
+  );
+}
+
+export function BankTransferDetails({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-amber-200/80 bg-white/75 px-3.5 py-3 text-sm text-amber-950",
+        className
+      )}
+    >
+      <p className="font-semibold">פרטי חשבון בנק</p>
+      <ul className="mt-2 list-none space-y-1 p-0">
+        <li>{BANK_TRANSFER_ACCOUNT.bank}</li>
+        <li>סניף {BANK_TRANSFER_ACCOUNT.branch}</li>
+        <li>חשבון {BANK_TRANSFER_ACCOUNT.account}</li>
+        <li>{BANK_TRANSFER_ACCOUNT.holder}</li>
+      </ul>
+    </div>
   );
 }
 

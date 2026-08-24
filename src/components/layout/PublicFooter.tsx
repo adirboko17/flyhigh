@@ -8,9 +8,9 @@ import { THEME_COLOR } from "@/lib/theme-color";
 const FOOTER_LOGO = "/images/alagova-logo-01.png";
 
 const FOOTER_TAGLINE =
-  "בית ספר לשחייה ופעילויות מים. שחייה, ביטחון והנאה – בגובה העיניים.";
+  "מרכז ספורט וכושר. כושר, שחייה והנאה – בגובה העיניים.";
 
-const MOBILE_BRAND_TAGLINE = "שחייה, ביטחון והנאה בגובה העיניים";
+const MOBILE_BRAND_TAGLINE = "כושר, שחייה והנאה בגובה העיניים";
 
 /** ניווט פוטר — רק לינקים ציבוריים מרכזיים. */
 const NAV_LINKS = [

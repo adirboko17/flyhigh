@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
 
 const menuItemClass =
@@ -35,28 +36,46 @@ export function AdminRowActions({
 }: AdminRowActionsProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   function updateMenuPosition() {
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const menuWidth = 168;
-    // הצמדה לקצה המסך כדי שהתפריט לא ייחתך במסכים צרים.
-    const maxLeft = Math.max(8, window.innerWidth - menuWidth - 8);
+    const button = buttonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const menuWidth = menuRef.current?.offsetWidth ?? 168;
+    const menuHeight = menuRef.current?.offsetHeight ?? 96;
+    const gap = 4;
+    const padding = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - padding;
+    const spaceAbove = rect.top - padding;
+    const openUpward = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+    const rawTop = openUpward ? rect.top - menuHeight - gap : rect.bottom + gap;
+    const maxTop = Math.max(padding, window.innerHeight - menuHeight - padding);
+    const maxLeft = Math.max(padding, window.innerWidth - menuWidth - padding);
     setMenuPos({
-      top: rect.bottom + 4,
-      left: Math.min(Math.max(8, rect.right - menuWidth), maxLeft),
+      top: Math.min(Math.max(padding, rawTop), maxTop),
+      left: Math.min(Math.max(padding, rect.right - menuWidth), maxLeft),
     });
   }
 
-  useEffect(() => {
-    if (!open) return;
+  useLayoutEffect(() => {
+    if (!open || !mounted) return;
     updateMenuPosition();
 
     function onPointerDown(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -72,7 +91,7 @@ export function AdminRowActions({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, mounted]);
 
   async function handleDelete() {
     setOpen(false);
@@ -108,8 +127,11 @@ export function AdminRowActions({
         <MoreIcon />
       </button>
 
-      {open && (
+      {open &&
+        mounted &&
+        createPortal(
         <div
+          ref={menuRef}
           role="menu"
           style={{ top: menuPos.top, left: menuPos.left }}
           className="fixed z-50 min-w-[10.5rem] overflow-hidden rounded-xl border border-ink-100 bg-white py-1 shadow-card"
@@ -187,7 +209,8 @@ export function AdminRowActions({
             <TrashIcon className="shrink-0" />
             {loading ? "מוחק..." : "מחיקה"}
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

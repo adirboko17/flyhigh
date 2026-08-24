@@ -13,6 +13,7 @@ import {
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
 import { saveClassSchedule } from "@/lib/scheduling/saveClassSchedule";
+import { Icon } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
@@ -85,6 +86,13 @@ interface Props {
   defaultSiblingTiers: SiblingDiscountTier[];
   categories: string[];
 }
+
+const FORM_STEPS = [
+  { id: "details", label: "פרטי החוג" },
+  { id: "audience", label: "למי מיועד" },
+  { id: "schedule", label: "מועדים" },
+  { id: "pricing", label: "מחיר" },
+] as const;
 
 const emptyForm = {
   title: "",
@@ -225,6 +233,31 @@ function validateAudience(
   return null;
 }
 
+function validateDetails(form: ReturnType<typeof toFormState>): string | null {
+  if (!form.title.trim()) return "נא למלא את שם החוג.";
+  return null;
+}
+
+function validatePricing(form: ReturnType<typeof toFormState>): string | null {
+  if (form.price === "" || Number(form.price) < 0) {
+    return "נא למלא את מחיר החוג.";
+  }
+  if (
+    form.price_mode === "monthly" &&
+    !parseBillingMonths(Number(form.billing_months))
+  ) {
+    return "נא לבחור בין 2 ל־12 חודשים לחוג שמתומחר לפי חודש.";
+  }
+  return null;
+}
+
+function validateCapacity(form: ReturnType<typeof toFormState>): string | null {
+  if (!Number(form.capacity) || Number(form.capacity) < 1) {
+    return "נא למלא מכסת משתתפים.";
+  }
+  return null;
+}
+
 function validateSchedule(schedule: ClassScheduleState): string | null {
   const active = schedule.sessions.filter((s) => s.status !== "cancelled");
 
@@ -288,6 +321,8 @@ export function ClassForm({
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const lastStep = FORM_STEPS.length - 1;
 
   useEffect(() => {
     return () => {
@@ -344,8 +379,38 @@ export function ClassForm({
     setForm((f) => ({ ...f, image_url: "" }));
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  function validateStep(
+    index: number,
+    nextSchedule = schedule
+  ): string | null {
+    if (index === 0) return validateDetails(form);
+    if (index === 1) {
+      return validateAudience(form, nextSchedule) ?? validateCapacity(form);
+    }
+    if (index === 2) return validateSchedule(nextSchedule);
+    return validatePricing(form);
+  }
+
+  function goTo(index: number) {
+    if (index < step) {
+      setError(null);
+      setStep(index);
+    }
+  }
+
+  function goNext() {
+    const nextSchedule = ensureWeeklySessions(schedule);
+    if (nextSchedule !== schedule) setSchedule(nextSchedule);
+    const stepError = validateStep(step, nextSchedule);
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
+    setError(null);
+    setStep((current) => Math.min(current + 1, lastStep));
+  }
+
+  async function saveClass() {
     setError(null);
 
     const nextSchedule = ensureWeeklySessions(schedule);
@@ -353,24 +418,13 @@ export function ClassForm({
       setSchedule(nextSchedule);
     }
 
-    const audienceError = validateAudience(form, nextSchedule);
-    if (audienceError) {
-      setError(audienceError);
-      return;
-    }
-
-    if (
-      form.price_mode === "monthly" &&
-      !parseBillingMonths(Number(form.billing_months))
-    ) {
-      setError("נא לבחור בין 2 ל־12 חודשים לחוג שמתומחר לפי חודש.");
-      return;
-    }
-
-    const scheduleError = validateSchedule(nextSchedule);
-    if (scheduleError) {
-      setError(scheduleError);
-      return;
+    for (let index = 0; index <= lastStep; index += 1) {
+      const stepError = validateStep(index, nextSchedule);
+      if (stepError) {
+        setError(stepError);
+        setStep(index);
+        return;
+      }
     }
 
     setLoading(true);
@@ -439,15 +493,27 @@ export function ClassForm({
 
   return (
     <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
-      <form onSubmit={submit} className="min-w-0 space-y-6">
-        <Card>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (step < lastStep) goNext();
+          else void saveClass();
+        }}
+        className="min-w-0 space-y-6"
+      >
+        <ClassFormStepper current={step} onSelect={goTo} />
+
+        <Card className={step === 0 ? undefined : "hidden"}>
           <CardContent className="space-y-5">
+            <StepIntro
+              title="פרטי החוג"
+              hint="שם, קטגוריה ותיאור קצר — אפשר להוסיף תמונה עכשיו או אחר כך."
+            />
             <Field label="שם החוג" required>
               <Input
                 value={form.title}
                 onChange={set("title")}
                 placeholder="למשל: שחייה למתחילים"
-                required
               />
             </Field>
             <Field label="תיאור">
@@ -479,28 +545,32 @@ export function ClassForm({
                 />
               </Field>
             </div>
+            <ClassImageUpload
+              displayUrl={previewImageUrl}
+              onFileSelect={handleImageSelect}
+              onClear={handleImageClear}
+              onValidationError={setError}
+              disabled={loading}
+            />
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={step === 1 ? undefined : "hidden"}>
           <CardContent className="space-y-5">
-            <div>
-              <h3 className="font-display text-base font-bold text-ink-900">
-                למי מיועד החוג
-              </h3>
-              <p className="mt-0.5 text-sm text-ink-500">
-                {schedule.scheduleType === "weekly"
-                  ? "מגדר נקבע לכל מועד בלוח הזמנים. כאן מגדירים גילאים, כיתות, או חוג פתוח לכולם."
-                  : "הגדירו מגדר, וגם טווח גילאים, כיתות, או חוג פתוח לכולם."}
-              </p>
-            </div>
+            <StepIntro
+              title="למי מיועד החוג"
+              hint={
+                schedule.scheduleType === "weekly"
+                  ? "בחרו גילאים או כיתות. מגדר נקבע אחר כך לכל מועד."
+                  : "בחרו מגדר, ואז גילאים, כיתות, או חוג פתוח לכולם."
+              }
+            />
 
             {schedule.scheduleType !== "weekly" && (
               <Field label="מגדר" required>
                 <Select
                   value={form.gender_policy}
                   onChange={set("gender_policy")}
-                  required
                 >
                   {(Object.keys(CLASS_GENDER_POLICY) as ClassGenderPolicy[]).map(
                     (value) => (
@@ -578,7 +648,6 @@ export function ClassForm({
                   <Select
                     value={form.grade_min}
                     onChange={set("grade_min")}
-                    required
                   >
                     <option value="">בחרו...</option>
                     {SCHOOL_GRADES.map((option) => (
@@ -592,7 +661,6 @@ export function ClassForm({
                   <Select
                     value={form.grade_max}
                     onChange={set("grade_max")}
-                    required
                   >
                     <option value="">בחרו...</option>
                     {SCHOOL_GRADES.map((option) => (
@@ -612,17 +680,47 @@ export function ClassForm({
                 value={form.capacity}
                 onChange={set("capacity")}
                 placeholder="למשל: 10"
-                required
               />
             </Field>
+          </CardContent>
+        </Card>
 
-            <div>
-              <h4 className="text-sm font-semibold text-ink-800">תמחור</h4>
-              <p className="mt-0.5 text-sm text-ink-500">
-                חוג לפי חודש מחויב על כל התקופה — אי אפשר לקנות חודש בודד.
-                בדף הסליקה הלקוח יכול לפרוס לתשלומים.
-              </p>
+        <Card className={step === 2 ? undefined : "hidden"}>
+          <CardContent className="space-y-5">
+            <StepIntro
+              title="מועדים"
+              hint="אם יש כמה שעות בשבוע — האם הילד בוחר אחת, או מגיע לכולן."
+            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AudienceModeOption
+                selected={form.pick_one_slot}
+                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: true }))}
+                title="בחירת מועד אחד"
+                hint="כל מועד הוא קבוצה נפרדת. הילד מגיע פעם בשבוע"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={!form.pick_one_slot}
+                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: false }))}
+                title="כל המועדים יחד"
+                hint="הילד רשום לכל הימים והשעות של החוג"
+                disabled={loading}
+              />
             </div>
+            <ClassScheduleEditor
+              value={schedule}
+              onChange={setSchedule}
+              disabled={loading}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className={step === 3 ? undefined : "hidden"}>
+          <CardContent className="space-y-5">
+            <StepIntro
+              title="מחיר והנחות"
+              hint="מחיר אחד לכל התקופה, או מחיר חודשי. הלקוח יכול לפרוס בתשלומים."
+            />
 
             <div className="grid gap-2 sm:grid-cols-2">
               <AudienceModeOption
@@ -665,7 +763,6 @@ export function ClassForm({
                   value={form.price}
                   onChange={set("price")}
                   placeholder={form.price_mode === "monthly" ? "למשל: 160" : "למשל: 320"}
-                  required
                 />
               </Field>
               {form.price_mode === "monthly" && (
@@ -677,7 +774,6 @@ export function ClassForm({
                     step="1"
                     value={form.billing_months}
                     onChange={set("billing_months")}
-                    required
                   />
                 </Field>
               )}
@@ -709,19 +805,13 @@ export function ClassForm({
                 ))}
               </Select>
             </Field>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="space-y-4">
             <div>
               <h3 className="font-display text-base font-bold text-ink-900">
                 הנחת אחים
               </h3>
               <p className="mt-0.5 text-sm text-ink-500">
-                כשמשפחה רושמת כמה ילדים לאותה קטגוריה — גם בחוגים שונים, למשל
-                שני חוגי שחייה — ההנחה חלה רק על הילד השני ומעלה. בקטגוריה
-                אחרת אין הנחת אחים.
+                כשמשפחה רושמת יותר מילד אחד לאותה קטגוריה.
               </p>
             </div>
 
@@ -759,66 +849,39 @@ export function ClassForm({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="space-y-5">
-            <div>
-              <h3 className="font-display text-base font-bold text-ink-900">
-                איך נרשמים למועדים
-              </h3>
-              <p className="mt-0.5 text-sm text-ink-500">
-                אם יש כמה שעות בשבוע — האם הילד בוחר אחת, או מגיע לכולן.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <AudienceModeOption
-                selected={form.pick_one_slot}
-                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: true }))}
-                title="בחירת מועד אחד"
-                hint="כל מועד הוא קבוצה נפרדת. הילד מגיע פעם בשבוע"
-                disabled={loading}
-              />
-              <AudienceModeOption
-                selected={!form.pick_one_slot}
-                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: false }))}
-                title="כל המועדים יחד"
-                hint="הילד רשום לכל הימים והשעות של החוג"
-                disabled={loading}
-              />
-            </div>
-
-            <ClassScheduleEditor
-              value={schedule}
-              onChange={setSchedule}
-              disabled={loading}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <ClassImageUpload
-              displayUrl={previewImageUrl}
-              onFileSelect={handleImageSelect}
-              onClear={handleImageClear}
-              onValidationError={setError}
-              disabled={loading}
-            />
-          </CardContent>
-        </Card>
-
         {error && (
           <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </p>
         )}
 
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {step > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={loading}
+              onClick={() => {
+                setError(null);
+                setStep((current) => current - 1);
+              }}
+            >
+              חזרה
+            </Button>
+          )}
           <Button type="submit" size="lg" disabled={loading}>
-            {loading ? "שומר..." : isEdit ? "עדכון החוג" : "שמירת החוג"}
+            {loading
+              ? "שומר..."
+              : step < lastStep
+                ? "המשך"
+                : isEdit
+                  ? "עדכון החוג"
+                  : "שמירת החוג"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="lg"
             onClick={() => router.push("/admin/classes")}
           >
@@ -834,6 +897,70 @@ export function ClassForm({
         instructorName={instructorName}
         previewStatus={existing?.status ?? "active"}
       />
+    </div>
+  );
+}
+
+function StepIntro({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div>
+      <h3 className="font-display text-base font-bold text-ink-900">{title}</h3>
+      <p className="mt-0.5 text-sm text-ink-500">{hint}</p>
+    </div>
+  );
+}
+
+function ClassFormStepper({
+  current,
+  onSelect,
+}: {
+  current: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-ink-500 sm:hidden">
+        שלב {current + 1} מתוך {FORM_STEPS.length} · {FORM_STEPS[current]?.label}
+      </p>
+      <ol className="flex list-none items-center gap-2 p-0">
+        {FORM_STEPS.map((item, index) => {
+          const done = current > index;
+          const active = current === index;
+          return (
+            <li key={item.id} className="flex min-w-0 flex-1 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSelect(index)}
+                disabled={index >= current}
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-bold transition-colors",
+                  done
+                    ? "bg-aqua-500 text-white"
+                    : active
+                      ? "bg-brand-600 text-white"
+                      : "bg-ink-100 text-ink-500",
+                  index < current && "hover:brightness-95"
+                )}
+                aria-current={active ? "step" : undefined}
+                aria-label={item.label}
+              >
+                {done ? <Icon name="check" size={14} stroke={3} /> : index + 1}
+              </button>
+              <span
+                className={cn(
+                  "hidden truncate text-[13px] font-semibold sm:block",
+                  active ? "text-ink-900" : "text-ink-400"
+                )}
+              >
+                {item.label}
+              </span>
+              {index < FORM_STEPS.length - 1 && (
+                <span className="h-px min-w-3 flex-1 bg-ink-100" />
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

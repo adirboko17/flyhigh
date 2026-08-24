@@ -173,12 +173,8 @@ export function RegisterForm() {
       if (birthError) return setError(birthError);
       if (!details.city.trim()) return setError("נא למלא עיר.");
       if (!details.address.trim()) return setError("נא למלא כתובת.");
-      if (wantsDifferentReceipt) {
-        if (!details.receiptName.trim())
-          return setError("נא למלא שם על הקבלה.");
-        if (!details.receiptIdNumber.trim())
-          return setError("נא למלא מספר ח.פ / ת.ז.");
-      }
+      if (wantsDifferentReceipt && !details.receiptName.trim())
+        return setError("נא למלא שם על הקבלה.");
       if (!acceptedTerms) return setError("יש לאשר את התקנון כדי להמשיך.");
       setStep(2);
       return;
@@ -218,7 +214,7 @@ export function RegisterForm() {
       .update({
         receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
         receipt_id_number: wantsDifferentReceipt
-          ? details.receiptIdNumber.trim()
+          ? details.receiptIdNumber.trim() || null
           : null,
       })
       .eq("id", userId);
@@ -287,7 +283,7 @@ export function RegisterForm() {
           role: "parent",
           receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
           receipt_id_number: wantsDifferentReceipt
-            ? details.receiptIdNumber.trim()
+            ? details.receiptIdNumber.trim() || null
             : null,
           pending_children: namedChildren.map((c) => ({
             full_name: c.name.trim(),
@@ -452,7 +448,7 @@ export function RegisterForm() {
               id="fullName"
               variant="ds"
               autoComplete="name"
-              placeholder="מיכל לוי"
+              placeholder="ישראל ישראלי"
               value={details.fullName}
               onChange={setDetailsField("fullName")}
             />
@@ -542,7 +538,6 @@ export function RegisterForm() {
               <Field
                 label="מספר ח.פ / ת.ז"
                 htmlFor="receiptIdNumber"
-                required
                 variant="ds"
               >
                 <Input
