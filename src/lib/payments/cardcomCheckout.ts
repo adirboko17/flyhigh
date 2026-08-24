@@ -24,7 +24,7 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-async function loadCustomer(parentId: string): Promise<CardcomCustomer> {
+export async function loadCustomer(parentId: string): Promise<CardcomCustomer> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")

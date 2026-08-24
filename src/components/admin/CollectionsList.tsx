@@ -121,7 +121,8 @@ export function CollectionsList({ parents }: CollectionsListProps) {
         const parentMatches =
           q === "" ||
           normalize(parent.name).includes(q) ||
-          normalize(parent.phone).includes(q);
+          normalize(parent.phone).includes(q) ||
+          normalize(parent.email).includes(q);
 
         const charges = parent.charges.filter((charge) => {
           if (statusFilter === "open" && !isOpen(charge)) return false;
@@ -212,7 +213,7 @@ export function CollectionsList({ parents }: CollectionsListProps) {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="חיפוש לפי שם הורה, טלפון, ילד/ה או חוג..."
+                placeholder="חיפוש לפי שם הורה, אימייל, טלפון, ילד/ה או חוג..."
                 className="h-12 border-ink-100 bg-ink-50/50 ps-11 shadow-soft focus:bg-white"
                 aria-label="חיפוש ברשימת הגבייה"
               />
@@ -302,6 +303,11 @@ export function CollectionsList({ parents }: CollectionsListProps) {
       {activeCharge && (
         <ChargeReceiptDialog
           charge={activeCharge}
+          customerEmail={
+            parents.find((parent) =>
+              parent.charges.some((charge) => charge.id === activeCharge.id)
+            )?.email ?? null
+          }
           busyId={busyId}
           disabled={isPending}
           onClose={() => setActiveCharge(null)}
@@ -339,6 +345,17 @@ function ParentCard({
             <p className="truncate font-display font-bold text-ink-900">
               {parent.name}
             </p>
+            {parent.email ? (
+              <a
+                href={`mailto:${parent.email}`}
+                dir="ltr"
+                className="block truncate text-right text-xs text-ink-500 transition-colors hover:text-brand-600"
+              >
+                {parent.email}
+              </a>
+            ) : (
+              <p className="text-xs text-ink-400">אין אימייל לשליחת קבלה</p>
+            )}
             {parent.phone ? (
               <a
                 href={`tel:${parent.phone}`}
@@ -347,9 +364,7 @@ function ParentCard({
               >
                 {parent.phone}
               </a>
-            ) : (
-              <p className="text-xs text-ink-400">ללא טלפון</p>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -474,6 +489,7 @@ function ChargeRow({
 
 function ChargeReceiptDialog({
   charge,
+  customerEmail,
   busyId,
   disabled,
   onClose,
@@ -482,6 +498,7 @@ function ChargeReceiptDialog({
   onDone,
 }: {
   charge: CollectionCharge;
+  customerEmail: string | null;
   busyId: string | null;
   disabled: boolean;
   onClose: () => void;
@@ -569,6 +586,18 @@ function ChargeReceiptDialog({
       className="max-w-lg"
     >
       <div className="space-y-5">
+        <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+          <p className="text-xs text-ink-500">הקבלה תישלח לאימייל</p>
+          {customerEmail ? (
+            <p dir="ltr" className="mt-0.5 text-right font-semibold text-ink-900">
+              {customerEmail}
+            </p>
+          ) : (
+            <p className="mt-0.5 font-medium text-amber-700">
+              אין אימייל בחשבון הלקוח — המסמך יופק בלי שליחה
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-3 gap-2 rounded-2xl bg-ink-50 p-3 text-center">
           <div>
             <p className="text-xs text-ink-500">סכום חיוב</p>
@@ -628,6 +657,10 @@ function ChargeReceiptDialog({
                 disabled={busy}
               />
             </Field>
+            <p className="text-xs leading-relaxed text-ink-500">
+              עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
+              תישלח למייל הלקוח, ותישלח התראה גם אליכם.
+            </p>
 
             {localError && (
               <p role="alert" className="text-sm font-medium text-red-600">

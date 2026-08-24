@@ -293,6 +293,139 @@ export function cardcomDocumentNumber(result: CardcomLpResult) {
   return pickString(info, ["DocumentNumber", "documentNumber"]);
 }
 
+export type CardcomStandaloneDocument = {
+  documentNumber: string | null;
+  documentUrl: string | null;
+  sentToEmail: string | null;
+};
+
+type StandaloneDocumentInput = {
+  amount: number;
+  description: string;
+  customer: CardcomCustomer;
+  /** איך התשלום התקבל — יופיע במסמך, לא כסליקת אשראי. */
+  paymentMethodLabel: string;
+  /** מזומן נרשם בשדה Cash; שאר האמצעים כתשלום מותאם. */
+  asCash: boolean;
+  comment?: string | null;
+  documentDate?: string | null;
+};
+
+/** קארדקום דורש תאריך מסמך בפורמט dd/MM/yyyy בלבד. */
+function toCardcomInvDate(value?: string | null): string | undefined {
+  if (!value?.trim()) return undefined;
+  const trimmed = value.trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) return trimmed;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (!match) return undefined;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function standaloneDocumentBody(input: StandaloneDocumentInput, forceCash: boolean) {
+  const config = getCardcomConfig();
+  const email = input.customer.email?.trim() || null;
+  const sendEmail = Boolean(email && email.length <= 50);
+  const comment = [input.paymentMethodLabel, input.comment?.trim()]
+    .filter(Boolean)
+    .join(" · ");
+  const useCash = forceCash || input.asCash;
+  const invDate = toCardcomInvDate(input.documentDate);
+
+  return {
+    ApiName: config.apiName,
+    ApiPassword: config.apiPassword,
+    ...(useCash ? { Cash: input.amount } : {}),
+    ...(!useCash
+      ? {
+          CustomFields: [
+            {
+              TransactionID: 0,
+              TranDate: invDate,
+              Description: input.paymentMethodLabel.slice(0, 50),
+              asmacta: input.paymentMethodLabel.slice(0, 50),
+              Sum: input.amount,
+            },
+          ],
+        }
+      : {}),
+    Document: {
+      DocumentTypeToCreate: "TaxInvoiceAndReceipt",
+      Name: (input.customer.invoiceName || input.customer.name).slice(0, 50),
+      TaxId: input.customer.taxId?.trim()?.slice(0, 50) || undefined,
+      Email: sendEmail ? email : undefined,
+      IsSendByEmail: sendEmail,
+      AddressLine1: input.customer.address?.trim()?.slice(0, 50) || undefined,
+      City: input.customer.city?.trim()?.slice(0, 50) || undefined,
+      Phone: input.customer.phone?.trim()?.slice(0, 50) || undefined,
+      Mobile: input.customer.phone?.trim()?.slice(0, 50) || undefined,
+      Comments: comment.slice(0, 250) || undefined,
+      DocumentDate: invDate,
+      Languge: "he",
+      ISOCoinID: 1,
+      Products: [
+        {
+          Description: input.description.slice(0, 250),
+          Quantity: 1,
+          UnitCost: input.amount,
+        },
+      ],
+    },
+  };
+}
+
+function parseDocumentInfo(result: Record<string, unknown>): CardcomStandaloneDocument & {
+  ok: boolean;
+  error?: string;
+} {
+  const code = Number(result.ResponseCode ?? -1);
+  const info = asRecord(result) ?? result;
+  if (code !== 0) {
+    return {
+      ok: false,
+      error: pickString(info, ["Description", "description"]) || "הפקת המסמך בקארדקום נכשלה.",
+      documentNumber: null,
+      documentUrl: null,
+      sentToEmail: null,
+    };
+  }
+
+  return {
+    ok: true,
+    documentNumber: pickString(info, ["DocumentNumber", "documentNumber"]),
+    documentUrl: pickString(info, ["DocumentUrl", "documentUrl"]),
+    sentToEmail: null,
+  };
+}
+
+/** מפיק חשבונית מס-קבלה בלי חיוב אשראי, ושולח למייל הלקוח אם יש. */
+export async function createStandaloneDocument(
+  input: StandaloneDocumentInput
+): Promise<CardcomStandaloneDocument> {
+  const email = input.customer.email?.trim() || null;
+  const sendEmail = Boolean(email && email.length <= 50);
+
+  const attempt = (forceCash: boolean) =>
+    postJson<Record<string, unknown>>(
+      "/Documents/CreateDocument",
+      standaloneDocumentBody(input, forceCash)
+    );
+
+  let result = parseDocumentInfo(await attempt(false));
+  if (!result.ok && !input.asCash) {
+    result = parseDocumentInfo(await attempt(true));
+  }
+
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  return {
+    documentNumber: result.documentNumber,
+    documentUrl: result.documentUrl,
+    sentToEmail: sendEmail ? email : null,
+  };
+}
+
 export function extractCardcomLowProfileId(
   source: URLSearchParams | Record<string, unknown>
 ) {
