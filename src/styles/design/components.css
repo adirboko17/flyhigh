@@ -244,6 +244,13 @@
   border-radius: 18px;
 }
 
+/* במובייל הקצה התחתון אופקי, והגלים האנכיים נמתחים ל־2 קווים. */
+@media (max-width: 639.98px) {
+  .plan-ticket-stub-waves {
+    display: none !important;
+  }
+}
+
 /* כרטיס חוג ציבורי — צל עדין והרמה בהובר, בסגנון קרוב לכרטיסי הבריכה */
 .class-card {
   border-radius: 22px;

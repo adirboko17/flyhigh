@@ -296,7 +296,9 @@ export function PlanTicketCard({
             featured ? "bg-black/20" : "bg-[#d7eef6]"
           )}
         >
-          <StubWaves featured={featured} />
+          <div className="plan-ticket-stub-waves pointer-events-none absolute inset-0 hidden sm:block">
+            <StubWaves featured={featured} />
+          </div>
 
           <p
             className={cn(
@@ -498,7 +500,7 @@ function StubWaves({ featured }: { featured: boolean }) {
       aria-hidden
       viewBox="0 0 80 200"
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 h-full w-full opacity-40"
+      className="h-full w-full opacity-40"
     >
       <path
         d="M0 40c20-8 40-8 60 0s40 8 60 0v20c-20 8-40 8-60 0s-40-8-60 0Z"
