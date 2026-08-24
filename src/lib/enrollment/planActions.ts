@@ -10,6 +10,7 @@ import {
 } from "@/lib/finance/coupon";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
@@ -286,10 +287,11 @@ export async function completePlanPurchase(input: {
     };
   }
 
+  let selectedChildren: { id: string; full_name: string }[] = [];
   if (uniqueChildIds.length > 0) {
     const { data: children } = await supabase
       .from("children")
-      .select("id")
+      .select("id, full_name")
       .eq("parent_id", profile.id)
       .in("id", uniqueChildIds);
 
@@ -299,6 +301,7 @@ export async function completePlanPurchase(input: {
         error: "אחד או יותר מהילדים שנבחרו אינם תקינים.",
       };
     }
+    selectedChildren = children;
   }
 
   // מסלול מנוי הוא מתמשך, ולכן אין טעם לרכוש אותו פעמיים לאותו משתתף.
@@ -588,6 +591,23 @@ export async function completePlanPurchase(input: {
 
     paymentReference = charge.reference;
     checkoutUrl = charge.redirectUrl;
+  }
+
+  if (deferred && totalAmount > 0) {
+    const participantNames = [
+      ...(includeSelf ? [profile.full_name] : []),
+      ...selectedChildren.map((child) => child.full_name),
+    ];
+    await notifyAdminPayment({
+      paid: false,
+      parentName: profile.full_name,
+      phone: profile.phone,
+      email: profile.email,
+      product: chargeDescription,
+      amount: totalAmount,
+      paymentMethod,
+      participants: participantNames,
+    });
   }
 
   return {

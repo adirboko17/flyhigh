@@ -27,6 +27,7 @@ import {
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
   declarationSchoolYear,
   healthDeclarationErrorFor,
@@ -488,6 +489,19 @@ export async function completeClassEnrollmentPayment(input: {
 
     paymentReference = charge.reference;
     checkoutUrl = charge.redirectUrl;
+  }
+
+  if (deferred && totalAmount > 0) {
+    await notifyAdminPayment({
+      paid: false,
+      parentName: profile.full_name,
+      phone: profile.phone,
+      email: profile.email,
+      product: chargeDescription,
+      amount: totalAmount,
+      paymentMethod,
+      participants: children.map((child) => child.full_name),
+    });
   }
 
   return {

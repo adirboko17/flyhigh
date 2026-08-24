@@ -4,9 +4,13 @@
  */
 
 export type CardcomCustomer = {
+  /** שם בעל הכרטיס בדף הסליקה. */
   name: string;
+  /** שם הלקוח על החשבונית — אם הוגדר שם קבלה אחר. */
+  invoiceName: string;
   email?: string | null;
   phone?: string | null;
+  /** ח.פ / ת.ז שיופיע על החשבונית בלבד. */
   taxId?: string | null;
   address?: string | null;
   city?: string | null;
@@ -104,7 +108,7 @@ function documentPayload(input: {
   const email = input.customer.email?.trim() || null;
   return {
     TypeToCreate: "TaxInvoiceAndReceipt",
-    Name: input.customer.name,
+    Name: input.customer.invoiceName,
     TaxId: input.customer.taxId?.trim() || undefined,
     Email: email || undefined,
     IsSendByEmail: Boolean(email),
@@ -152,7 +156,6 @@ function createPayload(
       CardOwnerNameValue: input.customer.name,
       CardOwnerPhoneValue: input.customer.phone?.trim() || undefined,
       CardOwnerEmailValue: input.customer.email?.trim() || undefined,
-      CardOwnerIdValue: input.customer.taxId?.trim() || undefined,
     },
     AdvancedDefinition: {
       ApiPassword: config.apiPassword || undefined,

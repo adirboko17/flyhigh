@@ -8,6 +8,7 @@ import {
 } from "@/lib/constants";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
   declarationSchoolYear,
   healthDeclarationErrorFor,
@@ -285,6 +286,30 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   revalidatePath("/admin/collections");
   revalidatePath("/admin/finance");
   revalidatePath("/admin/customers");
+
+  if (
+    input.method !== "none" &&
+    !awaitingCardcom &&
+    !settledNow &&
+    total > 0
+  ) {
+    const { data: parent } = await supabase
+      .from("profiles")
+      .select("full_name, email, phone")
+      .eq("id", input.parentId)
+      .maybeSingle();
+
+    await notifyAdminPayment({
+      paid: false,
+      parentName: parent?.full_name || "לקוח",
+      phone: parent?.phone,
+      email: parent?.email,
+      product: `שיבוץ ל${cls.title}`,
+      amount: total,
+      paymentMethod: input.method,
+      participants: children.map((child) => child.full_name),
+    });
+  }
 
   return {
     success: true,

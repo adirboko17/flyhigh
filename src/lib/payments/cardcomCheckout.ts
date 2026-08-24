@@ -1,3 +1,4 @@
+import { notifyAdminCardcomPaid } from "@/lib/notifications/adminPayment";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database.types";
 import {
@@ -31,8 +32,12 @@ async function loadCustomer(parentId: string): Promise<CardcomCustomer> {
     .eq("id", parentId)
     .maybeSingle();
 
+  const fullName = data?.full_name?.trim() || "לקוח";
+  const invoiceName = data?.receipt_name?.trim() || fullName;
+
   return {
-    name: data?.receipt_name?.trim() || data?.full_name || "לקוח",
+    name: fullName,
+    invoiceName,
     email: data?.email,
     phone: data?.phone,
     taxId: data?.receipt_id_number,
@@ -270,6 +275,13 @@ export async function settleCardcomCheckout(input: {
       completed_at: new Date().toISOString(),
     })
     .eq("id", checkout.id);
+
+  await notifyAdminCardcomPaid({
+    parentId: checkout.parent_id,
+    amount: Number(checkout.amount),
+    description: checkout.description,
+    paymentIds: (payments ?? []).map((payment) => payment.id),
+  });
 
   return { success: true, status: "paid", transactionId };
 }
