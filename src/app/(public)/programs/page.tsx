@@ -9,10 +9,10 @@ import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
   ACTIVITY_CARD_TEMPLATE,
-  POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   activityCardPresentation,
+  poolPassCardTemplate,
   programDurationLabel,
 } from "@/lib/program-cards";
 import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
@@ -202,8 +202,7 @@ export default async function ProgramsPage() {
         {poolPasses.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2">
             {poolPasses.map((pass, index) => {
-              const template =
-                POOL_PASS_CARD_TEMPLATES[index % POOL_PASS_CARD_TEMPLATES.length];
+              const template = poolPassCardTemplate(pass.entries_count);
 
               return (
                 <ScrollReveal

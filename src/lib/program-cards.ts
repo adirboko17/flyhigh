@@ -140,6 +140,13 @@ export const POOL_PASS_CARD_TEMPLATES: PlanCardTemplate[] = [
   },
 ];
 
+/** כניסה בודדת מקבלת את התבנית הראשונה; כרטיסייה — את השנייה. */
+export function poolPassCardTemplate(entriesCount: number): PlanCardTemplate {
+  return entriesCount > 1
+    ? POOL_PASS_CARD_TEMPLATES[1]
+    : POOL_PASS_CARD_TEMPLATES[0];
+}
+
 export const PRIVATE_LESSON_CARD_TEMPLATES: PlanCardTemplate[] = [
   {
     icon: "drop",

@@ -334,13 +334,18 @@ function PlanCheckoutDialog({
   const total = Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
   const deferred = isDeferredPaymentMethod(method);
   const nothingToCharge = total <= 0;
+  const isSingleEntry = planKind === "pool_pass" && entriesCount === 1;
   const kindLabel = isActivity
     ? "פעילות"
     : planKind === "program"
       ? "מנוי"
       : planKind === "private_lesson"
         ? "שיעור פרטי"
-        : "כרטיסייה";
+        : isSingleEntry
+          ? "כניסה"
+          : "כרטיסייה";
+  const purchaseTitle =
+    planKind === "pool_pass" ? `רכישת ${planTitle}` : `רכישת ${kindLabel}`;
 
   /** שינוי המשתתפים משנה את בסיס החישוב, ולכן קופון שהוחל כבר אינו תקף. */
   function resetCoupon() {
@@ -454,7 +459,7 @@ function PlanCheckoutDialog({
             : "התשלום הושלם בהצלחה"
           : step === "payment"
             ? "אמצעי תשלום"
-            : `רכישת ${kindLabel}`
+            : purchaseTitle
       }
       description={
         step === "success"
@@ -481,7 +486,9 @@ function PlanCheckoutDialog({
             </div>
             {planKind === "pool_pass" && entriesCount ? (
               <p className="mt-0.5 text-sm text-ink-500">
-                {entriesCount} כניסות לכל משתתף
+                {entriesCount === 1
+                  ? "כניסה אחת לכל משתתף"
+                  : `${entriesCount} כניסות לכל משתתף`}
               </p>
             ) : isPrivateLesson && durationMinutes ? (
               <p className="mt-0.5 text-sm text-ink-500">
