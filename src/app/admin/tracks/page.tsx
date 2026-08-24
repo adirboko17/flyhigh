@@ -1,7 +1,7 @@
 import { TracksManager } from "@/components/admin/TracksManager";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 
-export const metadata = { title: "מסלולים וכניסות" };
+export const metadata = { title: "מנויים וכניסות" };
 
 export default async function AdminTracksPage() {
   const supabase = await createAdminDataClient();

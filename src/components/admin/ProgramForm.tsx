@@ -29,31 +29,44 @@ const emptyForm = {
   status: "active",
 };
 
-function toFormState(existing?: ProgramFormData) {
-  if (!existing) return emptyForm;
+function toFormState(existing?: ProgramFormData, defaultKind?: ProgramKind) {
+  if (!existing) {
+    return { ...emptyForm, kind: defaultKind ?? "membership" };
+  }
   return {
     title: existing.title,
     description: existing.description ?? "",
     price: existing.price.toString(),
     duration_months: String(existing.duration_months || 1),
-    kind: existing.kind ?? "membership",
+    kind: existing.kind ?? defaultKind ?? "membership",
     status: existing.status,
   };
 }
 
 interface ProgramFormProps {
   existing?: ProgramFormData;
+  /** סוג קבוע כשפותחים את הטופס מתוך סקציית מנויים או פעילויות. */
+  defaultKind?: ProgramKind;
   /** מסופק כשהטופס רץ בתוך מודאל — סוגר במקום לנווט, ובלי כרטיס עוטף. */
   onClose?: () => void;
 }
 
-export function ProgramForm({ existing, onClose }: ProgramFormProps) {
+export function ProgramForm({
+  existing,
+  defaultKind,
+  onClose,
+}: ProgramFormProps) {
   const router = useRouter();
   const isEdit = Boolean(existing);
   const inModal = Boolean(onClose);
-  const [form, setForm] = useState(() => toFormState(existing));
+  const [form, setForm] = useState(() => toFormState(existing, defaultKind));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kind: ProgramKind = isActivityProgram(form.kind)
+    ? "activity"
+    : "membership";
+  const isActivity = kind === "activity";
+  const tracksHash = isActivity ? "#activities" : "#programs";
 
   const set =
     (k: keyof typeof form) =>
@@ -70,12 +83,11 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
     setLoading(true);
     const supabase = createClient();
 
-    const kind: ProgramKind = form.kind === "activity" ? "activity" : "membership";
-    const durationMonths = kind === "activity"
+    const durationMonths = isActivity
       ? 1
       : Math.floor(Number(form.duration_months));
     if (
-      kind === "membership" &&
+      !isActivity &&
       (!Number.isFinite(durationMonths) || durationMonths < 1 || durationMonths > 36)
     ) {
       setError("נא לבחור משך מנוי בין חודש אחד ל־36 חודשים.");
@@ -89,7 +101,7 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
       price: Number(form.price) || 0,
       duration_months: durationMonths,
       kind,
-      // מסלול חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
+      // פריט חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
         : "active",
@@ -105,7 +117,11 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
       : (await supabase.from("programs").insert(payload)).error;
 
     if (dbError) {
-      setError("אירעה שגיאה בשמירת המסלול. בדקו את הפרטים ונסו שוב.");
+      setError(
+        isActivity
+          ? "אירעה שגיאה בשמירת הפעילות. בדקו את הפרטים ונסו שוב."
+          : "אירעה שגיאה בשמירת המנוי. בדקו את הפרטים ונסו שוב."
+      );
       setLoading(false);
       return;
     }
@@ -115,17 +131,17 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
     router.refresh();
 
     if (onClose) onClose();
-    else router.push("/admin/tracks#programs");
+    else router.push(`/admin/tracks${tracksHash}`);
   }
 
   const fields = (
     <>
-      <Field label="שם המסלול" required>
+      <Field label={isActivity ? "שם הפעילות" : "שם המנוי"} required>
         <Input
           value={form.title}
           onChange={set("title")}
           placeholder={
-            isActivityProgram(form.kind)
+            isActivity
               ? "לדוגמה: פעילות הפוגה"
               : "לדוגמה: מנוי חודשי — שחייה חופשית"
           }
@@ -133,26 +149,20 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
           autoFocus={inModal}
         />
       </Field>
-      <Field label="סוג" required>
-        <Select value={form.kind} onChange={set("kind")}>
-          <option value="membership">מנוי לפי תוקף</option>
-          <option value="activity">פעילות לפי מספר נפשות</option>
-        </Select>
-      </Field>
       <Field label="תיאור">
         <Textarea
           value={form.description}
           onChange={set("description")}
           placeholder={
-            isActivityProgram(form.kind)
-              ? "פעילות חד־פעמית. הלקוח בוחר כמה נפשות, משלם, ואז מתאמים מועד."
-              : "תיאור קצר של המסלול..."
+            isActivity
+              ? "פעילות חד־פעמית. הלקוח בוחר כמה משתתפים, משלם, ואז מתאמים מועד בטלפון."
+              : "תיאור קצר של המנוי..."
           }
         />
       </Field>
       <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         <Field
-          label={isActivityProgram(form.kind) ? "מחיר לנפש (₪)" : "מחיר (₪)"}
+          label={isActivity ? "מחיר למשתתף (₪)" : "מחיר (₪)"}
           required
         >
           <Input
@@ -164,9 +174,10 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
             required
           />
         </Field>
-        {isActivityProgram(form.kind) ? (
+        {isActivity ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:col-span-1">
-            הלקוח בוחר כמה נפשות ומשלם לפי זה. אחרי התשלום ניצור קשר לתיאום מועד.
+            הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה
+            בתיאום מועדים כדי לחייג ולתאם מועד.
           </div>
         ) : (
           <Field label="משך המנוי" required hint="לפי זה תחושב התראת הסיום למנהל">
@@ -213,7 +224,15 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
 
       <div className="flex gap-3">
         <Button type="submit" size={inModal ? "md" : "lg"} disabled={loading}>
-          {loading ? "שומר..." : isEdit ? "עדכון המסלול" : "שמירת המסלול"}
+          {loading
+            ? "שומר..."
+            : isActivity
+              ? isEdit
+                ? "עדכון הפעילות"
+                : "שמירת הפעילות"
+              : isEdit
+                ? "עדכון המנוי"
+                : "שמירת המנוי"}
         </Button>
         <Button
           type="button"
@@ -221,7 +240,7 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
           size={inModal ? "md" : "lg"}
           disabled={loading}
           onClick={() =>
-            onClose ? onClose() : router.push("/admin/tracks#programs")
+            onClose ? onClose() : router.push(`/admin/tracks${tracksHash}`)
           }
         >
           ביטול

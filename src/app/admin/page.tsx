@@ -46,7 +46,8 @@ export default async function AdminDashboard() {
   const supabase = await createAdminDataClient();
 
   const [
-    { data: payments },
+    { data: paidPayments },
+    { data: openPaymentRows },
     { count: enrollmentsThisMonth },
     { count: enrollmentsLastMonth },
     { count: pendingEnrollments },
@@ -63,10 +64,13 @@ export default async function AdminDashboard() {
     // חלון של חודשיים לחישוב המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
     supabase
       .from("payments")
-      .select("amount, status, paid_at, payment_receipts(amount)")
-      .or(
-        `paid_at.gte.${previousMonthStart},status.eq.pending,status.eq.partial`
-      ),
+      .select("amount, status, paid_at")
+      .eq("status", "paid")
+      .gte("paid_at", previousMonthStart),
+    supabase
+      .from("payments")
+      .select("amount, status, payment_receipts(amount)")
+      .in("status", ["pending", "partial"]),
     supabase
       .from("enrollments")
       .select("id", { count: "exact", head: true })
@@ -129,7 +133,7 @@ export default async function AdminDashboard() {
       .order("ends_on"),
   ]);
 
-  const allPayments = payments ?? [];
+  const allPayments = paidPayments ?? [];
   const allSessions = sessions ?? [];
   const enrollmentsThisMonthCount = enrollmentsThisMonth ?? 0;
   const enrollmentsLastMonthCount = enrollmentsLastMonth ?? 0;
@@ -148,9 +152,7 @@ export default async function AdminDashboard() {
   const revenueThisMonth = revenueOfMonth(currentMonth);
   const revenueLastMonth = revenueOfMonth(previousMonth);
 
-  const openCharges = allPayments.filter(
-    (payment) => payment.status === "pending" || payment.status === "partial"
-  );
+  const openCharges = openPaymentRows ?? [];
   const openAmount = openCharges.reduce((sum, payment) => {
     const paid = (payment.payment_receipts ?? []).reduce(
       (acc, receipt) => acc + Number(receipt.amount),
@@ -235,7 +237,7 @@ export default async function AdminDashboard() {
       icon: "👨‍👩‍👧",
       tone: "amber" as const,
       title: `${awaitingActivities} ${awaitingActivities === 1 ? "פעילות" : "פעילויות"} לתיאום`,
-      detail: "לקוחות שרכשו לפי מספר נפשות וממתינים למועד",
+      detail: "לקוחות שרכשו פעילות וממתינים לתיאום מועד",
       href: "/admin/private-lessons",
     },
     pendingEnrollmentsCount > 0 && {

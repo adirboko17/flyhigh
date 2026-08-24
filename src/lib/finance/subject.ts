@@ -27,7 +27,7 @@ export function subjectLabel(enrollment: EnrollmentSubject | null): string {
     case "class":
       return enrollment.classes?.title ?? "חוג שנמחק";
     case "program":
-      return enrollment.programs?.title ?? "מסלול שנמחק";
+      return enrollment.programs?.title ?? "מנוי שנמחק";
     case "pool_pass":
       return enrollment.pool_passes?.title ?? "כרטיסייה שנמחקה";
     case "private_lesson":

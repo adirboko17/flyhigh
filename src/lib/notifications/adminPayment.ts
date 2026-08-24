@@ -72,21 +72,29 @@ function buildHtml(notice: AdminPaymentNotice) {
 
 export async function notifyAdminPayment(notice: AdminPaymentNotice) {
   const to = getAdminNotifyEmail();
-  if (!to || notice.amount <= 0) return;
+  if (!to || notice.amount <= 0) {
+    console.error("[admin-payment-email] skipped", {
+      hasTo: Boolean(to),
+      amount: notice.amount,
+    });
+    return;
+  }
 
   const subject = notice.paid
     ? `לקוח שילם — ${notice.parentName} · ${formatCurrency(notice.amount)}`
     : `לקוח נרשם וצריך לשלם — ${notice.parentName} · ${formatCurrency(notice.amount)}`;
 
+  const provider = getEmailProvider();
   try {
-    const sent = await getEmailProvider().send({
+    const sent = await provider.send({
       to,
       subject,
       html: buildHtml(notice),
     });
     if (!sent.success) {
       console.error("[admin-payment-email] send failed", {
-        provider: getEmailProvider().name,
+        provider: provider.name,
+        to,
       });
     }
   } catch (error) {

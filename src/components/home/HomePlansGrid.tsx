@@ -70,7 +70,7 @@ export function HomePlansGrid({
           <ScrollReveal>
             <SectionHead
               eyebrow="מנויים"
-              title="מסלולים חודשיים"
+              title="מנויים חודשיים"
               sub="שחייה חופשית, כמה שבא לכם"
               accent="var(--logo-magenta)"
             />
@@ -127,7 +127,7 @@ export function HomePlansGrid({
           <ScrollReveal>
             <SectionHead
               eyebrow="הפוגה"
-              title="פעילויות לפי נפשות"
+              title="פעילויות"
               sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
               accent="var(--logo-magenta)"
             />

@@ -146,7 +146,7 @@ export function PlanCard({
                   : "hero-cta-primary"
               )}
             >
-              הצטרפות למסלול
+              הצטרפות למנוי
             </Link>
           )}
         </div>

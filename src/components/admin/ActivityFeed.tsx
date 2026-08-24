@@ -83,7 +83,7 @@ type Filter = "all" | EnrollmentType;
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "הכל" },
   { id: "class", label: "חוגים" },
-  { id: "program", label: "מסלולים" },
+  { id: "program", label: "מנויים" },
   { id: "pool_pass", label: "כניסות" },
   { id: "private_lesson", label: "פרטיים" },
 ];

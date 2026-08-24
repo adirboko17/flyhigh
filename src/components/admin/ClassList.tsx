@@ -10,6 +10,7 @@ import {
   UserPlusMenuIcon,
 } from "@/components/admin/AdminRowActions";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
+import { loadClassRoster } from "@/lib/admin/classRoster";
 import {
   AssignToClassDialog,
   type AssignMode,
@@ -104,6 +105,8 @@ export type AdminClassRow = {
   sibling_discount_tiers: Json | null;
   instructors: { full_name: string } | null;
   instructor_id: string | null;
+  registeredCount: number;
+  waitlistCount: number;
   enrollments: AdminClassEnrollment[];
   waitlist: AdminClassWaitlistEntry[];
   attendance: AdminClassAttendance[];
@@ -247,7 +250,7 @@ export function ClassList({ classes }: ClassListProps) {
       {previewed && (
         <ClassPreviewDialog
           cls={previewed}
-          registered={activeEnrollments(previewed).length}
+          registered={previewed.registeredCount}
           onClose={() => setPreviewed(null)}
         />
       )}
@@ -256,7 +259,7 @@ export function ClassList({ classes }: ClassListProps) {
         <AssignToClassDialog
           cls={manualAssign}
           mode={{ kind: "manual" }}
-          registered={activeEnrollments(manualAssign).length}
+          registered={manualAssign.registeredCount}
           onClose={() => setManualAssign(null)}
         />
       )}
@@ -277,8 +280,8 @@ function ClassCard({
 }) {
   const router = useRouter();
   const status = CLASS_STATUS[cls.status];
-  const registered = activeEnrollments(cls).length;
-  const waiting = openWaitlist(cls).length;
+  const registered = cls.registeredCount;
+  const waiting = cls.waitlistCount;
   const rate = attendanceRate(cls);
   const ratio = cls.capacity > 0 ? registered / cls.capacity : 0;
   const ageLabel = audienceLabel(cls);
@@ -526,28 +529,51 @@ function ClassDetailPanel({
     useState<AttendanceMode>(initialAttendanceMode);
   const [assigning, setAssigning] = useState<AssignMode | null>(null);
   const [listQuery, setListQuery] = useState("");
+  const [roster, setRoster] = useState<{
+    enrollments: AdminClassEnrollment[];
+    waitlist: AdminClassWaitlistEntry[];
+  } | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRoster(null);
+    setRosterLoading(true);
+    loadClassRoster(cls.id).then((data) => {
+      if (cancelled) return;
+      setRoster(data);
+      setRosterLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cls.id]);
+
+  const rosterClass = roster
+    ? { ...cls, enrollments: roster.enrollments, waitlist: roster.waitlist }
+    : cls;
 
   const enrollments = useMemo(() => {
-    const rows = activeEnrollments(cls);
+    const rows = activeEnrollments(rosterClass);
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [cls]);
+  }, [rosterClass]);
 
   const cancelled = useMemo(() => {
-    const rows = cls.enrollments.filter((e) => e.status === "cancelled");
+    const rows = rosterClass.enrollments.filter((e) => e.status === "cancelled");
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [cls.enrollments]);
+  }, [rosterClass.enrollments]);
 
-  const waiting = openWaitlist(cls);
+  const waiting = openWaitlist(rosterClass);
 
   const students = useMemo(() => {
     const seen = new Set<string>();
@@ -650,7 +676,8 @@ function ClassDetailPanel({
             {cls.title}
           </h2>
           <p className="mt-1 text-sm text-white/80">
-            {enrollments.length} מתוך {cls.capacity} מקומות · {scheduleLabel(cls)}
+            {(rosterLoading ? cls.registeredCount : enrollments.length)} מתוך{" "}
+            {cls.capacity} מקומות · {scheduleLabel(cls)}
           </p>
         </div>
 
@@ -705,16 +732,18 @@ function ClassDetailPanel({
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-ink-50/40">
-          {tab === "enrollments" && (
+          {rosterLoading && (tab === "enrollments" || tab === "waitlist") ? (
+            <p className="px-5 py-10 text-center text-sm text-ink-400">
+              טוען את הרשימה...
+            </p>
+          ) : tab === "enrollments" ? (
             <EnrollmentsTab
               active={filteredEnrollments}
               cancelled={filteredCancelled}
               totalActive={enrollments.length}
               searching={Boolean(q)}
             />
-          )}
-
-          {tab === "waitlist" &&
+          ) : tab === "waitlist" &&
             (waiting.length === 0 ? (
               <div className="p-5">
                 <EmptyState
@@ -762,7 +791,14 @@ function ClassDetailPanel({
           cls={cls}
           mode={assigning}
           registered={enrollments.length}
-          onClose={() => setAssigning(null)}
+          onClose={() => {
+            setAssigning(null);
+            setRosterLoading(true);
+            loadClassRoster(cls.id).then((data) => {
+              setRoster(data);
+              setRosterLoading(false);
+            });
+          }}
         />
       )}
     </div>

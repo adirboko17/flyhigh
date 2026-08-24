@@ -47,7 +47,7 @@ function formatClock(value: string | null) {
 }
 
 function peopleLabel(count: number) {
-  return `${count} ${count === 1 ? "נפש" : "נפשות"}`;
+  return `${count} ${count === 1 ? "משתתף" : "משתתפים"}`;
 }
 
 export function ActivityBookingsBoard({
@@ -108,7 +108,7 @@ export function ActivityBookingsBoard({
           {awaiting.length === 0 ? (
             <EmptyState
               title="אין פעילויות שממתינות לתיאום"
-              description="כשלקוח רוכש פעילות לפי מספר נפשות היא תופיע כאן."
+              description="כשלקוח רוכש פעילות היא תופיע כאן לתיאום מועד בטלפון."
               icon="👨‍👩‍👧"
               className="border-0 bg-transparent"
             />

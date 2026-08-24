@@ -369,7 +369,7 @@ export default async function ParentDashboard() {
               href="/programs"
               className="ah-btn ah-btn--md flex-1 bg-white/15 px-2 text-[11px] text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none sm:px-5 sm:text-sm"
             >
-              מסלולים וכניסות
+              מנויים וכניסות
             </Link>
             <Link
               href="#children"
@@ -590,13 +590,13 @@ export default async function ParentDashboard() {
 
       <Card id="plans" className="min-w-0 scroll-mt-24 rounded-xl sm:rounded-2xl">
         <CardHeader className="px-3 py-3 sm:px-5 sm:py-4">
-          <CardTitle className="break-words">מסלולים, כניסות ושיעורים פרטיים</CardTitle>
+          <CardTitle className="break-words">מנויים, כניסות ושיעורים פרטיים</CardTitle>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {activePlans.length > 0 && (
               <Badge tone="brand">{activePlans.length} פעילים</Badge>
             )}
             <ViewAllDialog
-              title="מסלולים, כניסות ושיעורים פרטיים"
+              title="מנויים, כניסות ושיעורים פרטיים"
               description="כל הרכישות שלכם לבריכה ולשיעורים פרטיים, כולל היסטוריה"
               count={planEnrollments.length}
               disabled={planEnrollments.length === 0}
@@ -618,7 +618,7 @@ export default async function ParentDashboard() {
           {planEnrollments.length === 0 ? (
             <EmptyState
               icon="🎫"
-              title="עדיין לא רכשתם מסלול, כניסות או שיעור פרטי"
+              title="עדיין לא רכשתם מנוי, כניסות או שיעור פרטי"
               description="מנוי, כרטיסייה או שיעור פרטי — הרכישה מתבצעת אונליין בכמה קליקים."
               action={
                 <ButtonLink href="/programs" size="sm">
@@ -643,7 +643,7 @@ export default async function ParentDashboard() {
         {planEnrollments.length > 0 && (
           <CardFooter className="flex flex-wrap items-center justify-between gap-2 bg-ink-50/60 px-3 py-3 sm:gap-3 sm:px-5 sm:py-4">
             <span className="text-sm text-ink-600">
-              רוצים להוסיף מסלול או כרטיסייה נוספת?
+              רוצים להוסיף מנוי או כרטיסייה נוספת?
             </span>
             <ButtonLink href="/programs" size="sm" variant="outline">
               לרכישה
@@ -953,7 +953,7 @@ function PlanRow({
           {isPrivate && duration !== null && ` · ${duration} דק׳`}
           {isPrivate && slots.length > 0 && ` · ${slots.length} שיעורים`}
           {isActivity && peopleCount !== null &&
-            ` · ${peopleCount} ${peopleCount === 1 ? "נפש" : "נפשות"}`}
+            ` · ${peopleCount} ${peopleCount === 1 ? "משתתף" : "משתתפים"}`}
         </p>
         <p className="mt-0.5 text-xs text-ink-400">
           נרכש ב-{formatDate(enrollment.created_at)}

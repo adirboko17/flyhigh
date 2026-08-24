@@ -6,37 +6,70 @@ export interface NavItem {
   matchPaths?: string[];
 }
 
-export const ADMIN_NAV: NavItem[] = [
+export interface NavGroup {
+  id: string;
+  label: string;
+  icon: string;
+  children: NavItem[];
+}
+
+export type NavEntry = NavItem | NavGroup;
+
+export function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return "children" in entry;
+}
+
+export function navHrefs(entries: NavEntry[]): string[] {
+  return entries.flatMap((entry) =>
+    isNavGroup(entry) ? entry.children.map((child) => child.href) : [entry.href]
+  );
+}
+
+export const ADMIN_NAV: NavEntry[] = [
   { href: "/admin", label: "דשבורד", icon: "📊" },
   { href: "/admin/customers", label: "לקוחות", icon: "👨‍👩‍👧" },
   { href: "/admin/instructors", label: "מדריכות", icon: "👩‍🏫" },
   { href: "/admin/classes", label: "חוגים", icon: "🏊" },
   {
     href: "/admin/tracks",
-    label: "מסלולים וכניסות",
+    label: "מנויים וכניסות",
     icon: "🎫",
     matchPaths: ["/admin/programs", "/admin/pool-passes"],
   },
   {
-    href: "/admin/private-lessons",
-    label: "תיאום מועדים",
-    icon: "🎯",
+    id: "operations",
+    label: "תפעול",
+    icon: "🗓️",
+    children: [
+      {
+        href: "/admin/private-lessons",
+        label: "תיאום מועדים",
+        icon: "🎯",
+      },
+      { href: "/admin/calendar", label: "לוח שנה", icon: "📅" },
+      {
+        href: "/admin/activity",
+        label: "פעילות אחרונה",
+        icon: "📝",
+        matchPaths: ["/admin/enrollments"],
+      },
+    ],
   },
-  { href: "/admin/calendar", label: "לוח שנה", icon: "📅" },
-  { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
-  { href: "/admin/receipt-labels", label: "תוויות לקבלה", icon: "🧾" },
   {
-    href: "/admin/activity",
-    label: "פעילות אחרונה",
-    icon: "📝",
-    matchPaths: ["/admin/enrollments"],
-  },
-  { href: "/admin/collections", label: "גבייה", icon: "🧾" },
-  {
-    href: "/admin/finance",
-    label: "כספים",
-    icon: "💳",
-    matchPaths: ["/admin/payments", "/admin/reports"],
+    id: "finance",
+    label: "פיננסי",
+    icon: "💰",
+    children: [
+      {
+        href: "/admin/finance",
+        label: "כספים",
+        icon: "💳",
+        matchPaths: ["/admin/payments", "/admin/reports"],
+      },
+      { href: "/admin/collections", label: "גבייה", icon: "🧾" },
+      { href: "/admin/receipt-labels", label: "תוויות לקבלה", icon: "🏷️" },
+      { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
+    ],
   },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },
 ];

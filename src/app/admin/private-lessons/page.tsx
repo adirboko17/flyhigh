@@ -15,48 +15,63 @@ export default async function AdminPrivateLessonsPage() {
     { data: upcomingRows },
     { data: awaitingActivities },
     { data: upcomingActivities },
-    { data: payments },
-  ] =
-    await Promise.all([
-      supabase
-        .from("private_lesson_slots")
-        .select(
-          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
-        )
-        .eq("status", "awaiting_schedule")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("private_lesson_slots")
-        .select(
-          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
-        )
-        .eq("status", "scheduled")
-        .gte("session_date", today)
-        .order("session_date")
-        .order("start_time")
-        .limit(50),
-      supabase
-        .from("activity_bookings")
-        .select(
-          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
-        )
-        .eq("status", "awaiting_schedule")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("activity_bookings")
-        .select(
-          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
-        )
-        .eq("status", "scheduled")
-        .gte("session_date", today)
-        .order("session_date")
-        .order("start_time")
-        .limit(50),
-      supabase
-        .from("payments")
-        .select("enrollment_id, amount")
-        .not("enrollment_id", "is", null),
-    ]);
+  ] = await Promise.all([
+    supabase
+      .from("private_lesson_slots")
+      .select(
+        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
+      )
+      .eq("status", "awaiting_schedule")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("private_lesson_slots")
+      .select(
+        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
+      )
+      .eq("status", "scheduled")
+      .gte("session_date", today)
+      .order("session_date")
+      .order("start_time")
+      .limit(50),
+    supabase
+      .from("activity_bookings")
+      .select(
+        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
+      )
+      .eq("status", "awaiting_schedule")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("activity_bookings")
+      .select(
+        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
+      )
+      .eq("status", "scheduled")
+      .gte("session_date", today)
+      .order("session_date")
+      .order("start_time")
+      .limit(50),
+  ]);
+
+  const enrollmentIds = [
+    ...new Set(
+      [
+        ...(awaitingRows ?? []),
+        ...(upcomingRows ?? []),
+        ...(awaitingActivities ?? []),
+        ...(upcomingActivities ?? []),
+      ]
+        .map((row) => row.enrollment_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const { data: payments } =
+    enrollmentIds.length > 0
+      ? await supabase
+          .from("payments")
+          .select("enrollment_id, amount")
+          .in("enrollment_id", enrollmentIds)
+      : { data: [] };
 
   const amountByEnrollment = new Map<string, number>();
   for (const payment of payments ?? []) {
@@ -68,9 +83,7 @@ export default async function AdminPrivateLessonsPage() {
     );
   }
 
-  function mapRow(
-    row: NonNullable<typeof awaitingRows>[number]
-  ) {
+  function mapRow(row: NonNullable<typeof awaitingRows>[number]) {
     return {
       id: row.id,
       status: row.status,
@@ -88,9 +101,7 @@ export default async function AdminPrivateLessonsPage() {
     };
   }
 
-  function mapActivity(
-    row: NonNullable<typeof awaitingActivities>[number]
-  ) {
+  function mapActivity(row: NonNullable<typeof awaitingActivities>[number]) {
     return {
       id: row.id,
       status: row.status,
@@ -112,7 +123,7 @@ export default async function AdminPrivateLessonsPage() {
     <div className="space-y-10">
       <PageHeader
         title="שיעורים פרטיים ופעילויות"
-        description="תיאום מועדים ללקוחות שרכשו שיעור פרטי או פעילות לפי מספר נפשות."
+        description="תיאום מועדים ללקוחות שרכשו שיעור פרטי או פעילות."
       />
       <ActivityBookingsBoard
         awaiting={(awaitingActivities ?? []).map(mapActivity)}

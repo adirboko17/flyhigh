@@ -51,18 +51,13 @@ class ResendEmailProvider implements EmailProvider {
   }
 }
 
-let emailProvider: EmailProvider | null = null;
-
 export function getEmailProvider(): EmailProvider {
-  if (!emailProvider) {
-    emailProvider =
-      process.env.RESEND_API_KEY?.trim() && process.env.RESEND_FROM_EMAIL?.trim()
-        ? new ResendEmailProvider()
-        : new MockEmailProvider();
-  }
-  return emailProvider;
+  return process.env.RESEND_API_KEY?.trim() &&
+    process.env.RESEND_FROM_EMAIL?.trim()
+    ? new ResendEmailProvider()
+    : new MockEmailProvider();
 }
 
 export function getAdminNotifyEmail() {
-  return process.env.ADMIN_NOTIFY_EMAIL?.trim() || "bokobzadir@gmail.com";
+  return process.env.ADMIN_NOTIFY_EMAIL?.trim() || "office@al-ha-gova.co.il";
 }

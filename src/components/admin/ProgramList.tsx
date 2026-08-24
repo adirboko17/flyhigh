@@ -25,9 +25,42 @@ export type AdminProgramRow = {
   status: keyof typeof LISTING_STATUS;
 };
 
+const SECTION = {
+  membership: {
+    id: "programs",
+    icon: "🎫",
+    title: "מנויים",
+    newLabel: "+ מנוי חדש",
+    empty: "אין מנויים עדיין — צרו את המנוי הראשון שלכם.",
+    noMatch: "לא נמצאו מנויים התואמים לחיפוש.",
+    nameCol: "שם המנוי",
+    priceCol: "מחיר",
+    extraCol: "משך",
+    modalNew: "מנוי חדש",
+    modalEdit: "עריכת מנוי",
+    modalNewDesc: "המנוי ייווצר כפעיל ויוצג באתר.",
+  },
+  activity: {
+    id: "activities",
+    icon: "🎯",
+    title: "פעילויות",
+    newLabel: "+ פעילות חדשה",
+    empty: "אין פעילויות עדיין — הוסיפו פעילות עם שם ומחיר למשתתף.",
+    noMatch: "לא נמצאו פעילויות התואמות לחיפוש.",
+    nameCol: "שם הפעילות",
+    priceCol: "מחיר למשתתף",
+    extraCol: "אחרי הרכישה",
+    modalNew: "פעילות חדשה",
+    modalEdit: "עריכת פעילות",
+    modalNewDesc:
+      "הלקוח בוחר כמה משתתפים ומשלם לפי זה. אחרי התשלום הבקשה נכנסת לתיאום מועדים כדי לתאם מועד בטלפון.",
+  },
+} as const;
+
 interface ProgramListProps {
   programs: AdminProgramRow[];
   query?: string;
+  kind: ProgramKind;
 }
 
 function normalizeSearch(value: string) {
@@ -43,39 +76,47 @@ function matchesProgram(item: AdminProgramRow, query: string) {
   );
 }
 
-export function ProgramList({ programs, query = "" }: ProgramListProps) {
+export function ProgramList({
+  programs,
+  query = "",
+  kind,
+}: ProgramListProps) {
   const router = useRouter();
   const [editing, setEditing] = useState<AdminProgramRow | "new" | null>(null);
+  const copy = SECTION[kind];
+
+  const scoped = useMemo(
+    () => programs.filter((p) => p.kind === kind),
+    [programs, kind]
+  );
 
   const filtered = useMemo(
-    () => programs.filter((p) => matchesProgram(p, query)),
-    [programs, query]
+    () => scoped.filter((p) => matchesProgram(p, query)),
+    [scoped, query]
   );
 
   return (
     <>
       <AdminSection
-        id="programs"
-        icon="🎫"
-        title="מסלולים"
+        id={copy.id}
+        icon={copy.icon}
+        title={copy.title}
         count={filtered.length}
-        totalCount={programs.length}
+        totalCount={scoped.length}
         onNew={() => setEditing("new")}
-        newLabel="+ מסלול חדש"
+        newLabel={copy.newLabel}
       >
-        {programs.length === 0 ? (
-          <SectionMessage>
-            אין מסלולים עדיין — צרו את המסלול הראשון שלכם.
-          </SectionMessage>
+        {scoped.length === 0 ? (
+          <SectionMessage>{copy.empty}</SectionMessage>
         ) : filtered.length === 0 ? (
-          <SectionMessage>לא נמצאו מסלולים התואמים לחיפוש.</SectionMessage>
+          <SectionMessage>{copy.noMatch}</SectionMessage>
         ) : (
           <Table>
             <THead>
               <TR>
-                <TH>שם המסלול</TH>
-                <TH>מחיר</TH>
-                <TH>משך</TH>
+                <TH>{copy.nameCol}</TH>
+                <TH>{copy.priceCol}</TH>
+                <TH>{copy.extraCol}</TH>
                 <TH>סטטוס</TH>
                 <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
@@ -95,13 +136,13 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
                     {formatCurrency(p.price)}
                     {isActivityProgram(p.kind) ? (
                       <span className="block text-xs font-normal text-ink-400">
-                        לנפש
+                        למשתתף
                       </span>
                     ) : null}
                   </TD>
                   <TD className="whitespace-nowrap text-ink-600">
                     {isActivityProgram(p.kind)
-                      ? "לפי נפשות · תיאום מועד"
+                      ? "תיאום מועדים"
                       : p.duration_months === 1
                         ? "חודש"
                         : `${p.duration_months} חודשים`}
@@ -139,14 +180,13 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
       <Modal
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "מסלול חדש" : "עריכת מסלול"}
-        description={
-          editing === "new" ? "המסלול ייווצר כפעיל ויוצג באתר." : undefined
-        }
+        title={editing === "new" ? copy.modalNew : copy.modalEdit}
+        description={editing === "new" ? copy.modalNewDesc : undefined}
       >
         {editing !== null && (
           <ProgramForm
             existing={editing === "new" ? undefined : editing}
+            defaultKind={kind}
             onClose={() => setEditing(null)}
           />
         )}

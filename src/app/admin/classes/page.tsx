@@ -1,31 +1,17 @@
 ﻿import {
   ClassList,
   type AdminClassAttendance,
-  type AdminClassEnrollment,
   type AdminClassRow,
-  type AdminClassWaitlistEntry,
 } from "@/components/admin/ClassList";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "ניהול חוגים" };
 
-/** קיבוץ רשומות לפי החוג שאליו הן משויכות. */
-function groupByClass<T extends { class_id: string | null }>(rows: T[] | null) {
-  const map = new Map<string, T[]>();
-  for (const row of rows ?? []) {
-    if (!row.class_id) continue;
-    const list = map.get(row.class_id);
-    if (list) list.push(row);
-    else map.set(row.class_id, [row]);
-  }
-  return map;
-}
-
 export default async function AdminClassesPage() {
   const supabase = await createAdminDataClient();
 
-  // רשימת החוגים + נרשמים/המתנה בלבד. נוכחות נטענת בפאנל (חוסך אלפי שורות בכל כניסה).
-  const [{ data: classes }, { data: enrollments }, { data: waitlist }] =
+  // רשימה קלה: מטא־דאטה + ספירות. הרשימות המלאות נטענות בפתיחת הפאנל.
+  const [{ data: classes }, { data: enrollmentCounts }, { data: waitlistCounts }] =
     await Promise.all([
       supabase
         .from("classes")
@@ -35,33 +21,40 @@ export default async function AdminClassesPage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("enrollments")
-        .select(
-          "id, class_id, parent_id, child_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)"
-        )
+        .select("class_id, status")
         .eq("type", "class")
         .not("class_id", "is", null)
-        .in("status", ["active", "pending", "cancelled"])
-        .order("created_at", { ascending: false }),
+        .in("status", ["active", "pending"]),
       supabase
         .from("waitlist")
-        .select(
-          "id, class_id, parent_id, child_id, status, created_at, children(full_name), profiles(full_name, phone)"
-        )
-        .in("status", ["waiting", "offered"])
-        .order("created_at"),
+        .select("class_id")
+        .in("status", ["waiting", "offered"]),
     ]);
 
-  const enrollmentsByClass = groupByClass<AdminClassEnrollment>(
-    enrollments as AdminClassEnrollment[] | null
-  );
-  const waitlistByClass = groupByClass<AdminClassWaitlistEntry>(
-    waitlist as AdminClassWaitlistEntry[] | null
-  );
+  const registeredByClass = new Map<string, number>();
+  for (const row of enrollmentCounts ?? []) {
+    if (!row.class_id) continue;
+    registeredByClass.set(
+      row.class_id,
+      (registeredByClass.get(row.class_id) ?? 0) + 1
+    );
+  }
+
+  const waitlistByClass = new Map<string, number>();
+  for (const row of waitlistCounts ?? []) {
+    if (!row.class_id) continue;
+    waitlistByClass.set(
+      row.class_id,
+      (waitlistByClass.get(row.class_id) ?? 0) + 1
+    );
+  }
 
   const rows: AdminClassRow[] = (classes ?? []).map((cls) => ({
     ...cls,
-    enrollments: enrollmentsByClass.get(cls.id) ?? [],
-    waitlist: waitlistByClass.get(cls.id) ?? [],
+    registeredCount: registeredByClass.get(cls.id) ?? 0,
+    waitlistCount: waitlistByClass.get(cls.id) ?? 0,
+    enrollments: [],
+    waitlist: [],
     attendance: [] as AdminClassAttendance[],
   }));
 

@@ -264,7 +264,7 @@ export const ATTENDANCE_STATUS: Record<
 
 export const ENROLLMENT_TYPE: Record<Enums<"enrollment_type">, string> = {
   class: "חוג",
-  program: "מסלול",
+  program: "מנוי",
   pool_pass: "כניסה לבריכה",
   private_lesson: "שיעור פרטי",
 };

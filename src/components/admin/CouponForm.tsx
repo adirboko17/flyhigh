@@ -318,7 +318,7 @@ export function CouponForm({ existing, options, onClose }: CouponFormProps) {
             </optgroup>
           )}
           {options.programs.length > 0 && (
-            <optgroup label="מסלולים">
+            <optgroup label="מנויים ופעילויות">
               {options.programs.map((item) => (
                 <option key={item.id} value={`program:${item.id}`}>
                   {item.label}

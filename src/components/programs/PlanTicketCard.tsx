@@ -58,7 +58,7 @@ export function PlanTicketCard({
         : stub.kind === "people"
           ? {
               eyebrow: "מחיר",
-              value: "לנפש",
+              value: "למשתתף",
               unit: null as string | null,
             }
           : {

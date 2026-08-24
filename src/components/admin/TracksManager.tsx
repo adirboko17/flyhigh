@@ -26,7 +26,8 @@ export function TracksManager({
   return (
     <div className="space-y-5">
       <TracksSearchBar query={query} onQueryChange={setQuery} />
-      <ProgramList programs={programs} query={query} />
+      <ProgramList programs={programs} query={query} kind="membership" />
+      <ProgramList programs={programs} query={query} kind="activity" />
       <PoolPassList passes={passes} query={query} />
       <PrivateLessonList lessons={privateLessons} query={query} />
     </div>
@@ -46,7 +47,7 @@ function TracksSearchBar({
     <Card className="overflow-hidden">
       <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
         <p className="text-sm font-medium text-ink-600">
-          חיפוש מסלולים, כניסות ושיעורים פרטיים
+          חיפוש מנויים, פעילויות, כניסות ושיעורים פרטיים
         </p>
         <p className="mt-0.5 text-xs text-ink-400">
           לפי שם או תיאור — מסנן את כל הרשימות יחד
@@ -61,7 +62,7 @@ function TracksSearchBar({
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="הקלידו שם או תיאור..."
             className="h-12 border-ink-100 bg-ink-50/50 ps-11 pe-11 shadow-soft focus:bg-white"
-            aria-label="חיפוש מסלולים, כניסות ושיעורים פרטיים"
+            aria-label="חיפוש מנויים, פעילויות, כניסות ושיעורים פרטיים"
           />
           {isSearching && (
             <button

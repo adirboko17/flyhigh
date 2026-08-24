@@ -73,16 +73,6 @@ export default function LoginPage() {
               </Link>
             </p>
           </div>
-
-          <div className="mt-5 rounded-2xl border border-dashed border-ink-200 bg-ink-50/80 p-4 text-xs text-ink-500 lg:mt-6">
-            <p className="mb-1 font-semibold text-ink-600">חשבונות לדוגמה (דמו):</p>
-            <ul className="space-y-0.5 break-all" dir="ltr">
-              <li>admin@al-hagova.co.il</li>
-              <li>dana@al-hagova.co.il</li>
-              <li>michal@example.com</li>
-              <li>Password123!</li>
-            </ul>
-          </div>
         </ScrollReveal>
       </div>
 

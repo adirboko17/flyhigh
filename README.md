@@ -23,16 +23,12 @@ CARDCOM_API_PASSWORD=...
 CARDCOM_APP_URL=https://www.al-ha-gova.co.il
 RESEND_API_KEY=...
 RESEND_FROM_EMAIL=על הגובה <office@al-ha-gova.co.il>
-ADMIN_NOTIFY_EMAIL=bokobzadir@gmail.com
+ADMIN_NOTIFY_EMAIL=office@al-ha-gova.co.il
 ```
 
-## משתמשי דמו
+## כניסת ניהול
 
-| תפקיד   | אימייל                  | סיסמה        |
-|---------|-------------------------|--------------|
-| מנהל    | admin@al-hagova.co.il   | Password123! |
-| מדריכה  | dana@al-hagova.co.il    | Password123! |
-| הורה    | michal@example.com      | Password123! |
+התחברו עם המשתמש הראשי: `office@al-ha-gova.co.il`
 
 ## מבנה הפרויקט
 

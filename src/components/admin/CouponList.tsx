@@ -45,7 +45,7 @@ function subjectOf(coupon: AdminCouponRow, labelOf: Map<string, string>) {
   }
   if (coupon.program_id) {
     return {
-      label: labelOf.get(`program:${coupon.program_id}`) ?? "מסלול שנמחק",
+      label: labelOf.get(`program:${coupon.program_id}`) ?? "מנוי שנמחק",
       redeemable: true,
     };
   }

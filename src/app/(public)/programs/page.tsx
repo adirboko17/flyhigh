@@ -63,7 +63,7 @@ export default async function ProgramsPage() {
         badgeIcon="ticket"
         badgeText="מחירון · הבריכה"
         title="שנקפוץ למים?"
-        description="מנויים חודשיים לשחייה חופשית, פעילויות לפי מספר נפשות וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
+        description="מנויים חודשיים לשחייה חופשית, פעילויות לפי מספר משתתפים וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
       />
 
       <section
@@ -73,7 +73,7 @@ export default async function ProgramsPage() {
         <ScrollReveal>
           <SectionHead
             eyebrow="מנויים"
-            title="מסלולים חודשיים"
+            title="מנויים חודשיים"
             sub="שחייה חופשית, כמה שבא לכם"
             accent="var(--logo-magenta)"
           />
@@ -123,7 +123,7 @@ export default async function ProgramsPage() {
           </div>
         ) : (
           <p className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-ink-500">
-            אין מסלולים פעילים כרגע. צרו קשר ונשמח לעזור.
+            אין מנויים פעילים כרגע. צרו קשר ונשמח לעזור.
           </p>
         )}
       </section>
@@ -136,7 +136,7 @@ export default async function ProgramsPage() {
           <ScrollReveal>
             <SectionHead
               eyebrow="הפוגה"
-              title="פעילויות לפי נפשות"
+              title="פעילויות"
               sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
               accent="var(--logo-magenta)"
             />

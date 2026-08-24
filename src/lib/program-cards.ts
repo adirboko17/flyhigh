@@ -27,9 +27,9 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
 export const ACTIVITY_CARD_TEMPLATE: PlanCardTemplate = {
   icon: "family",
   accent: "var(--logo-magenta)",
-  period: "/ לנפש",
+  period: "/ למשתתף",
   features: [
-    "פעילות בבריכה לפי מספר הנפשות",
+    "פעילות בבריכה לפי מספר המשתתפים",
     "מתאים לילדים ולמשפחות",
     "משלמים, ואז מתאמים מועד מול המשרד",
   ],

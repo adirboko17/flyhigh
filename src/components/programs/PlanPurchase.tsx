@@ -26,6 +26,7 @@ import {
 import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
+  peopleCountLabel,
   type ProgramKind,
 } from "@/lib/programs";
 import {
@@ -52,7 +53,7 @@ interface PlanPurchaseButtonProps {
   entriesCount?: number | null;
   /** משך שיעור פרטי בדקות. */
   durationMinutes?: number | null;
-  /** מנוי או פעילות לפי נפשות — רלוונטי רק כש־planKind הוא program. */
+  /** מנוי או פעילות — רלוונטי רק כש־planKind הוא program. */
   programKind?: ProgramKind;
   featured?: boolean;
   viewer: PlanViewer;
@@ -90,7 +91,7 @@ export function PlanPurchaseButton({
       : isActivity
         ? "רכישת הפעילות"
         : planKind === "program"
-          ? "רכישת המסלול"
+          ? "רכישת המנוי"
           : "רכישת כניסות";
   const loginLabel =
     planKind === "private_lesson"
@@ -98,7 +99,7 @@ export function PlanPurchaseButton({
       : isActivity
         ? "התחברות לרכישת פעילות"
         : planKind === "program"
-          ? "התחברות לרכישת מסלול"
+          ? "התחברות לרכישת מנוי"
           : "התחברות לרכישה";
 
   if (viewer.kind === "guest") {
@@ -301,7 +302,7 @@ function PlanCheckoutDialog({
   const kindLabel = isActivity
     ? "פעילות"
     : planKind === "program"
-      ? "מסלול"
+      ? "מנוי"
       : planKind === "private_lesson"
         ? "שיעור פרטי"
         : "כרטיסייה";
@@ -450,7 +451,7 @@ function PlanCheckoutDialog({
                 {durationMinutes} דקות לשיעור · מחיר לשיעור למשתתף
               </p>
             ) : isActivity ? (
-              <p className="mt-0.5 text-sm text-ink-500">מחיר לנפש</p>
+              <p className="mt-0.5 text-sm text-ink-500">מחיר למשתתף</p>
             ) : (
               <p className="mt-0.5 text-sm text-ink-500">מחיר לכל משתתף</p>
             )}
@@ -461,7 +462,7 @@ function PlanCheckoutDialog({
               <p className="font-semibold">לפני הרכישה חשוב לדעת</p>
               <p className="mt-1">
                 {isActivity
-                  ? "בחרו כמה נפשות יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
+                  ? "בחרו כמה משתתפים יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
                   : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
               </p>
             </div>
@@ -499,7 +500,7 @@ function PlanCheckoutDialog({
           {usesQuantity && (
             <fieldset>
               <legend className="mb-2 text-sm font-semibold text-ink-800">
-                {isActivity ? "כמה נפשות?" : "כמה שיעורים?"}
+                {isActivity ? "כמה משתתפים?" : "כמה שיעורים?"}
               </legend>
               <div className="flex items-center gap-3">
                 <button
@@ -564,9 +565,9 @@ function PlanCheckoutDialog({
               <span>
                 מחיר ל
                 {isActivity
-                  ? "נפש"
+                  ? "משתתף"
                   : planKind === "program"
-                    ? "מסלול"
+                    ? "מנוי"
                     : planKind === "private_lesson"
                       ? "שיעור"
                       : "כרטיסייה"}
@@ -581,7 +582,7 @@ function PlanCheckoutDialog({
             )}
             {isActivity && (
               <div className="flex justify-between gap-3 text-ink-600">
-                <span>נפשות</span>
+                <span>משתתפים</span>
                 <span className="shrink-0">{quantity}</span>
               </div>
             )}
@@ -647,7 +648,7 @@ function PlanCheckoutDialog({
             <p className="mt-1 break-words text-brand-700">
               {planTitle}
               {isActivity
-                ? ` · ${quantity} ${quantity === 1 ? "נפש" : "נפשות"}`
+                ? ` · ${peopleCountLabel(quantity)}`
                 : ` · ${count} ${count === 1 ? "משתתף/ת" : "משתתפים"}`}
               {isPrivateLesson &&
                 ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
@@ -730,7 +731,7 @@ function PlanCheckoutDialog({
             </p>
             <p className="mt-1 text-sm text-ink-500">
               {isActivity
-                ? `${quantity} ${quantity === 1 ? "נפש" : "נפשות"}`
+                ? peopleCountLabel(quantity)
                 : count === 1
                   ? `על שם ${participants[0]?.name}`
                   : `עבור ${count} משתתפים`}

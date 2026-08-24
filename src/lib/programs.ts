@@ -4,8 +4,12 @@ export type ProgramKind = Enums<"program_kind">;
 
 export const PROGRAM_KIND_LABEL: Record<ProgramKind, string> = {
   membership: "מנוי",
-  activity: "פעילות לפי נפשות",
+  activity: "פעילות",
 };
+
+export function peopleCountLabel(count: number) {
+  return `${count} ${count === 1 ? "משתתף" : "משתתפים"}`;
+}
 
 export function isActivityProgram(
   kind: string | null | undefined

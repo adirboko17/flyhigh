@@ -197,10 +197,14 @@ async function recordCollectionReceipt(input: {
     sent_to_email: document.sentToEmail,
   });
 
-  await notifyCollectionPaid({
-    charge: input.charge,
-    amount: input.amount,
-  });
+  try {
+    await notifyCollectionPaid({
+      charge: input.charge,
+      amount: input.amount,
+    });
+  } catch (error) {
+    console.error("[admin-payment-email] collection notify failed", error);
+  }
 
   revalidatePath("/admin/collections");
   return { success: true };

@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { ROLE_LABEL } from "@/lib/constants";
-import type { NavItem } from "@/lib/navigation";
+import {
+  isNavGroup,
+  navHrefs,
+  type NavEntry,
+  type NavGroup,
+  type NavItem,
+} from "@/lib/navigation";
 import type { Profile } from "@/lib/auth";
 import { THEME_COLOR } from "@/lib/theme-color";
 import { cn } from "@/utils/cn";
@@ -16,7 +22,7 @@ import { LogoutButton } from "./LogoutButton";
 const COLLAPSE_COOKIE = "admin-sidebar-collapsed";
 
 interface SidebarProps {
-  items: NavItem[];
+  items: NavEntry[];
   /** תווית קטנה ליד הלוגו (אופציונלי). */
   area?: string;
   /** לוגו מותאם לסרגל (ברירת מחדל: alagova-logo.png) */
@@ -77,6 +83,13 @@ export function Sidebar({
     setNavigatingTo(null);
     setTip(null);
   }, [pathname]);
+
+  // טוען מראש את עמודי התפריט כדי שלחיצה לא תתחיל מאפס.
+  useEffect(() => {
+    for (const href of navHrefs(items)) {
+      if (href !== pathname) router.prefetch(href);
+    }
+  }, [items, pathname, router]);
 
   const matchesPath = (href: string) =>
     href === pathname ||
@@ -222,46 +235,43 @@ export function Sidebar({
             rail ? "p-2" : "p-3"
           )}
         >
-          {items.map((item) => {
-            const active = isActive(item);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                // בלי prefetch גלובלי: טעינה מראש של כל התפריט מציפה את השרת.
-                // hover/focus על פריט אחד מתחיל את העמוד הבא לפני הלחיצה.
-                prefetch={false}
-                onClick={() => {
+          {items.map((entry) =>
+            isNavGroup(entry) ? (
+              <NavGroupItem
+                key={entry.id}
+                group={entry}
+                pathname={pathname}
+                rail={rail}
+                isActive={isActive}
+                onNavigate={(href) => {
                   setOpen(false);
-                  if (item.href !== pathname) setNavigatingTo(item.href);
+                  if (href !== pathname) setNavigatingTo(href);
                 }}
-                onMouseEnter={(event) => {
-                  showTip(item.label, event.currentTarget);
-                  if (item.href !== pathname) router.prefetch(item.href);
+                onPrefetch={(href) => {
+                  if (href !== pathname) router.prefetch(href);
                 }}
-                onMouseLeave={() => setTip(null)}
-                onFocus={(event) => {
-                  showTip(item.label, event.currentTarget);
-                  if (item.href !== pathname) router.prefetch(item.href);
+                onTip={showTip}
+                onTipHide={() => setTip(null)}
+              />
+            ) : (
+              <NavLinkItem
+                key={entry.href}
+                item={entry}
+                pathname={pathname}
+                rail={rail}
+                active={isActive(entry)}
+                onNavigate={(href) => {
+                  setOpen(false);
+                  if (href !== pathname) setNavigatingTo(href);
                 }}
-                onBlur={() => setTip(null)}
-                aria-current={active ? "page" : undefined}
-                aria-label={rail ? item.label : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:text-sm lg:font-medium",
-                  rail
-                    ? "lg:justify-center lg:gap-0 lg:px-0 lg:py-2.5"
-                    : "lg:px-3.5 lg:py-2.5",
-                  active
-                    ? "bg-brand-gradient text-white shadow-glow"
-                    : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
-                )}
-              >
-                <span className="text-base leading-none">{item.icon}</span>
-                <span className={cn(rail && "lg:hidden")}>{item.label}</span>
-              </Link>
-            );
-          })}
+                onPrefetch={(href) => {
+                  if (href !== pathname) router.prefetch(href);
+                }}
+                onTip={showTip}
+                onTipHide={() => setTip(null)}
+              />
+            )
+          )}
         </nav>
 
         <SidebarUser
@@ -286,6 +296,176 @@ export function Sidebar({
         </div>
       )}
     </>
+  );
+}
+
+function NavLinkItem({
+  item,
+  pathname,
+  rail,
+  active,
+  nested = false,
+  onNavigate,
+  onPrefetch,
+  onTip,
+  onTipHide,
+}: {
+  item: NavItem;
+  pathname: string;
+  rail: boolean;
+  active: boolean;
+  nested?: boolean;
+  onNavigate: (href: string) => void;
+  onPrefetch: (href: string) => void;
+  onTip: (label: string, el: HTMLElement) => void;
+  onTipHide: () => void;
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={() => onNavigate(item.href)}
+      onMouseEnter={(event) => {
+        onTip(item.label, event.currentTarget);
+        onPrefetch(item.href);
+      }}
+      onMouseLeave={onTipHide}
+      onFocus={(event) => {
+        onTip(item.label, event.currentTarget);
+        onPrefetch(item.href);
+      }}
+      onBlur={onTipHide}
+      aria-current={active ? "page" : undefined}
+      aria-label={rail ? item.label : undefined}
+      className={cn(
+        "flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:text-sm lg:font-medium",
+        rail
+          ? "lg:justify-center lg:gap-0 lg:px-0 lg:py-2.5"
+          : "lg:px-3.5 lg:py-2.5",
+        nested && !rail && "lg:py-2 lg:text-[13px]",
+        active
+          ? "bg-brand-gradient text-white shadow-glow"
+          : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+      )}
+    >
+      <span className="text-base leading-none">{item.icon}</span>
+      <span className={cn(rail && "lg:hidden")}>{item.label}</span>
+    </Link>
+  );
+}
+
+function NavGroupItem({
+  group,
+  pathname,
+  rail,
+  isActive,
+  onNavigate,
+  onPrefetch,
+  onTip,
+  onTipHide,
+}: {
+  group: NavGroup;
+  pathname: string;
+  rail: boolean;
+  isActive: (item: NavItem) => boolean;
+  onNavigate: (href: string) => void;
+  onPrefetch: (href: string) => void;
+  onTip: (label: string, el: HTMLElement) => void;
+  onTipHide: () => void;
+}) {
+  const childActive = group.children.some(isActive);
+  const [expanded, setExpanded] = useState(childActive);
+
+  useEffect(() => {
+    if (childActive && !rail) setExpanded(true);
+  }, [childActive, pathname, rail]);
+
+  if (rail) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          aria-label={group.label}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+          onMouseEnter={(event) => onTip(group.label, event.currentTarget)}
+          onMouseLeave={onTipHide}
+          className={cn(
+            "flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-medium transition-all",
+            childActive
+              ? "bg-brand-gradient text-white shadow-glow"
+              : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+          )}
+        >
+          <span className="text-base leading-none">{group.icon}</span>
+        </button>
+        {expanded && (
+          <div className="absolute top-0 end-full z-[90] ms-2 w-52 rounded-2xl border border-ink-100 bg-white p-2 shadow-card">
+            <p className="px-2.5 pb-1.5 text-xs font-semibold text-ink-400">
+              {group.label}
+            </p>
+            {group.children.map((child) => (
+              <NavLinkItem
+                key={child.href}
+                item={child}
+                pathname={pathname}
+                rail={false}
+                nested
+                active={isActive(child)}
+                onNavigate={onNavigate}
+                onPrefetch={onPrefetch}
+                onTip={onTip}
+                onTipHide={onTipHide}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:px-3.5 lg:py-2.5 lg:text-sm lg:font-medium",
+          childActive
+            ? "bg-brand-50 text-brand-700"
+            : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+        )}
+      >
+        <span className="text-base leading-none">{group.icon}</span>
+        <span className="flex-1 text-start">{group.label}</span>
+        <Icon
+          name="chevron"
+          size={14}
+          className={cn(
+            "shrink-0 text-current opacity-60 transition-transform",
+            expanded ? "-rotate-90" : "rotate-90"
+          )}
+        />
+      </button>
+      {expanded && (
+        <div className="mt-1 flex flex-col gap-1 border-s-2 border-ink-100 pe-0 ps-3 lg:ms-4">
+          {group.children.map((child) => (
+            <NavLinkItem
+              key={child.href}
+              item={child}
+              pathname={pathname}
+              rail={false}
+              nested
+              active={isActive(child)}
+              onNavigate={onNavigate}
+              onPrefetch={onPrefetch}
+              onTip={onTip}
+              onTipHide={onTipHide}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

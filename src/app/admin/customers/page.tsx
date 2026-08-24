@@ -9,7 +9,7 @@ export default async function AdminCustomersPage() {
   const { data: parents } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, birth_date, city, address, created_at, children(*, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
+      "id, full_name, email, phone, birth_date, city, address, created_at, children(id, full_name, birth_date, gender, school_grade, grade_school_year, notes, created_at, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
     )
     .eq("role", "parent")
     .order("created_at", { ascending: false });

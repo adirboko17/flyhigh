@@ -191,7 +191,7 @@ export default async function AdminCalendarPage({
           notes: booking.notes,
           capacity: people,
           registered: people,
-          clientLabel: `${child ? `${parent} · ${child}` : parent} · ${people} ${people === 1 ? "נפש" : "נפשות"}`,
+          clientLabel: `${child ? `${parent} · ${child}` : parent} · ${people} ${people === 1 ? "משתתף" : "משתתפים"}`,
         },
       ];
     }

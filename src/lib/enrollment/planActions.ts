@@ -150,7 +150,7 @@ function resolveParticipants(childIds: string[], includeSelf: boolean) {
 }
 
 function planNotFoundError(kind: PlanKind): string {
-  if (kind === "program") return "המסלול לא נמצא או אינו זמין לרכישה.";
+  if (kind === "program") return "המנוי או הפעילות לא נמצאו או אינם זמינים לרכישה.";
   if (kind === "pool_pass") return "הכרטיסייה לא נמצאה או אינה זמינה לרכישה.";
   return "השיעור הפרטי לא נמצא או אינו זמין לרכישה.";
 }
@@ -198,7 +198,7 @@ export async function previewPlanCoupon(input: {
     return {
       success: false,
       error: isActivityProgram(plan.programKind)
-        ? "נא לבחור מספר נפשות תקין."
+        ? "נא לבחור מספר משתתפים תקין."
         : "נא לבחור כמות תקינה של שיעורים.",
     };
   }
@@ -282,7 +282,7 @@ export async function completePlanPurchase(input: {
     return {
       success: false,
       error: isActivity
-        ? "נא לבחור מספר נפשות תקין."
+        ? "נא לבחור מספר משתתפים תקין."
         : "נא לבחור כמות תקינה של שיעורים.",
     };
   }
@@ -323,7 +323,7 @@ export async function completePlanPurchase(input: {
     if (participants.some((participant) => taken.has(participant))) {
       return {
         success: false,
-        error: "אחד או יותר מהמשתתפים שנבחרו כבר רשומים למסלול הזה.",
+        error: "אחד או יותר מהמשתתפים שנבחרו כבר רשומים למנוי הזה.",
       };
     }
   }
