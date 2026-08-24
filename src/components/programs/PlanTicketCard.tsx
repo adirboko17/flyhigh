@@ -6,7 +6,19 @@ export type PlanTicketStub =
   | { kind: "entries"; count: number }
   | { kind: "months"; count: number }
   | { kind: "minutes"; count: number }
-  | { kind: "people" };
+  | {
+      kind: "people";
+      label?: string;
+      eyebrow?: string;
+      value?: string;
+      unit?: string;
+    };
+
+export type PlanPriceRow = {
+  range: string;
+  price: string;
+  note?: string | null;
+};
 
 interface PlanTicketCardProps {
   name: string;
@@ -14,6 +26,8 @@ interface PlanTicketCardProps {
   price: string;
   /** תווית ליד המחיר, למשל "/ לחודש". */
   period?: string;
+  /** קידומת קטנה לפני הסכום, למשל «החל מ־». */
+  pricePrefix?: string | null;
   stub: PlanTicketStub;
   features: string[];
   icon: IconName;
@@ -21,6 +35,9 @@ interface PlanTicketCardProps {
   featured?: boolean;
   badge?: string;
   cta?: React.ReactNode;
+  /** מחירון מדרגות בטבלה קומפקטית, בלי להאריך את כרטיס הכרטיסייה. */
+  priceRows?: PlanPriceRow[];
+  extraLine?: string | null;
   /**
    * גרסה קומפקטית לדף הבית — אותו כרטיס בלי רשימת יתרונות ובלי גובה מינימלי גדול.
    */
@@ -33,6 +50,7 @@ export function PlanTicketCard({
   desc,
   price,
   period,
+  pricePrefix,
   stub,
   features,
   icon,
@@ -40,6 +58,8 @@ export function PlanTicketCard({
   featured = false,
   badge,
   cta,
+  priceRows = [],
+  extraLine = null,
   compact = false,
 }: PlanTicketCardProps) {
   const stubMeta =
@@ -48,23 +68,27 @@ export function PlanTicketCard({
           eyebrow: stub.count === 1 ? "כניסה" : "כניסות",
           value: String(stub.count),
           unit: null as string | null,
+          compactValue: true,
         }
       : stub.kind === "minutes"
         ? {
             eyebrow: "משך",
             value: String(stub.count),
             unit: "דק׳",
+            compactValue: true,
           }
         : stub.kind === "people"
           ? {
-              eyebrow: "מחיר",
-              value: "למשתתף",
-              unit: null as string | null,
+              eyebrow: stub.eyebrow ?? "מחיר",
+              value: stub.value ?? stub.label ?? "למשתתף",
+              unit: stub.unit ?? null,
+              compactValue: Boolean(stub.value),
             }
           : {
               eyebrow: "מנוי",
               value: String(stub.count),
               unit: stub.count === 1 ? "חודש" : "חודשים",
+              compactValue: true,
             };
 
   return (
@@ -154,6 +178,59 @@ export function PlanTicketCard({
             </p>
           )}
 
+          {priceRows.length > 0 && (
+            <div
+              className={cn(
+                "relative mt-3 rounded-xl px-3 py-2.5",
+                compact ? "text-[12px]" : "text-[13px]",
+                featured ? "bg-white/10" : "bg-ink-50/80"
+              )}
+            >
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {priceRows.map((row) => (
+                  <div
+                    key={`${row.range}-${row.price}`}
+                    className="flex items-baseline justify-between gap-2"
+                  >
+                    <span
+                      className={cn(
+                        "min-w-0 truncate",
+                        featured ? "text-white/70" : "text-ink-500"
+                      )}
+                    >
+                      {row.range}
+                      {row.note ? (
+                        <span className="ms-1 text-[10px] opacity-80">
+                          {row.note}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 font-bold tabular-nums",
+                        featured ? "text-white" : "text-ink-800"
+                      )}
+                    >
+                      {row.price}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {extraLine && (
+                <p
+                  className={cn(
+                    "mt-2 border-t pt-1.5 text-[11px]",
+                    featured
+                      ? "border-white/15 text-white/70"
+                      : "border-ink-100 text-ink-500"
+                  )}
+                >
+                  {extraLine}
+                </p>
+              )}
+            </div>
+          )}
+
           <div
             className={cn(
               "relative mt-auto flex items-end justify-between gap-3",
@@ -161,6 +238,16 @@ export function PlanTicketCard({
             )}
           >
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+              {pricePrefix && (
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    featured ? "text-white/75" : "text-ink-400"
+                  )}
+                >
+                  {pricePrefix}
+                </span>
+              )}
               <p
                 className={cn(
                   "font-display font-extrabold leading-none tabular-nums",
@@ -265,10 +352,15 @@ export function PlanTicketCard({
             </p>
             <p
               className={cn(
-                "mt-0.5 font-display font-extrabold tabular-nums leading-none",
+                "mt-0.5 max-w-full font-display font-extrabold leading-none",
+                stubMeta.compactValue ? "tabular-nums" : "break-words",
                 compact
-                  ? "text-[28px] sm:text-[32px]"
-                  : "text-4xl sm:text-[44px]",
+                  ? stubMeta.compactValue
+                    ? "text-[28px] sm:text-[32px]"
+                    : "text-[15px] sm:text-[16px]"
+                  : stubMeta.compactValue
+                    ? "text-4xl sm:text-[44px]"
+                    : "text-xl sm:text-2xl",
                 featured ? "text-white" : ""
               )}
               style={!featured ? { color: accent } : undefined}

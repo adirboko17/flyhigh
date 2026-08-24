@@ -6,6 +6,7 @@ import {
   DEFERRED_PAYMENT_METHODS,
   type DeferredPaymentMethod,
 } from "@/lib/constants";
+import { classInstallmentOptions } from "@/lib/finance/classPricing";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
@@ -36,6 +37,7 @@ type AssignCore = {
   amount: number;
   method: AssignChargeMethod;
   markPaid: boolean;
+  weeklySlotId?: string | null;
 };
 
 function isAllowedMethod(value: string): value is AssignChargeMethod {
@@ -73,7 +75,7 @@ export async function assignWaitlistEntry(input: {
   const supabase = await createClient();
   const { data: entry } = await supabase
     .from("waitlist")
-    .select("id, class_id, child_id, parent_id, status")
+    .select("id, class_id, child_id, parent_id, status, weekly_slot_id")
     .eq("id", input.waitlistId)
     .maybeSingle();
 
@@ -96,6 +98,7 @@ export async function assignWaitlistEntry(input: {
     amount: input.amount,
     method: input.method,
     markPaid: input.markPaid,
+    weeklySlotId: entry.weekly_slot_id,
   });
 }
 
@@ -116,7 +119,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity, title")
+        .select("id, capacity, title, billing_months, pick_one_slot")
         .eq("id", input.classId)
         .maybeSingle(),
       // אימות שהילדים באמת שייכים ללקוח שנבחר, ולא נשלחו מהדפדפן.
@@ -135,6 +138,25 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   if (!cls) {
     return { success: false, error: "החוג לא נמצא." };
+  }
+
+  let weeklySlotId: string | null = input.weeklySlotId ?? null;
+  if (cls.pick_one_slot) {
+    if (!weeklySlotId) {
+      return { success: false, error: "נא לבחור מועד לשיבוץ." };
+    }
+    const { data: slot } = await supabase
+      .from("class_weekly_slots")
+      .select("id")
+      .eq("id", weeklySlotId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+    if (!slot) {
+      return { success: false, error: "המועד שנבחר אינו שייך לחוג זה." };
+    }
+    weeklySlotId = slot.id;
+  } else {
+    weeklySlotId = null;
   }
 
   if (!children || children.length !== childIds.length) {
@@ -190,6 +212,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         parent_id: input.parentId,
         child_id: childId,
         class_id: input.classId,
+        weekly_slot_id: weeklySlotId,
         type: "class" as const,
         status: "active" as const,
         payment_status: settledNow ? ("paid" as const) : ("unpaid" as const),
@@ -245,6 +268,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
           childIds,
           adminAssigned: true,
         },
+        installments: classInstallmentOptions(cls.billing_months),
       });
 
       if (!charge.success || !charge.redirectUrl) {

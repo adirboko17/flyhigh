@@ -12,7 +12,13 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
+import {
+  activityStartingPrice,
+  parseActivityPriceTiers,
+  usesGroupPricing,
+} from "@/lib/finance/activityPricing";
 import { isActivityProgram, type ProgramKind } from "@/lib/programs";
+import type { Json } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 
 export type AdminProgramRow = {
@@ -23,6 +29,8 @@ export type AdminProgramRow = {
   duration_months: number;
   kind: ProgramKind;
   status: keyof typeof LISTING_STATUS;
+  price_tiers?: Json | null;
+  extra_half_hour_price?: number | null;
 };
 
 const SECTION = {
@@ -45,15 +53,15 @@ const SECTION = {
     icon: "🎯",
     title: "פעילויות",
     newLabel: "+ פעילות חדשה",
-    empty: "אין פעילויות עדיין — הוסיפו פעילות עם שם ומחיר למשתתף.",
+    empty: "אין פעילויות עדיין — הוסיפו פעילות עם מחיר למשתתף או מדרגות לפי גודל קבוצה.",
     noMatch: "לא נמצאו פעילויות התואמות לחיפוש.",
     nameCol: "שם הפעילות",
-    priceCol: "מחיר למשתתף",
+    priceCol: "מחיר",
     extraCol: "אחרי הרכישה",
     modalNew: "פעילות חדשה",
     modalEdit: "עריכת פעילות",
     modalNewDesc:
-      "הלקוח בוחר כמה משתתפים ומשלם לפי זה. אחרי התשלום הבקשה נכנסת לתיאום מועדים כדי לתאם מועד בטלפון.",
+      "אפשר מחיר למשתתף או מחירון לפי גודל קבוצה. אחרי התשלום הבקשה נכנסת לתיאום מועדים כדי לתאם מועד בטלפון.",
   },
 } as const;
 
@@ -65,6 +73,20 @@ interface ProgramListProps {
 
 function normalizeSearch(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
+}
+
+function activityPriceLabel(item: AdminProgramRow) {
+  const tiers = parseActivityPriceTiers(item.price_tiers);
+  if (isActivityProgram(item.kind) && usesGroupPricing(tiers)) {
+    return {
+      amount: formatCurrency(activityStartingPrice(tiers, item.price)),
+      hint: "החל מ־ · לקבוצה",
+    };
+  }
+  return {
+    amount: formatCurrency(item.price),
+    hint: isActivityProgram(item.kind) ? "למשתתף" : null,
+  };
 }
 
 function matchesProgram(item: AdminProgramRow, query: string) {
@@ -133,12 +155,7 @@ export function ProgramList({
                     )}
                   </TD>
                   <TD className="whitespace-nowrap font-medium">
-                    {formatCurrency(p.price)}
-                    {isActivityProgram(p.kind) ? (
-                      <span className="block text-xs font-normal text-ink-400">
-                        למשתתף
-                      </span>
-                    ) : null}
+                    <ActivityPriceCell item={p} />
                   </TD>
                   <TD className="whitespace-nowrap text-ink-600">
                     {isActivityProgram(p.kind)
@@ -191,6 +208,18 @@ export function ProgramList({
           />
         )}
       </Modal>
+    </>
+  );
+}
+
+function ActivityPriceCell({ item }: { item: AdminProgramRow }) {
+  const label = activityPriceLabel(item);
+  return (
+    <>
+      {label.amount}
+      {label.hint ? (
+        <span className="block text-xs font-normal text-ink-400">{label.hint}</span>
+      ) : null}
     </>
   );
 }

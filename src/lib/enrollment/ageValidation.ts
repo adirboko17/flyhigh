@@ -1,4 +1,9 @@
-import { calcAge } from "@/utils/format";
+import {
+  calcAgeMonths,
+  formatAgeRangeMonths,
+  formatChildAge,
+  isAgeMonthsInRange,
+} from "@/lib/age-range";
 
 export type AgeRange = {
   ageMin: number | null;
@@ -7,65 +12,72 @@ export type AgeRange = {
 
 export type AgeEligibility = {
   eligible: boolean;
+  /** גיל בחודשים, לתצוגה דרך ageLabel. */
   age: number | null;
+  ageLabel: string | null;
   reason: string | null;
 };
 
-/** תווית טווח גילאים לתצוגה. */
-export function formatAgeRange(ageMin: number | null, ageMax: number | null): string {
-  if (ageMin !== null && ageMax !== null) return `גילאי ${ageMin}–${ageMax}`;
-  if (ageMin !== null) return `מגיל ${ageMin}`;
-  if (ageMax !== null) return `עד גיל ${ageMax}`;
-  return "כל הגילאים";
+/** תווית טווח גילאים לתצוגה. min/max בחודשים. */
+export function formatAgeRange(
+  ageMin: number | null,
+  ageMax: number | null
+): string {
+  return formatAgeRangeMonths(ageMin, ageMax) ?? "כל הגילאים";
 }
 
 /** האם לחוג מוגדר מגבלת גיל כלשהי. */
-export function hasAgeRestriction(ageMin: number | null, ageMax: number | null): boolean {
-  return ageMin !== null || ageMax !== null;
-}
-
-/** בדיקה האם גיל נמצא בטווח המותר. */
-export function isAgeInRange(
-  age: number,
+export function hasAgeRestriction(
   ageMin: number | null,
   ageMax: number | null
 ): boolean {
-  if (ageMin !== null && age < ageMin) return false;
-  if (ageMax !== null && age > ageMax) return false;
-  return true;
+  return ageMin !== null || ageMax !== null;
 }
 
-/** בדיקת זכאות לפי תאריך לידה וטווח גילאי החוג. */
+/** בדיקה האם גיל (בחודשים) נמצא בטווח המותר. */
+export function isAgeInRange(
+  ageMonths: number,
+  ageMin: number | null,
+  ageMax: number | null
+): boolean {
+  return isAgeMonthsInRange(ageMonths, ageMin, ageMax);
+}
+
+/** בדיקת זכאות לפי תאריך לידה וטווח גילאי החוג (בחודשים). */
 export function getAgeEligibility(
   birthDate: string | null | undefined,
   ageMin: number | null,
   ageMax: number | null,
   personName?: string
 ): AgeEligibility {
+  const ageMonths = calcAgeMonths(birthDate);
+  const ageLabel = formatChildAge(ageMonths);
+
   if (!hasAgeRestriction(ageMin, ageMax)) {
-    return { eligible: true, age: calcAge(birthDate), reason: null };
+    return { eligible: true, age: ageMonths, ageLabel, reason: null };
   }
 
-  const age = calcAge(birthDate);
   const label = personName ?? "המשתתף/ת";
 
-  if (age === null) {
+  if (ageMonths === null) {
     return {
       eligible: false,
       age: null,
+      ageLabel: null,
       reason: `יש להזין תאריך לידה עבור ${label} לפני ההרשמה.`,
     };
   }
 
-  if (!isAgeInRange(age, ageMin, ageMax)) {
+  if (!isAgeInRange(ageMonths, ageMin, ageMax)) {
     return {
       eligible: false,
-      age,
-      reason: `${label} (גיל ${age}) אינו/אינה בטווח הגילאים של החוג (${formatAgeRange(ageMin, ageMax)}).`,
+      age: ageMonths,
+      ageLabel,
+      reason: `${label} (גיל ${ageLabel}) אינו/אינה בטווח הגילאים של החוג (${formatAgeRange(ageMin, ageMax)}).`,
     };
   }
 
-  return { eligible: true, age, reason: null };
+  return { eligible: true, age: ageMonths, ageLabel, reason: null };
 }
 
 type Participant = {

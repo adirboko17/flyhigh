@@ -9,6 +9,7 @@ import {
   createLowProfilePage,
   getLowProfileResult,
   type CardcomCustomer,
+  type CardcomInstallments,
 } from "@/lib/integrations/cardcom";
 
 export type CardcomCheckoutResult =
@@ -52,6 +53,7 @@ export async function startCardcomCheckout(input: {
   amount: number;
   description: string;
   couponRedemptionId?: string | null;
+  installments?: CardcomInstallments | null;
 }): Promise<CardcomCheckoutResult> {
   const amount = round2(input.amount);
   const paymentIds = [...new Set(input.paymentIds.filter(Boolean))];
@@ -108,6 +110,7 @@ export async function startCardcomCheckout(input: {
       amount,
       description: input.description,
       customer: await loadCustomer(input.parentId),
+      installments: input.installments,
     });
 
     const { error: updateError } = await admin

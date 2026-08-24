@@ -1,4 +1,10 @@
+import { parseAgeBoundInput } from "@/lib/age-range";
+import {
+  CLASS_GENDER_POLICY,
+  type ClassGenderPolicy,
+} from "@/lib/class-audience";
 import { DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
+import { classPeriodTotal, parseBillingMonths } from "@/lib/finance/classPricing";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import type { PublicClass } from "@/types";
@@ -6,10 +12,43 @@ import type { PublicClass } from "@/types";
 export type ScheduleType = "weekly" | "custom";
 
 export type WeeklySlot = {
+  id?: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+  genderPolicy: ClassGenderPolicy;
 };
+
+export function weeklySlotKey(slot: Pick<WeeklySlot, "dayOfWeek" | "startTime">) {
+  return `${slot.dayOfWeek}|${slot.startTime.slice(0, 5)}`;
+}
+
+export function formatWeeklySlotLabel(
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+  genderPolicy?: ClassGenderPolicy | null
+) {
+  const start = startTime.slice(0, 5);
+  const end = endTime.slice(0, 5);
+  const base = `יום ${DAYS_OF_WEEK[dayOfWeek] ?? dayOfWeek} · ${start}–${end}`;
+  return genderPolicy ? `${base} · ${CLASS_GENDER_POLICY[genderPolicy]}` : base;
+}
+
+export function genderPolicyFromWeeklySlots(
+  slots: WeeklySlot[]
+): ClassGenderPolicy {
+  const genders = [...new Set(slots.map((slot) => slot.genderPolicy ?? "mixed"))];
+  return genders.length === 1 ? genders[0]! : "mixed";
+}
+
+export function parseSessionCount(
+  value: string | number | null | undefined
+): number | null {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1 || n > 80) return null;
+  return n;
+}
 
 export type ClassSessionDraft = {
   id?: string;
@@ -25,6 +64,7 @@ export type ClassScheduleState = {
   weeklySlots: WeeklySlot[];
   rangeStart: string;
   rangeEnd: string;
+  sessionCount: string;
   sessions: ClassSessionDraft[];
 };
 
@@ -40,32 +80,70 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
+function firstOnOrAfter(start: Date, dayOfWeek: number): Date {
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const delta = (dayOfWeek - cursor.getDay() + 7) % 7;
+  cursor.setDate(cursor.getDate() + delta);
+  return cursor;
+}
+
+export function lastSessionDate(sessions: ClassSessionDraft[]): string {
+  return sessions.reduce(
+    (latest, session) =>
+      session.sessionDate > latest ? session.sessionDate : latest,
+    ""
+  );
+}
+
 export function generateWeeklySessions(
   slots: WeeklySlot[],
   rangeStart: string,
-  rangeEnd: string
+  rangeEnd?: string | null,
+  sessionCount?: number | null
 ): ClassSessionDraft[] {
-  if (!rangeStart || !rangeEnd || slots.length === 0) return [];
+  if (!rangeStart || slots.length === 0) return [];
+
+  const usableSlots = slots.filter(
+    (slot) => slot.startTime.trim() && slot.endTime.trim()
+  );
+  if (usableSlots.length === 0) return [];
 
   const start = parseLocalDate(rangeStart);
-  const end = parseLocalDate(rangeEnd);
-  if (start > end) return [];
-
+  const count = parseSessionCount(sessionCount);
   const sessions: ClassSessionDraft[] = [];
-  const cursor = new Date(start);
 
-  while (cursor <= end) {
-    const dayOfWeek = cursor.getDay();
-    const slot = slots.find((s) => s.dayOfWeek === dayOfWeek);
-    if (slot) {
-      sessions.push({
-        sessionDate: formatLocalDate(cursor),
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        status: "scheduled",
-      });
+  if (count) {
+    for (const slot of usableSlots) {
+      const cursor = firstOnOrAfter(start, slot.dayOfWeek);
+      for (let i = 0; i < count; i++) {
+        sessions.push({
+          sessionDate: formatLocalDate(cursor),
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          status: "scheduled",
+        });
+        cursor.setDate(cursor.getDate() + 7);
+      }
     }
-    cursor.setDate(cursor.getDate() + 1);
+  } else {
+    if (!rangeEnd) return [];
+    const end = parseLocalDate(rangeEnd);
+    if (start > end) return [];
+
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const dayOfWeek = cursor.getDay();
+      const daySlots = usableSlots.filter((slot) => slot.dayOfWeek === dayOfWeek);
+      for (const slot of daySlots) {
+        sessions.push({
+          sessionDate: formatLocalDate(cursor),
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          status: "scheduled",
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
   }
 
   return sessions.sort(
@@ -75,19 +153,43 @@ export function generateWeeklySessions(
   );
 }
 
+export function ensureWeeklySessions(
+  schedule: ClassScheduleState
+): ClassScheduleState {
+  if (schedule.scheduleType !== "weekly") return schedule;
+  const hasActive = schedule.sessions.some((session) => session.status !== "cancelled");
+  if (hasActive) return schedule;
+
+  const generated = generateWeeklySessions(
+    schedule.weeklySlots,
+    schedule.rangeStart,
+    schedule.rangeEnd,
+    parseSessionCount(schedule.sessionCount)
+  );
+  if (generated.length === 0) return schedule;
+
+  return {
+    ...schedule,
+    sessions: mergeGeneratedSessions(schedule.sessions, generated),
+    rangeEnd: lastSessionDate(generated) || schedule.rangeEnd,
+  };
+}
+
 export function mergeGeneratedSessions(
   existing: ClassSessionDraft[],
   generated: ClassSessionDraft[]
 ): ClassSessionDraft[] {
-  // מפתח לפי תאריך בלבד — כדי ששינוי שעה של מפגש לא יימחק בעדכון הרשימה.
-  const existingByDate = new Map(
-    existing.map((session) => [session.sessionDate, session]),
+  const sessionKey = (session: ClassSessionDraft) =>
+    `${session.sessionDate}|${session.startTime.slice(0, 5)}`;
+  const existingByKey = new Map(
+    existing.map((session) => [sessionKey(session), session]),
   );
-  const usedDates = new Set<string>();
+  const usedKeys = new Set<string>();
 
   const merged = generated.map((generatedSession) => {
-    const prev = existingByDate.get(generatedSession.sessionDate);
-    usedDates.add(generatedSession.sessionDate);
+    const key = sessionKey(generatedSession);
+    const prev = existingByKey.get(key);
+    usedKeys.add(key);
     if (!prev) return generatedSession;
 
     return {
@@ -95,15 +197,12 @@ export function mergeGeneratedSessions(
       id: prev.id,
       status: prev.status,
       notes: prev.notes,
-      sessionDate: prev.sessionDate,
-      startTime: prev.startTime,
-      endTime: prev.endTime,
     };
   });
 
   // מפגשים ידניים/מבוטלים שלא נוצרו מחדש מהטווח נשארים ברשימה.
   for (const session of existing) {
-    if (usedDates.has(session.sessionDate)) continue;
+    if (usedKeys.has(sessionKey(session))) continue;
     if (session.status === "cancelled" || session.id) {
       merged.push(session);
     }
@@ -133,6 +232,11 @@ export function formatScheduleSummary(
   if (scheduleType === "custom") {
     if (active.length === 0) return "תאריכים מותאמים";
     return `${active.length} מפגשים · תאריכים מותאמים`;
+  }
+
+  if (weeklySlots.length > 1) {
+    const label = `${weeklySlots.length} מועדים בשבוע`;
+    return active.length > 0 ? `${label} · ${active.length} מפגשים` : label;
   }
 
   const days = formatWeeklyDays(weeklySlots.map((s) => s.dayOfWeek));
@@ -186,22 +290,124 @@ export function syncLegacyClassFields(
 
 export const emptyScheduleState = (): ClassScheduleState => ({
   scheduleType: "weekly",
-  weeklySlots: [{ dayOfWeek: 0, startTime: "", endTime: "" }],
+  weeklySlots: [
+    { dayOfWeek: 1, startTime: "16:00", endTime: "16:45", genderPolicy: "mixed" },
+  ],
   rangeStart: "",
   rangeEnd: "",
+  sessionCount: "",
   sessions: [],
 });
 
+export function sessionWeekday(sessionDate: string) {
+  const [year, month, day] = sessionDate.split("-").map(Number);
+  return new Date(year, month - 1, day).getDay();
+}
+
+export function sessionSlotKey(session: Pick<ClassSessionDraft, "sessionDate" | "startTime">) {
+  return weeklySlotKey({
+    dayOfWeek: sessionWeekday(session.sessionDate),
+    startTime: session.startTime,
+  });
+}
+
+export type SessionSlotGroup = {
+  key: string;
+  slot: WeeklySlot | null;
+  items: { session: ClassSessionDraft; index: number }[];
+};
+
+export function groupSessionsByWeeklySlot(
+  slots: WeeklySlot[],
+  sessions: ClassSessionDraft[]
+): SessionSlotGroup[] {
+  const groups = new Map<string, SessionSlotGroup>();
+
+  for (const slot of slots) {
+    const key = weeklySlotKey(slot);
+    groups.set(key, { key, slot, items: [] });
+  }
+
+  const unmatched: SessionSlotGroup = {
+    key: "unmatched",
+    slot: null,
+    items: [],
+  };
+
+  sessions.forEach((session, index) => {
+    if (!session.sessionDate) {
+      unmatched.items.push({ session, index });
+      return;
+    }
+    const key = sessionSlotKey(session);
+    const group = groups.get(key);
+    if (group) group.items.push({ session, index });
+    else unmatched.items.push({ session, index });
+  });
+
+  const byDate = (
+    a: SessionSlotGroup["items"][number],
+    b: SessionSlotGroup["items"][number]
+  ) =>
+    a.session.sessionDate.localeCompare(b.session.sessionDate) ||
+    a.session.startTime.localeCompare(b.session.startTime);
+
+  const result = [...groups.values()].filter((group) => group.items.length > 0);
+  for (const group of result) group.items.sort(byDate);
+  if (unmatched.items.length > 0) {
+    unmatched.items.sort(byDate);
+    result.push(unmatched);
+  }
+  return result;
+}
+
+export function nextWeeklySessionDate(
+  slot: Pick<WeeklySlot, "dayOfWeek">,
+  lastDate: string | null | undefined,
+  rangeStart: string
+): string {
+  if (lastDate) {
+    const cursor = parseLocalDate(lastDate);
+    cursor.setDate(cursor.getDate() + 7);
+    return formatLocalDate(cursor);
+  }
+  if (!rangeStart) return "";
+  return formatLocalDate(firstOnOrAfter(parseLocalDate(rangeStart), slot.dayOfWeek));
+}
+
+function inferSessionCount(slots: WeeklySlot[], sessions: ClassSessionDraft[]): string {
+  const first = slots[0];
+  if (!first) return "";
+  const start = first.startTime.slice(0, 5);
+  const matching = sessions.filter((session) => {
+    if (session.status === "cancelled") return false;
+    if (session.startTime.slice(0, 5) !== start) return false;
+    return sessionWeekday(session.sessionDate) === first.dayOfWeek;
+  });
+  return matching.length > 0 ? String(matching.length) : "";
+}
+
 export function weeklySlotsFromDb(
-  rows: { day_of_week: number; start_time: string; end_time: string }[]
+  rows: {
+    id?: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    gender_policy?: ClassGenderPolicy | null;
+  }[]
 ): WeeklySlot[] {
   return rows
     .map((r) => ({
+      id: r.id,
       dayOfWeek: r.day_of_week,
       startTime: r.start_time.slice(0, 5),
       endTime: r.end_time.slice(0, 5),
+      genderPolicy: r.gender_policy ?? "mixed",
     }))
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    .sort(
+      (a, b) =>
+        a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime)
+    );
 }
 
 export function sessionsFromDb(
@@ -240,10 +446,15 @@ export function formToPreviewClass(
     audience_type: PublicClass["audience_type"];
     age_min: string;
     age_max: string;
+    age_min_unit?: "years" | "months";
+    age_max_unit?: "years" | "months";
     grade_min: string;
     grade_max: string;
     capacity: string;
     price: string;
+    billing_months?: string;
+    price_mode?: "period" | "monthly";
+    pick_one_slot?: boolean;
   },
   schedule: ClassScheduleState,
   imageUrl: string | null,
@@ -257,8 +468,12 @@ export function formToPreviewClass(
     schedule.sessions
   );
   const activeSessions = schedule.sessions.filter((s) => s.status !== "cancelled");
+  const billingMonths =
+    form.price_mode === "monthly"
+      ? parseBillingMonths(Number(form.billing_months))
+      : null;
   const proration = prorateClassPrice(
-    Number(form.price) || 0,
+    classPeriodTotal(Number(form.price) || 0, billingMonths),
     schedule.sessions.map((session) => ({
       session_date: session.sessionDate,
       start_time: session.startTime,
@@ -267,6 +482,7 @@ export function formToPreviewClass(
     todayInIsrael()
   );
   const isGrade = form.audience_type === "grade";
+  const isOpen = form.audience_type === "open";
 
   return {
     id: "preview",
@@ -274,13 +490,22 @@ export function formToPreviewClass(
     description: form.description || "",
     category: form.category || "",
     level: form.level || "",
-    gender_policy: form.gender_policy || "mixed",
+    gender_policy:
+      schedule.scheduleType === "weekly" && schedule.weeklySlots.length > 0
+        ? genderPolicyFromWeeklySlots(schedule.weeklySlots)
+        : form.gender_policy || "mixed",
     audience_type: form.audience_type || "age",
-    age_min: isGrade ? 0 : form.age_min ? Number(form.age_min) : 0,
-    age_max: isGrade ? 0 : form.age_max ? Number(form.age_max) : 0,
+    age_min: (isOpen || isGrade
+      ? null
+      : parseAgeBoundInput(form.age_min, form.age_min_unit ?? "years")) as PublicClass["age_min"],
+    age_max: (isOpen || isGrade
+      ? null
+      : parseAgeBoundInput(form.age_max, form.age_max_unit ?? "years")) as PublicClass["age_max"],
     grade_min: isGrade && form.grade_min ? Number(form.grade_min) : 0,
     grade_max: isGrade && form.grade_max ? Number(form.grade_max) : 0,
     capacity,
+    billing_months: billingMonths,
+    pick_one_slot: form.pick_one_slot ?? true,
     price: Number(form.price) || 0,
     start_date: legacy.start_date ?? "",
     end_date: legacy.end_date ?? "",
@@ -311,8 +536,15 @@ export function buildInitialSchedule(
     end_time?: string | null;
     start_date?: string | null;
     end_date?: string | null;
+    gender_policy?: ClassGenderPolicy | null;
   },
-  slotRows: { day_of_week: number; start_time: string; end_time: string }[],
+  slotRows: {
+    id?: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    gender_policy?: ClassGenderPolicy | null;
+  }[],
   sessionRows: {
     id: string;
     session_date: string;
@@ -332,15 +564,18 @@ export function buildInitialSchedule(
               dayOfWeek: classItem.day_of_week,
               startTime: classItem.start_time?.slice(0, 5) ?? "",
               endTime: classItem.end_time?.slice(0, 5) ?? "",
+              genderPolicy: classItem.gender_policy ?? "mixed",
             },
           ]
         : [];
+  const sessions = sessionsFromDb(sessionRows);
 
   return {
     scheduleType,
     weeklySlots,
     rangeStart: classItem.start_date ?? "",
     rangeEnd: classItem.end_date ?? "",
-    sessions: sessionsFromDb(sessionRows),
+    sessionCount: inferSessionCount(weeklySlots, sessions),
+    sessions,
   };
 }

@@ -24,6 +24,15 @@ import {
   type PlanKind,
 } from "@/lib/enrollment/planActions";
 import {
+  activityDefaultPeopleCount,
+  activityPeopleCap,
+  describeActivityPeopleRange,
+  extraHalfHourLabel,
+  quoteActivityPrice,
+  usesGroupPricing,
+  type ActivityPriceTier,
+} from "@/lib/finance/activityPricing";
+import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
   peopleCountLabel,
@@ -55,6 +64,9 @@ interface PlanPurchaseButtonProps {
   durationMinutes?: number | null;
   /** מנוי או פעילות — רלוונטי רק כש־planKind הוא program. */
   programKind?: ProgramKind;
+  /** מדרגות מחיר לקבוצה — רק לפעילות. */
+  priceTiers?: ActivityPriceTier[];
+  extraHalfHourPrice?: number | null;
   featured?: boolean;
   viewer: PlanViewer;
 }
@@ -67,6 +79,8 @@ export function PlanPurchaseButton({
   entriesCount,
   durationMinutes,
   programKind,
+  priceTiers = [],
+  extraHalfHourPrice = null,
   featured = false,
   viewer,
 }: PlanPurchaseButtonProps) {
@@ -152,6 +166,8 @@ export function PlanPurchaseButton({
         entriesCount={entriesCount}
         durationMinutes={durationMinutes}
         programKind={programKind}
+        priceTiers={priceTiers}
+        extraHalfHourPrice={extraHalfHourPrice}
         parentName={viewer.parentName}
         kids={viewer.children}
       />
@@ -167,6 +183,8 @@ interface PlanPurchaseTriggerProps {
   entriesCount?: number | null;
   durationMinutes?: number | null;
   programKind?: ProgramKind;
+  priceTiers?: ActivityPriceTier[];
+  extraHalfHourPrice?: number | null;
   viewer: PlanViewer;
   children: ReactNode;
   className?: string;
@@ -181,6 +199,8 @@ export function PlanPurchaseTrigger({
   entriesCount,
   durationMinutes,
   programKind,
+  priceTiers = [],
+  extraHalfHourPrice = null,
   viewer,
   children,
   className,
@@ -224,6 +244,8 @@ export function PlanPurchaseTrigger({
           entriesCount={entriesCount}
           durationMinutes={durationMinutes}
           programKind={programKind}
+          priceTiers={priceTiers}
+          extraHalfHourPrice={extraHalfHourPrice}
           parentName={viewer.parentName}
           kids={viewer.children}
         />
@@ -242,6 +264,8 @@ interface PlanCheckoutDialogProps {
   entriesCount?: number | null;
   durationMinutes?: number | null;
   programKind?: ProgramKind;
+  priceTiers?: ActivityPriceTier[];
+  extraHalfHourPrice?: number | null;
   parentName: string;
   kids: Child[];
 }
@@ -256,6 +280,8 @@ function PlanCheckoutDialog({
   entriesCount,
   durationMinutes,
   programKind,
+  priceTiers = [],
+  extraHalfHourPrice = null,
   parentName,
   kids,
 }: PlanCheckoutDialogProps) {
@@ -264,12 +290,17 @@ function PlanCheckoutDialog({
   const isPrivateLesson = planKind === "private_lesson";
   const isActivity = isActivityProgram(programKind);
   const usesQuantity = isPrivateLesson || isActivity;
+  const groupPricing = isActivity && usesGroupPricing(priceTiers);
+  const peopleCap = activityPeopleCap(priceTiers);
+  const extraHalfHour = extraHalfHourLabel(extraHalfHourPrice);
 
   const [step, setStep] = useState<"select" | "payment" | "success">("select");
   // בלי ילדים בחשבון הרכישה תמיד נרשמת על שם ההורה, ולכן היא מסומנת מראש.
   const [includeSelf, setIncludeSelf] = useState(!hasChildren);
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(() =>
+    isActivity ? activityDefaultPeopleCount(priceTiers) : 1
+  );
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -292,9 +323,13 @@ function PlanCheckoutDialog({
   ];
   const count = participants.length;
   const effectiveQuantity = usesQuantity ? quantity : 1;
+  const activityQuote = isActivity
+    ? quoteActivityPrice(effectiveQuantity, price, priceTiers)
+    : null;
   const listTotal = isActivity
-    ? Math.round(price * effectiveQuantity * 100) / 100
+    ? activityQuote?.amount ?? 0
     : Math.round(price * effectiveQuantity * count * 100) / 100;
+  const invalidGroupCount = isActivity && activityQuote === null;
   const couponDiscount = coupon?.discountAmount ?? 0;
   const total = Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
   const deferred = isDeferredPaymentMethod(method);
@@ -340,7 +375,7 @@ function PlanCheckoutDialog({
     setReceiptLabel(EMPTY_RECEIPT_LABEL_CHOICE);
     setSelectedChildIds([]);
     setIncludeSelf(!hasChildren);
-    setQuantity(1);
+    setQuantity(isActivity ? activityDefaultPeopleCount(priceTiers) : 1);
     onClose();
   }
 
@@ -439,7 +474,9 @@ function PlanCheckoutDialog({
                 {planTitle}
               </p>
               <p className="shrink-0 font-display font-extrabold text-brand-700">
-                {formatCurrency(price)}
+                {formatCurrency(
+                  groupPricing ? (activityQuote?.amount ?? price) : price
+                )}
               </p>
             </div>
             {planKind === "pool_pass" && entriesCount ? (
@@ -451,7 +488,9 @@ function PlanCheckoutDialog({
                 {durationMinutes} דקות לשיעור · מחיר לשיעור למשתתף
               </p>
             ) : isActivity ? (
-              <p className="mt-0.5 text-sm text-ink-500">מחיר למשתתף</p>
+              <p className="mt-0.5 text-sm text-ink-500">
+                {groupPricing ? "מחיר לקבוצה לפי מספר המשתתפים" : "מחיר למשתתף"}
+              </p>
             ) : (
               <p className="mt-0.5 text-sm text-ink-500">מחיר לכל משתתף</p>
             )}
@@ -497,7 +536,107 @@ function PlanCheckoutDialog({
             )}
           </fieldset>
 
-          {usesQuantity && (
+          {usesQuantity && groupPricing && (
+            <fieldset>
+              <legend className="mb-2 text-sm font-semibold text-ink-800">
+                כמה משתתפים?
+              </legend>
+              <div className="space-y-2">
+                {priceTiers.map((tier) => {
+                  const selected = activityQuote?.tier === tier || (
+                    quantity >= tier.minPeople &&
+                    (tier.maxPeople === null || quantity <= tier.maxPeople)
+                  );
+                  return (
+                    <label
+                      key={`${tier.minPeople}-${tier.maxPeople ?? "up"}`}
+                      className={cn(
+                        "flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3.5 py-3 transition-colors",
+                        selected
+                          ? "border-brand-500 bg-brand-50"
+                          : "border-ink-200 bg-white hover:border-ink-300"
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-ink-800">
+                          {describeActivityPeopleRange(tier)}
+                        </span>
+                        {tier.note && (
+                          <span className="block text-xs text-ink-500">
+                            {tier.note}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-sm font-bold text-brand-700">
+                        {formatCurrency(tier.price)}
+                      </span>
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        name="activity-tier"
+                        checked={selected}
+                        onChange={() => {
+                          resetCoupon();
+                          setQuantity(tier.minPeople);
+                        }}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              {activityQuote?.tier &&
+                (activityQuote.tier.maxPeople === null ||
+                  activityQuote.tier.maxPeople > activityQuote.tier.minPeople) && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-200 text-lg font-bold text-ink-700 hover:bg-ink-50 disabled:opacity-40"
+                      disabled={quantity <= activityQuote.tier.minPeople}
+                      onClick={() => {
+                        resetCoupon();
+                        setQuantity((q) =>
+                          Math.max(activityQuote.tier!.minPeople, q - 1)
+                        );
+                      }}
+                      aria-label="הפחתת כמות"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[3rem] text-center font-display text-xl font-bold tabular-nums text-ink-900">
+                      {quantity}
+                    </span>
+                    <button
+                      type="button"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-200 text-lg font-bold text-ink-700 hover:bg-ink-50 disabled:opacity-40"
+                      disabled={
+                        quantity >=
+                        (activityQuote.tier.maxPeople ?? peopleCap)
+                      }
+                      onClick={() => {
+                        resetCoupon();
+                        setQuantity((q) =>
+                          Math.min(
+                            activityQuote.tier!.maxPeople ?? peopleCap,
+                            q + 1
+                          )
+                        );
+                      }}
+                      aria-label="הוספת כמות"
+                    >
+                      +
+                    </button>
+                    <span className="text-sm text-ink-500">
+                      מספר מדויק בתוך המדרגה
+                    </span>
+                  </div>
+                )}
+              {extraHalfHour && (
+                <p className="mt-2 text-xs text-ink-500">{extraHalfHour} — בתיאום בטלפון</p>
+              )}
+            </fieldset>
+          )}
+
+          {usesQuantity && !groupPricing && (
             <fieldset>
               <legend className="mb-2 text-sm font-semibold text-ink-800">
                 {isActivity ? "כמה משתתפים?" : "כמה שיעורים?"}
@@ -562,17 +701,23 @@ function PlanCheckoutDialog({
 
           <div className="space-y-2 border-t border-ink-100 pt-4 text-sm">
             <div className="flex justify-between gap-3 text-ink-600">
-              <span>
+                <span>
                 מחיר ל
                 {isActivity
-                  ? "משתתף"
+                  ? groupPricing
+                    ? "קבוצה"
+                    : "משתתף"
                   : planKind === "program"
                     ? "מנוי"
                     : planKind === "private_lesson"
                       ? "שיעור"
                       : "כרטיסייה"}
               </span>
-              <span className="shrink-0">{formatCurrency(price)}</span>
+              <span className="shrink-0">
+                {formatCurrency(
+                  groupPricing ? (activityQuote?.amount ?? price) : price
+                )}
+              </span>
             </div>
             {isPrivateLesson && (
               <div className="flex justify-between gap-3 text-ink-600">
@@ -629,10 +774,14 @@ function PlanCheckoutDialog({
             <Button
               type="button"
               className="sm:flex-1"
-              disabled={count === 0}
+              disabled={count === 0 || invalidGroupCount}
               onClick={() => setStep("payment")}
             >
-              {count === 0 ? "בחרו משתתפים" : "המשך לתשלום"}
+              {count === 0
+                ? "בחרו משתתפים"
+                : invalidGroupCount
+                  ? "בחרו כמות מהמחירון"
+                  : "המשך לתשלום"}
             </Button>
           </div>
         </div>

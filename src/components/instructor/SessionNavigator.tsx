@@ -12,6 +12,7 @@ export type ClassSessionOption = {
   start_time: string;
   end_time: string;
   status: Enums<"class_session_status">;
+  weekly_slot_id?: string | null;
 };
 
 interface SessionNavigatorProps {

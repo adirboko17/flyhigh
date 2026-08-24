@@ -12,8 +12,10 @@ import {
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
+  activityCardPresentation,
   programDurationLabel,
 } from "@/lib/program-cards";
+import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
 import { isActivityProgram } from "@/lib/programs";
 import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
@@ -137,13 +139,15 @@ export default async function ProgramsPage() {
             <SectionHead
               eyebrow="הפוגה"
               title="פעילויות"
-              sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
+              sub="בוחרים כמה אנשים, משלמים לפי המחירון, ומתאמים מועד"
               accent="var(--logo-magenta)"
             />
           </ScrollReveal>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            {activities.map((program, index) => (
+            {activities.map((program, index) => {
+                const card = activityCardPresentation(program);
+                return (
                 <ScrollReveal
                   key={program.id}
                   delay={Math.min((index % 2) * 90, 90)}
@@ -155,23 +159,29 @@ export default async function ProgramsPage() {
                     planTitle={program.title}
                     price={program.price}
                     programKind={program.kind}
+                    priceTiers={parseActivityPriceTiers(program.price_tiers)}
+                    extraHalfHourPrice={program.extra_half_hour_price}
                     viewer={viewer}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard
                       compact
                       name={program.title}
-                      desc={program.description}
-                      price={formatCurrency(program.price)}
-                      period={ACTIVITY_CARD_TEMPLATE.period}
-                      stub={{ kind: "people" }}
-                      features={ACTIVITY_CARD_TEMPLATE.features}
+                      desc={program.description || card.hint}
+                      price={card.price}
+                      period={card.period}
+                      pricePrefix={card.pricePrefix}
+                      priceRows={card.priceRows}
+                      extraLine={card.extraLine}
+                      stub={card.stub}
+                      features={card.features}
                       icon={ACTIVITY_CARD_TEMPLATE.icon}
                       accent={ACTIVITY_CARD_TEMPLATE.accent}
                     />
                   </PlanPurchaseTrigger>
                 </ScrollReveal>
-              ))}
+                );
+              })}
           </div>
         </section>
       )}

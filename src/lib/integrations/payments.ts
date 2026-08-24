@@ -3,6 +3,7 @@
  */
 
 import { startCardcomCheckout } from "@/lib/payments/cardcomCheckout";
+import type { CardcomInstallments } from "@/lib/integrations/cardcom";
 
 export interface CreateChargeInput {
   amount: number;
@@ -13,6 +14,7 @@ export interface CreateChargeInput {
   paymentIds?: string[];
   couponRedemptionId?: string | null;
   metadata?: Record<string, unknown>;
+  installments?: CardcomInstallments | null;
 }
 
 export interface ChargeResult {
@@ -48,6 +50,7 @@ class CardcomPaymentProvider implements PaymentProvider {
       amount: input.amount,
       description: input.description,
       couponRedemptionId: input.couponRedemptionId,
+      installments: input.installments,
     });
 
     if (!checkout.success) {

@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import { uploadClassImage } from "@/lib/storage/classImage";
 import {
   emptyScheduleState,
+  ensureWeeklySessions,
+  genderPolicyFromWeeklySlots,
+  parseSessionCount,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
 import { saveClassSchedule } from "@/lib/scheduling/saveClassSchedule";
@@ -22,10 +25,19 @@ import {
   SiblingDiscountSummary,
 } from "@/components/admin/SiblingDiscountEditor";
 import {
+  classPeriodTotal,
+  parseBillingMonths,
+} from "@/lib/finance/classPricing";
+import {
   parseSiblingTiers,
   serializeSiblingTiers,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
+import {
+  monthsToFormBound,
+  parseAgeBoundInput,
+  type AgeUnit,
+} from "@/lib/age-range";
 import {
   CLASS_GENDER_POLICY,
   type ClassAudienceType,
@@ -33,6 +45,7 @@ import {
 } from "@/lib/class-audience";
 import { SCHOOL_GRADES, parseSchoolGradeInput } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
+import { formatCurrency } from "@/utils/format";
 import type { Json } from "@/types/database.types";
 import {
   defaultClassCategory,
@@ -55,6 +68,8 @@ export type ClassFormData = {
   grade_max: number | null;
   capacity: number;
   price: number;
+  billing_months: number | null;
+  pick_one_slot: boolean;
   instructor_id: string | null;
   status: "active" | "inactive" | "full";
   image_url: string | null;
@@ -80,10 +95,15 @@ const emptyForm = {
   audience_type: "age" as ClassAudienceType,
   age_min: "",
   age_max: "",
+  age_min_unit: "years" as AgeUnit,
+  age_max_unit: "years" as AgeUnit,
   grade_min: "",
   grade_max: "",
   capacity: "10",
   price: "",
+  pick_one_slot: true,
+  price_mode: "period" as const,
+  billing_months: "10",
   instructor_id: "",
   image_url: "",
 };
@@ -102,12 +122,19 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
     level: existing.level ?? "",
     gender_policy: existing.gender_policy ?? "mixed",
     audience_type: existing.audience_type ?? "age",
-    age_min: existing.age_min?.toString() ?? "",
-    age_max: existing.age_max?.toString() ?? "",
+    age_min: monthsToFormBound(existing.age_min).value,
+    age_max: monthsToFormBound(existing.age_max).value,
+    age_min_unit: monthsToFormBound(existing.age_min).unit,
+    age_max_unit: monthsToFormBound(existing.age_max).unit,
     grade_min: existing.grade_min?.toString() ?? "",
     grade_max: existing.grade_max?.toString() ?? "",
     capacity: existing.capacity.toString(),
     price: existing.price.toString(),
+    pick_one_slot: existing.pick_one_slot ?? true,
+    price_mode: parseBillingMonths(existing.billing_months)
+      ? ("monthly" as const)
+      : ("period" as const),
+    billing_months: String(parseBillingMonths(existing.billing_months) ?? 10),
     instructor_id: existing.instructor_id ?? "",
     image_url: existing.image_url ?? "",
   };
@@ -116,12 +143,17 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
 function toPayload(
   form: ReturnType<typeof toFormState>,
   imageUrl: string | null,
-  scheduleType: ClassScheduleState["scheduleType"],
+  schedule: ClassScheduleState,
   status: ClassFormData["status"],
   siblingDiscountTiers: Json | null
 ) {
   const audienceType = form.audience_type;
   const isGrade = audienceType === "grade";
+  const isOpen = audienceType === "open";
+  const weeklyGender =
+    schedule.scheduleType === "weekly" && schedule.weeklySlots.length > 0
+      ? genderPolicyFromWeeklySlots(schedule.weeklySlots)
+      : form.gender_policy;
 
   return {
     sibling_discount_tiers: siblingDiscountTiers,
@@ -129,23 +161,49 @@ function toPayload(
     description: form.description || null,
     category: form.category || null,
     level: form.level || null,
-    gender_policy: form.gender_policy,
+    gender_policy: weeklyGender,
     audience_type: audienceType,
-    age_min: isGrade ? null : form.age_min ? Number(form.age_min) : null,
-    age_max: isGrade ? null : form.age_max ? Number(form.age_max) : null,
+    age_min: isGrade || isOpen
+      ? null
+      : parseAgeBoundInput(form.age_min, form.age_min_unit),
+    age_max: isGrade || isOpen
+      ? null
+      : parseAgeBoundInput(form.age_max, form.age_max_unit),
     grade_min: isGrade ? parseSchoolGradeInput(form.grade_min) : null,
     grade_max: isGrade ? parseSchoolGradeInput(form.grade_max) : null,
     capacity: Number(form.capacity) || 0,
     price: Number(form.price) || 0,
+    billing_months:
+      form.price_mode === "monthly"
+        ? parseBillingMonths(Number(form.billing_months))
+        : null,
     instructor_id: form.instructor_id || null,
+    pick_one_slot: form.pick_one_slot,
     status,
     image_url: imageUrl,
-    schedule_type: scheduleType,
+    schedule_type: schedule.scheduleType,
   };
 }
 
-function validateAudience(form: ReturnType<typeof toFormState>): string | null {
-  if (!form.gender_policy) return "נא לבחור למי מיועד החוג.";
+function formatClassSaveError(error: { code?: string; message?: string } | null) {
+  const text = `${error?.code ?? ""} ${error?.message ?? ""}`;
+  if (text.includes("classes_audience_fields")) {
+    return "לא ניתן לשמור את הגדרת קהל היעד. בדקו גילאים, כיתות, או «פתוח לכולם».";
+  }
+  return "אירעה שגיאה בשמירת החוג. בדקו את הפרטים ונסו שוב.";
+}
+
+function validateAudience(
+  form: ReturnType<typeof toFormState>,
+  schedule: ClassScheduleState
+): string | null {
+  if (schedule.scheduleType !== "weekly" && !form.gender_policy) {
+    return "נא לבחור למי מיועד החוג.";
+  }
+
+  if (form.audience_type === "open") {
+    return null;
+  }
 
   if (form.audience_type === "grade") {
     const min = parseSchoolGradeInput(form.grade_min);
@@ -159,8 +217,8 @@ function validateAudience(form: ReturnType<typeof toFormState>): string | null {
     return null;
   }
 
-  const min = form.age_min ? Number(form.age_min) : null;
-  const max = form.age_max ? Number(form.age_max) : null;
+  const min = parseAgeBoundInput(form.age_min, form.age_min_unit);
+  const max = parseAgeBoundInput(form.age_max, form.age_max_unit);
   if (min !== null && max !== null && min > max) {
     return "גיל המינימום לא יכול להיות גבוה מגיל המקסימום.";
   }
@@ -171,11 +229,21 @@ function validateSchedule(schedule: ClassScheduleState): string | null {
   const active = schedule.sessions.filter((s) => s.status !== "cancelled");
 
   if (schedule.scheduleType === "weekly") {
-    if (schedule.weeklySlots.length === 0) {
-      return "בחרו לפחות יום אחד בשבוע.";
+    const validSlots = schedule.weeklySlots.filter(
+      (slot) => slot.startTime.trim() && slot.endTime.trim()
+    );
+    if (validSlots.length === 0) {
+      return "הוסיפו לפחות מועד אחד עם שעות.";
     }
-    if (!schedule.rangeStart || !schedule.rangeEnd) {
-      return "הגדירו טווח תאריכים ללוח הזמנים.";
+    if (!schedule.rangeStart) {
+      return "הזינו תאריך התחלה ללוח הזמנים.";
+    }
+    if (
+      active.length === 0 &&
+      !parseSessionCount(schedule.sessionCount) &&
+      !schedule.rangeEnd
+    ) {
+      return "הזינו מספר מפגשים או תאריך סיום.";
     }
   }
 
@@ -246,7 +314,20 @@ export function ClassForm({
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
   function setAudienceType(audienceType: ClassAudienceType) {
-    setForm((f) => ({ ...f, audience_type: audienceType }));
+    setForm((f) => ({
+      ...f,
+      audience_type: audienceType,
+      ...(audienceType === "open"
+        ? {
+            age_min: "",
+            age_max: "",
+            age_min_unit: "years" as AgeUnit,
+            age_max_unit: "years" as AgeUnit,
+            grade_min: "",
+            grade_max: "",
+          }
+        : {}),
+    }));
   }
 
   function handleImageSelect(file: File) {
@@ -267,13 +348,26 @@ export function ClassForm({
     e.preventDefault();
     setError(null);
 
-    const audienceError = validateAudience(form);
+    const nextSchedule = ensureWeeklySessions(schedule);
+    if (nextSchedule !== schedule) {
+      setSchedule(nextSchedule);
+    }
+
+    const audienceError = validateAudience(form, nextSchedule);
     if (audienceError) {
       setError(audienceError);
       return;
     }
 
-    const scheduleError = validateSchedule(schedule);
+    if (
+      form.price_mode === "monthly" &&
+      !parseBillingMonths(Number(form.billing_months))
+    ) {
+      setError("נא לבחור בין 2 ל־12 חודשים לחוג שמתומחר לפי חודש.");
+      return;
+    }
+
+    const scheduleError = validateSchedule(nextSchedule);
     if (scheduleError) {
       setError(scheduleError);
       return;
@@ -297,7 +391,7 @@ export function ClassForm({
     const payload = toPayload(
       form,
       imageUrl,
-      schedule.scheduleType,
+      nextSchedule,
       existing?.status ?? "active",
       usesDefaultDiscount ? null : serializeSiblingTiers(siblingTiers)
     );
@@ -311,7 +405,7 @@ export function ClassForm({
         .eq("id", existing!.id);
 
       if (updateError) {
-        setError("אירעה שגיאה בשמירת החוג. בדקו את הפרטים ונסו שוב.");
+        setError(formatClassSaveError(updateError));
         setLoading(false);
         return;
       }
@@ -323,7 +417,7 @@ export function ClassForm({
         .single();
 
       if (insertError || !inserted) {
-        setError("אירעה שגיאה בשמירת החוג. בדקו את הפרטים ונסו שוב.");
+        setError(formatClassSaveError(insertError));
         setLoading(false);
         return;
       }
@@ -331,7 +425,7 @@ export function ClassForm({
       classId = inserted.id;
     }
 
-    const scheduleSave = await saveClassSchedule(supabase, classId!, schedule);
+    const scheduleSave = await saveClassSchedule(supabase, classId!, nextSchedule);
     if (scheduleSave.error) {
       setError(scheduleSave.error);
       setLoading(false);
@@ -395,32 +489,36 @@ export function ClassForm({
                 למי מיועד החוג
               </h3>
               <p className="mt-0.5 text-sm text-ink-500">
-                הגדירו מגדר וטווח גילאים או כיתות להרשמה.
+                {schedule.scheduleType === "weekly"
+                  ? "מגדר נקבע לכל מועד בלוח הזמנים. כאן מגדירים גילאים, כיתות, או חוג פתוח לכולם."
+                  : "הגדירו מגדר, וגם טווח גילאים, כיתות, או חוג פתוח לכולם."}
               </p>
             </div>
 
-            <Field label="מגדר" required>
-              <Select
-                value={form.gender_policy}
-                onChange={set("gender_policy")}
-                required
-              >
-                {(Object.keys(CLASS_GENDER_POLICY) as ClassGenderPolicy[]).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {CLASS_GENDER_POLICY[value]}
-                    </option>
-                  )
-                )}
-              </Select>
-            </Field>
+            {schedule.scheduleType !== "weekly" && (
+              <Field label="מגדר" required>
+                <Select
+                  value={form.gender_policy}
+                  onChange={set("gender_policy")}
+                  required
+                >
+                  {(Object.keys(CLASS_GENDER_POLICY) as ClassGenderPolicy[]).map(
+                    (value) => (
+                      <option key={value} value={value}>
+                        {CLASS_GENDER_POLICY[value]}
+                      </option>
+                    )
+                  )}
+                </Select>
+              </Field>
+            )}
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <AudienceModeOption
                 selected={form.audience_type === "age"}
                 onSelect={() => setAudienceType("age")}
                 title="לפי גיל"
-                hint="גיל מינימום ומקסימום"
+                hint="שנים או חודשים"
                 disabled={loading}
               />
               <AudienceModeOption
@@ -430,28 +528,49 @@ export function ClassForm({
                 hint="מכיתה ועד כיתה"
                 disabled={loading}
               />
+              <AudienceModeOption
+                selected={form.audience_type === "open"}
+                onSelect={() => setAudienceType("open")}
+                title="פתוח לכולם"
+                hint="בלי הגבלת גיל או כיתה"
+                disabled={loading}
+              />
             </div>
 
-            {form.audience_type === "age" ? (
-              <div className="grid grid-cols-2 gap-4 sm:gap-5">
-                <Field label="גיל מינימום">
-                  <Input
-                    type="number"
-                    min={0}
+            {form.audience_type === "open" ? (
+              <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+                כל הילדים יכולים להירשם. אם בחרתם מגדר בנים או בנות — ההגבלה
+                הזאת עדיין חלה.
+              </p>
+            ) : form.audience_type === "age" ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                  <AgeBoundField
+                    label="גיל מינימום"
                     value={form.age_min}
-                    onChange={set("age_min")}
-                    placeholder="למשל: 4"
+                    unit={form.age_min_unit}
+                    onValueChange={set("age_min")}
+                    onUnitChange={(unit) =>
+                      setForm((f) => ({ ...f, age_min_unit: unit }))
+                    }
+                    placeholder="2"
+                    disabled={loading}
                   />
-                </Field>
-                <Field label="גיל מקסימום">
-                  <Input
-                    type="number"
-                    min={0}
+                  <AgeBoundField
+                    label="גיל מקסימום"
                     value={form.age_max}
-                    onChange={set("age_max")}
-                    placeholder="למשל: 8"
+                    unit={form.age_max_unit}
+                    onValueChange={set("age_max")}
+                    onUnitChange={(unit) =>
+                      setForm((f) => ({ ...f, age_max_unit: unit }))
+                    }
+                    placeholder="3"
+                    disabled={loading}
                   />
-                </Field>
+                </div>
+                <p className="text-xs text-ink-500">
+                  לחוג פעוטות אפשר למשל מינימום 2 חודשים ומקסימום 3 שנים.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4 sm:gap-5">
@@ -486,29 +605,100 @@ export function ClassForm({
               </div>
             )}
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="מכסת משתתפים" required>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.capacity}
-                  onChange={set("capacity")}
-                  placeholder="למשל: 10"
-                  required
-                />
-              </Field>
-              <Field label="מחיר (₪)" required>
+            <Field label="מכסת משתתפים" required>
+              <Input
+                type="number"
+                min={1}
+                value={form.capacity}
+                onChange={set("capacity")}
+                placeholder="למשל: 10"
+                required
+              />
+            </Field>
+
+            <div>
+              <h4 className="text-sm font-semibold text-ink-800">תמחור</h4>
+              <p className="mt-0.5 text-sm text-ink-500">
+                חוג לפי חודש מחויב על כל התקופה — אי אפשר לקנות חודש בודד.
+                בדף הסליקה הלקוח יכול לפרוס לתשלומים.
+              </p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AudienceModeOption
+                selected={form.price_mode === "period"}
+                onSelect={() =>
+                  setForm((f) => ({ ...f, price_mode: "period" }))
+                }
+                title="סכום לתקופה"
+                hint="מחיר אחד לכל החוג"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={form.price_mode === "monthly"}
+                onSelect={() =>
+                  setForm((f) => ({ ...f, price_mode: "monthly" }))
+                }
+                title="לפי חודש"
+                hint="מחיר חודשי × מספר חודשים"
+                disabled={loading}
+              />
+            </div>
+
+            <div
+              className={
+                form.price_mode === "monthly"
+                  ? "grid gap-5 sm:grid-cols-2"
+                  : undefined
+              }
+            >
+              <Field
+                label={
+                  form.price_mode === "monthly" ? "מחיר לחודש (₪)" : "מחיר לתקופה (₪)"
+                }
+                required
+              >
                 <Input
                   type="number"
                   min={0}
                   step="1"
                   value={form.price}
                   onChange={set("price")}
-                  placeholder="למשל: 320"
+                  placeholder={form.price_mode === "monthly" ? "למשל: 160" : "למשל: 320"}
                   required
                 />
               </Field>
+              {form.price_mode === "monthly" && (
+                <Field label="מספר חודשים" required>
+                  <Input
+                    type="number"
+                    min={2}
+                    max={12}
+                    step="1"
+                    value={form.billing_months}
+                    onChange={set("billing_months")}
+                    required
+                  />
+                </Field>
+              )}
             </div>
+            {form.price_mode === "monthly" && Number(form.price) > 0 && (
+              <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+                סה״כ לתקופה:{" "}
+                <span className="font-semibold text-ink-900">
+                  {formatCurrency(
+                    classPeriodTotal(
+                      Number(form.price),
+                      Number(form.billing_months)
+                    )
+                  )}
+                </span>
+                {" · "}
+                הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
+                {parseBillingMonths(Number(form.billing_months)) ?? "—"} תשלומים
+                בקארדקום.
+              </p>
+            )}
             <Field label="מדריכה">
               <Select value={form.instructor_id} onChange={set("instructor_id")}>
                 <option value="">ללא שיוך</option>
@@ -571,6 +761,31 @@ export function ClassForm({
 
         <Card>
           <CardContent className="space-y-5">
+            <div>
+              <h3 className="font-display text-base font-bold text-ink-900">
+                איך נרשמים למועדים
+              </h3>
+              <p className="mt-0.5 text-sm text-ink-500">
+                אם יש כמה שעות בשבוע — האם הילד בוחר אחת, או מגיע לכולן.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AudienceModeOption
+                selected={form.pick_one_slot}
+                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: true }))}
+                title="בחירת מועד אחד"
+                hint="כל מועד הוא קבוצה נפרדת. הילד מגיע פעם בשבוע"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={!form.pick_one_slot}
+                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: false }))}
+                title="כל המועדים יחד"
+                hint="הילד רשום לכל הימים והשעות של החוג"
+                disabled={loading}
+              />
+            </div>
+
             <ClassScheduleEditor
               value={schedule}
               onChange={setSchedule}
@@ -620,6 +835,50 @@ export function ClassForm({
         previewStatus={existing?.status ?? "active"}
       />
     </div>
+  );
+}
+
+function AgeBoundField({
+  label,
+  value,
+  unit,
+  onValueChange,
+  onUnitChange,
+  placeholder,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  unit: AgeUnit;
+  onValueChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onUnitChange: (unit: AgeUnit) => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  return (
+    <Field label={label}>
+      <div className="flex gap-2">
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={value}
+          onChange={onValueChange}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="flex-1"
+        />
+        <Select
+          value={unit}
+          onChange={(e) => onUnitChange(e.target.value as AgeUnit)}
+          disabled={disabled}
+          className="w-[7.25rem] shrink-0"
+        >
+          <option value="years">שנים</option>
+          <option value="months">חודשים</option>
+        </Select>
+      </div>
+    </Field>
   );
 }
 

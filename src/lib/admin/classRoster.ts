@@ -7,10 +7,10 @@ import type {
 } from "@/components/admin/ClassList";
 
 const ENROLLMENT_SELECT =
-  "id, class_id, parent_id, child_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)";
+  "id, class_id, parent_id, child_id, weekly_slot_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone)";
 
 const WAITLIST_SELECT =
-  "id, class_id, parent_id, child_id, status, created_at, children(full_name), profiles(full_name, phone)";
+  "id, class_id, parent_id, child_id, weekly_slot_id, status, created_at, children(full_name), profiles(full_name, phone)";
 
 export async function loadClassRoster(classId: string): Promise<{
   enrollments: AdminClassEnrollment[];

@@ -136,12 +136,19 @@ function documentPayload(input: {
   };
 }
 
+export type CardcomInstallments = {
+  min: number;
+  max: number;
+  selected: number;
+};
+
 function createPayload(
   input: {
     checkoutId: string;
     amount: number;
     description: string;
     customer: CardcomCustomer;
+    installments?: CardcomInstallments | null;
   },
   includeDocument: boolean
 ) {
@@ -170,9 +177,9 @@ function createPayload(
     AdvancedDefinition: {
       ApiPassword: config.apiPassword || undefined,
       ThreeDSecureState: "Disabled",
-      MinNumOfPayments: 1,
-      MaxNumOfPayments: 1,
-      SelectedNumOfPayments: 1,
+      MinNumOfPayments: input.installments?.min ?? 1,
+      MaxNumOfPayments: input.installments?.max ?? 1,
+      SelectedNumOfPayments: input.installments?.selected ?? 1,
       ISOCoinName: "ILS",
     },
     ...(includeDocument
@@ -215,6 +222,7 @@ export async function createLowProfilePage(input: {
   amount: number;
   description: string;
   customer: CardcomCustomer;
+  installments?: CardcomInstallments | null;
 }): Promise<{ lowProfileId: string; url: string }> {
   const attempt = async (includeDocument: boolean) => {
     const result = await postJson<Record<string, unknown>>(

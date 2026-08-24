@@ -1,20 +1,26 @@
+import {
+  calcAgeMonths,
+  formatAgeRangeMonths,
+  isAgeMonthsInRange,
+} from "@/lib/age-range";
 import { schoolGradeLabel, resolveSchoolGrade } from "@/lib/school-grade";
-import { calcAge } from "@/utils/format";
 import type { Enums } from "@/types/database.types";
 
 export type ClassGenderPolicy = Enums<"class_gender_policy">;
 export type ClassAudienceType = Enums<"class_audience_type">;
 
 export const CLASS_GENDER_POLICY: Record<ClassGenderPolicy, string> = {
-  male: "זכר",
-  female: "נקבה",
+  male: "בנים",
+  female: "בנות",
   mixed: "מעורב",
 };
 
 export type ClassAudienceFields = {
   gender_policy: ClassGenderPolicy;
   audience_type: ClassAudienceType;
+  /** גיל מינימום בחודשים. */
   age_min: number | null;
+  /** גיל מקסימום בחודשים. */
   age_max: number | null;
   grade_min: number | null;
   grade_max: number | null;
@@ -32,10 +38,7 @@ export function formatAgeRange(
   min: number | null | undefined,
   max: number | null | undefined,
 ): string | null {
-  if (min != null && max != null) return `גילאי ${min}–${max}`;
-  if (min != null) return `מגיל ${min}`;
-  if (max != null) return `עד גיל ${max}`;
-  return null;
+  return formatAgeRangeMonths(min, max);
 }
 
 export function formatGradeRange(
@@ -54,10 +57,17 @@ export function formatGradeRange(
 
 /** תווית קהל יעד לתצוגה בכרטיסים ובעמודי חוג. */
 export function formatClassAudience(cls: ClassAudienceFields): string {
+  if (cls.audience_type === "open") return "פתוח לכולם";
   if (cls.audience_type === "grade") {
     return formatGradeRange(cls.grade_min, cls.grade_max) ?? "לפי כיתה";
   }
   return formatAgeRange(cls.age_min, cls.age_max) ?? "כל הגילאים";
+}
+
+export function formatAudienceFieldLabel(type: ClassAudienceType): string {
+  if (type === "grade") return "כיתות";
+  if (type === "open") return "קהל יעד";
+  return "גילאים";
 }
 
 export function formatClassGenderPolicy(policy: ClassGenderPolicy): string {
@@ -76,6 +86,10 @@ export function childEligibilityError(
   }
   if (cls.gender_policy === "female" && child.gender !== "female") {
     return `${name} אינה מתאימה לחוג לבנות בלבד.`;
+  }
+
+  if (cls.audience_type === "open") {
+    return null;
   }
 
   if (cls.audience_type === "grade") {
@@ -98,14 +112,14 @@ export function childEligibilityError(
   const hasAgeFilter = cls.age_min != null || cls.age_max != null;
   if (!hasAgeFilter) return null;
 
-  const age = calcAge(child.birth_date);
-  if (age == null) {
+  const ageMonths = calcAgeMonths(child.birth_date);
+  if (ageMonths == null) {
     return `לא ניתן לרשום את ${name} — חסר תאריך לידה בחשבון.`;
   }
-  if (cls.age_min != null && age < cls.age_min) {
-    return `${name} צעיר/ה מדי לחוג זה.`;
-  }
-  if (cls.age_max != null && age > cls.age_max) {
+  if (!isAgeMonthsInRange(ageMonths, cls.age_min, cls.age_max)) {
+    if (cls.age_min != null && ageMonths < cls.age_min) {
+      return `${name} צעיר/ה מדי לחוג זה.`;
+    }
     return `${name} מבוגר/ת מדי לחוג זה.`;
   }
   return null;

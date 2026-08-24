@@ -11,7 +11,7 @@ import {
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
-import type { PublicClass } from "@/types";
+import type { PublicClass, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import {
   ClassEnrollmentActions,
@@ -21,6 +21,7 @@ import {
 import {
   ClassLateRegistrationBanner,
   ClassPriceAmount,
+  ClassPriceNote,
   classPriceLabel,
 } from "./ClassPrice";
 
@@ -28,12 +29,14 @@ interface ClassEnrollmentPanelProps {
   cls: PublicClass;
   soldOut: boolean;
   proration: ProratedClassPrice;
+  slots?: PublicClassSlot[];
 }
 
 export async function ClassEnrollmentPanel({
   cls,
   soldOut,
   proration,
+  slots = [],
 }: ClassEnrollmentPanelProps) {
   const registrationClosed = soldOut || proration.hasEnded;
   const profile = await getSessionProfile();
@@ -103,6 +106,7 @@ export async function ClassEnrollmentPanel({
           classTitle={cls.title}
           classPrice={proration.unitPrice}
           proration={proration}
+          billingMonths={cls.billing_months}
           ageMin={cls.age_min}
           ageMax={cls.age_max}
           soldOut={soldOut}
@@ -116,6 +120,8 @@ export async function ClassEnrollmentPanel({
           waitlist={waitlist ?? []}
           siblingTiers={siblingTiers}
           categorySiblingIds={categorySiblingIds}
+          pickOneSlot={cls.pick_one_slot}
+          slots={slots}
         />
       );
     }
@@ -124,12 +130,21 @@ export async function ClassEnrollmentPanel({
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-sm text-ink-500">{classPriceLabel(proration)}</p>
+        <p className="text-sm text-ink-500">
+          {classPriceLabel(proration, cls.billing_months)}
+        </p>
         <div className="mt-1">
           <ClassPriceAmount
             proration={proration}
             soldOut={registrationClosed}
             size="panel"
+            billingMonths={cls.billing_months}
+          />
+        </div>
+        <div className="mt-1">
+          <ClassPriceNote
+            proration={proration}
+            billingMonths={cls.billing_months}
           />
         </div>
         {(proration.isLate || proration.hasEnded) && (
@@ -140,30 +155,44 @@ export async function ClassEnrollmentPanel({
 
         <SiblingDiscountNote tiers={siblingTiers} category={cls.category} />
 
-        <div className="mt-5 rounded-2xl bg-ink-50 p-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-ink-500">מקומות פנויים</span>
-            <span className="font-bold text-ink-900">
-              {soldOut ? "מלא" : `${cls.available} מתוך ${cls.capacity}`}
-            </span>
+        {cls.pick_one_slot && slots.length > 0 ? (
+          <div className="mt-5 rounded-2xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+            לכל מועד יש {cls.capacity} מקומות. המקומות הפנויים מופיעים אחרי
+            בחירת יום ושעה.
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-200">
-            <div
-              className="h-full rounded-full bg-brand-gradient"
-              style={{
-                width: `${Math.min(
-                  100,
-                  (Number(cls.taken_count) / Math.max(cls.capacity, 1)) * 100
-                )}%`,
-              }}
-            />
+        ) : (
+          <div className="mt-5 rounded-2xl bg-ink-50 p-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-500">מקומות פנויים</span>
+              <span className="font-bold text-ink-900">
+                {soldOut ? "מלא" : `${cls.available} מתוך ${cls.capacity}`}
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-200">
+              <div
+                className="h-full rounded-full bg-brand-gradient"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    (Number(cls.taken_count) / Math.max(cls.capacity, 1)) * 100
+                  )}%`,
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {cls.category && <Badge tone="brand">{cls.category}</Badge>}
           {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
-          <Badge tone="neutral">{formatClassGenderPolicy(cls.gender_policy)}</Badge>
+          <Badge tone="neutral">
+            {slots.length > 1 &&
+            new Set(slots.map((slot) => slot.gender_policy)).size > 1
+              ? "מגדר לפי מועד"
+              : formatClassGenderPolicy(
+                  slots[0]?.gender_policy ?? cls.gender_policy
+                )}
+          </Badge>
           <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           {proration.billableCount > 0 && (
             <Badge tone="neutral">

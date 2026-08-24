@@ -59,14 +59,17 @@ export default async function InstructorDashboard() {
   const classIds = myClasses.map((c) => c.id);
 
   const counts = new Map<string, number>();
-  const studentsByClass = new Map<string, { id: string; full_name: string }[]>();
+  const studentsByClass = new Map<
+    string,
+    { id: string; full_name: string; weekly_slot_id?: string | null }[]
+  >();
   const historyByClass = new Map<string, AttendanceRecord[]>();
 
   if (classIds.length > 0) {
     const [{ data: enrollments }, { data: attendanceRows }] = await Promise.all([
       supabase
         .from("enrollments")
-        .select("class_id, children(id, full_name)")
+        .select("class_id, weekly_slot_id, children(id, full_name)")
         .in("class_id", classIds)
         .eq("status", "active"),
       supabase
@@ -81,7 +84,11 @@ export default async function InstructorDashboard() {
       if (!e.class_id || !e.children) return;
       counts.set(e.class_id, (counts.get(e.class_id) ?? 0) + 1);
       const list = studentsByClass.get(e.class_id) ?? [];
-      list.push({ id: e.children.id, full_name: e.children.full_name });
+      list.push({
+        id: e.children.id,
+        full_name: e.children.full_name,
+        weekly_slot_id: e.weekly_slot_id,
+      });
       studentsByClass.set(e.class_id, list);
     });
 

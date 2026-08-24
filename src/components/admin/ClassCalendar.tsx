@@ -784,9 +784,10 @@ function DayPanel({
     (sum, session) => sum + durationMinutes(session.startTime, session.endTime),
     0
   );
+  const groups = groupSessionsByStart(sessions);
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4">
       <button
         type="button"
         aria-label="סגירה"
@@ -797,40 +798,57 @@ function DayPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="calendar-day-title"
-        className="relative z-10 ms-auto flex h-full w-full max-w-lg flex-col border-s border-ink-100 bg-white shadow-card animate-fade-in"
+        className="relative z-10 flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-card animate-fade-in"
       >
-        <div className="bg-brand-gradient px-6 pb-6 pt-6 text-white">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl bg-white/15 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/25"
-            >
-              סגירה
-            </button>
+        <div className="flex shrink-0 items-start justify-between gap-3 bg-brand-gradient px-5 py-4 text-white sm:px-6">
+          <div className="min-w-0">
+            <h2 id="calendar-day-title" className="font-display text-xl font-bold sm:text-2xl">
+              {dayLabelLong(date)}
+            </h2>
+            <p className="mt-0.5 text-sm text-white/80">
+              {sessions.length} מפגשים · {formatDuration(totalMinutes)} פעילות
+            </p>
           </div>
-          <h2 id="calendar-day-title" className="font-display text-2xl font-bold">
-            {dayLabelLong(date)}
-          </h2>
-          <p className="mt-1 text-sm text-white/80">
-            {sessions.length} מפגשים · {formatDuration(totalMinutes)} פעילות
-          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="סגירה"
+            className="-me-1.5 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 transition-colors hover:bg-white/25"
+          >
+            <Icon name="x" size={18} />
+          </button>
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 sm:p-4">
           {sessions.length === 0 ? (
             <p className="py-10 text-center text-sm text-ink-400">
               אין מפגשים להצגה ביום זה.
             </p>
           ) : (
-            sessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
-                onSubstitute={() => onSubstitute(session)}
-              />
-            ))
+            <div className="space-y-3">
+              {groups.map((group) => (
+                <section key={group.startTime}>
+                  {groups.length > 1 && (
+                    <p
+                      dir="ltr"
+                      className="mb-1.5 px-1 text-xs font-bold tabular-nums text-ink-400"
+                    >
+                      {group.startTime}
+                    </p>
+                  )}
+                  <ul className="divide-y divide-ink-100 overflow-hidden rounded-2xl border border-ink-100 bg-white">
+                    {group.sessions.map((session) => (
+                      <SessionRow
+                        key={session.id}
+                        session={session}
+                        color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
+                        onSubstitute={() => onSubstitute(session)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
           )}
         </div>
       </aside>
@@ -838,7 +856,32 @@ function DayPanel({
   );
 }
 
-function SessionCard({
+function groupSessionsByStart(sessions: CalendarSession[]) {
+  const groups: { startTime: string; sessions: CalendarSession[] }[] = [];
+  for (const session of sessions) {
+    const last = groups[groups.length - 1];
+    if (last && last.startTime === session.startTime) {
+      last.sessions.push(session);
+    } else {
+      groups.push({ startTime: session.startTime, sessions: [session] });
+    }
+  }
+  return groups;
+}
+
+function sessionInstructorLabel(session: CalendarSession) {
+  if (isBookedSession(session.kind)) {
+    return session.clientLabel ?? null;
+  }
+  if (session.substituteInstructor) {
+    return session.instructor
+      ? `${session.substituteInstructor} במקום ${session.instructor}`
+      : session.substituteInstructor;
+  }
+  return session.instructor;
+}
+
+function SessionRow({
   session,
   color,
   onSubstitute,
@@ -850,101 +893,87 @@ function SessionCard({
   const status = CLASS_SESSION_STATUS[session.status];
   const cancelled = session.status === "cancelled";
   const isPrivate = isBookedSession(session.kind);
+  const instructorLabel = sessionInstructorLabel(session);
+  const showStatus = session.status !== "scheduled";
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="flex gap-3 p-4">
-        <span
-          className={cn("w-1 shrink-0 rounded-full", cancelled ? "bg-ink-200" : color.dot)}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <h3
-              className={cn(
-                "font-display font-bold text-ink-900",
-                cancelled && "text-ink-400 line-through"
-              )}
-            >
-              {session.title}
-            </h3>
-            <span
-              dir="ltr"
-              className="shrink-0 text-sm font-bold tabular-nums text-ink-700"
-            >
-              {session.startTime}–{session.endTime}
-            </span>
-          </div>
-
-          {isPrivate ? (
-            <p className="mt-1 text-sm text-ink-500">
-              {session.clientLabel ?? "לקוח"}
-            </p>
-          ) : session.substituteInstructor ? (
-            <p className="mt-1 text-sm text-ink-500">
-              <span className="font-semibold text-amber-700">
-                {session.substituteInstructor}
-              </span>
-              {session.instructor && (
-                <span className="ms-1.5">במקום {session.instructor}</span>
-              )}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-ink-500">
-              {session.instructor ?? "לא שובצה מדריכה"}
-            </p>
-          )}
-
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone={status.tone}>{status.label}</Badge>
-            {session.kind === "private_lesson" && (
-              <Badge tone="brand">שיעור פרטי</Badge>
+    <li className="flex gap-2.5 px-3 py-2.5">
+      <span
+        className={cn(
+          "w-1 shrink-0 self-stretch rounded-full",
+          cancelled ? "bg-ink-200" : color.dot
+        )}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3
+            className={cn(
+              "min-w-0 truncate font-display text-sm font-bold text-ink-900",
+              cancelled && "text-ink-400 line-through"
             )}
-            {session.kind === "activity" && (
-              <Badge tone="warning">פעילות</Badge>
-            )}
-            {!isPrivate && session.substituteInstructor && (
-              <Badge tone="warning">החלפה</Badge>
-            )}
-            {!isPrivate && session.category && (
-              <Badge tone="brand">{session.category}</Badge>
-            )}
-            {!isPrivate && (
-              <Badge tone="neutral">
-                {session.registered} / {session.capacity} נרשמים
-              </Badge>
-            )}
-          </div>
-
-          {session.notes && (
-            <p className="mt-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
-              {session.notes}
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {!isPrivate && !cancelled && (
-              <button
-                type="button"
-                onClick={onSubstitute}
-                className="rounded-xl border border-ink-200 px-3 py-1.5 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
-              >
-                {session.substituteInstructor ? "עדכון החלפה" : "החלפת מדריכה"}
-              </button>
-            )}
-            <Link
-              href={
-                isPrivate
-                  ? "/admin/private-lessons"
-                  : `/admin/classes/${session.classId}/edit`
-              }
-              className="text-sm font-semibold text-brand-600 transition-colors hover:text-brand-700"
-            >
-              {isPrivate ? "לתיאום מועדים ←" : "לעמוד החוג ←"}
-            </Link>
-          </div>
+          >
+            {session.title}
+          </h3>
+          <span
+            dir="ltr"
+            className="shrink-0 text-xs font-bold tabular-nums text-ink-600"
+          >
+            {session.startTime}–{session.endTime}
+          </span>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+          {instructorLabel && (
+            <span
+              className={cn(
+                "min-w-0 truncate",
+                session.substituteInstructor && "font-semibold text-amber-700"
+              )}
+            >
+              {instructorLabel}
+            </span>
+          )}
+          {showStatus && <Badge tone={status.tone}>{status.label}</Badge>}
+          {session.kind === "private_lesson" && (
+            <Badge tone="brand">שיעור פרטי</Badge>
+          )}
+          {session.kind === "activity" && (
+            <Badge tone="warning">פעילות</Badge>
+          )}
+          {!isPrivate && session.substituteInstructor && (
+            <Badge tone="warning">החלפה</Badge>
+          )}
+          {!isPrivate && (
+            <span className="tabular-nums text-ink-600">
+              {session.registered}/{session.capacity}
+            </span>
+          )}
+          {!isPrivate && !cancelled && (
+            <button
+              type="button"
+              onClick={onSubstitute}
+              className="font-semibold text-brand-600 transition-colors hover:text-brand-700"
+            >
+              {session.substituteInstructor ? "עדכון החלפה" : "החלפה"}
+            </button>
+          )}
+          <Link
+            href={
+              isPrivate
+                ? "/admin/private-lessons"
+                : `/admin/classes/${session.classId}/edit`
+            }
+            className="font-semibold text-brand-600 transition-colors hover:text-brand-700"
+          >
+            {isPrivate ? "תיאום" : "החוג"}
+          </Link>
+        </div>
+
+        {session.notes && (
+          <p className="mt-1 truncate text-xs text-ink-400">{session.notes}</p>
+        )}
+      </div>
+    </li>
   );
 }
 

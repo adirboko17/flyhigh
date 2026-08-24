@@ -3,9 +3,10 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/icons/Icon";
 import type { IconName } from "@/components/icons/paths";
-import { formatClassAudience } from "@/lib/class-audience";
+import { formatClassAudience, formatClassGenderPolicy } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
+import { classPeriodTotal } from "@/lib/finance/classPricing";
 import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
 import { formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
@@ -35,7 +36,7 @@ export function ClassCard({
   preview?: boolean;
 }) {
   const proration = classPriceFromPublicCounts(
-    Number(cls.price),
+    classPeriodTotal(Number(cls.price), cls.billing_months),
     cls.billable_session_count,
     cls.remaining_session_count
   );
@@ -47,26 +48,30 @@ export function ClassCard({
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
   const href = `/classes/${cls.id}`;
 
-  const scheduleLabel = cls.schedule_days
+  const scheduleLabel = cls.pick_one_slot
+    ? cls.schedule_days
+      ? `בחירת מועד · ימים ${cls.schedule_days}`
+      : "בחירת מועד אחד בשבוע"
+    : cls.schedule_days
     ? `ימים ${cls.schedule_days}`
     : cls.schedule_type === "custom"
       ? "תאריכים מותאמים"
       : `יום ${dayLabel(cls.day_of_week)}`;
 
   const audienceLabel =
-    cls.audience_type === "grade"
-      ? cls.grade_min != null || cls.grade_max != null
-        ? formatClassAudience(cls)
-        : null
-      : cls.age_min != null || cls.age_max != null
-        ? formatClassAudience(cls)
-        : null;
+    cls.audience_type === "open"
+      ? formatClassAudience(cls)
+      : cls.audience_type === "grade"
+        ? cls.grade_min != null || cls.grade_max != null
+          ? formatClassAudience(cls)
+          : null
+        : cls.age_min != null || cls.age_max != null
+          ? formatClassAudience(cls)
+          : null;
 
   const genderLabel =
     cls.gender_policy && cls.gender_policy !== "mixed"
-      ? cls.gender_policy === "male"
-        ? "זכר"
-        : "נקבה"
+      ? formatClassGenderPolicy(cls.gender_policy)
       : null;
 
   const availability = ended
@@ -195,13 +200,21 @@ export function ClassCard({
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">
-              {classPriceLabel(proration)}
+              {classPriceLabel(proration, cls.billing_months)}
             </p>
             <div className="mt-0.5">
-              <ClassPriceAmount proration={proration} soldOut={closed} />
+              <ClassPriceAmount
+                proration={proration}
+                soldOut={closed}
+                billingMonths={cls.billing_months}
+              />
             </div>
             <div className="mt-1 max-w-[12rem]">
-              <ClassPriceNote proration={proration} compact />
+              <ClassPriceNote
+                proration={proration}
+                compact
+                billingMonths={cls.billing_months}
+              />
             </div>
           </div>
 

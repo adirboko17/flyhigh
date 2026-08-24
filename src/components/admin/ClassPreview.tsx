@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import {
+  formatAudienceFieldLabel,
   formatClassAudience,
   formatClassGenderPolicy,
   type ClassAudienceType,
@@ -17,6 +18,7 @@ import {
   formToPreviewClass,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
+import { classPeriodTotal } from "@/lib/finance/classPricing";
 import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
 import { formatDate, formatTime } from "@/utils/format";
 import type { PublicClass } from "@/types";
@@ -35,10 +37,15 @@ export type ClassPreviewForm = {
   audience_type: ClassAudienceType;
   age_min: string;
   age_max: string;
+  age_min_unit?: "years" | "months";
+  age_max_unit?: "years" | "months";
   grade_min: string;
   grade_max: string;
   capacity: string;
   price: string;
+  price_mode?: "period" | "monthly";
+  pick_one_slot?: boolean;
+  billing_months?: string;
 };
 
 export function ClassPreviewPanel({
@@ -185,7 +192,7 @@ function ClassPagePreview({
           />
           <PreviewDetailRow
             icon="🎂"
-            label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
+            label={formatAudienceFieldLabel(cls.audience_type)}
             value={formatClassAudience(cls)}
           />
           <PreviewDetailRow
@@ -243,17 +250,25 @@ function ClassPagePreview({
 
 function ClassPreviewPrice({ cls }: { cls: PublicClass }) {
   const proration = classPriceFromPublicCounts(
-    Number(cls.price),
+    classPeriodTotal(Number(cls.price), cls.billing_months),
     cls.billable_session_count,
     cls.remaining_session_count
   );
 
   return (
     <>
-      <p className="text-xs text-ink-500">{classPriceLabel(proration)}</p>
-      <ClassPriceAmount proration={proration} />
+      <p className="text-xs text-ink-500">
+        {classPriceLabel(proration, cls.billing_months)}
+      </p>
+      <ClassPriceAmount
+        proration={proration}
+        billingMonths={cls.billing_months}
+      />
       <div className="mt-1">
-        <ClassPriceNote proration={proration} />
+        <ClassPriceNote
+          proration={proration}
+          billingMonths={cls.billing_months}
+        />
       </div>
     </>
   );

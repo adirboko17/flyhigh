@@ -16,6 +16,12 @@ import {
   resolveReceiptLabelForCheckout,
 } from "@/lib/enrollment/receiptLabel";
 import {
+  activityPeopleCap,
+  parseActivityPriceTiers,
+  quoteActivityPrice,
+  type ActivityPriceTier,
+} from "@/lib/finance/activityPricing";
+import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
   type ProgramKind,
@@ -52,6 +58,7 @@ type PlanRecord = {
   price: number;
   durationMonths: number | null;
   programKind: ProgramKind | null;
+  priceTiers: ActivityPriceTier[];
 };
 
 async function rollbackPlanPurchase(
@@ -74,12 +81,13 @@ function usesQuantity(kind: PlanKind, programKind: ProgramKind | null) {
 function normalizeQuantity(
   kind: PlanKind,
   programKind: ProgramKind | null,
-  quantity?: number
+  quantity?: number,
+  maxPeople = ACTIVITY_MAX_PEOPLE
 ) {
   if (!usesQuantity(kind, programKind)) return 1;
   const value = Math.floor(Number(quantity ?? 1));
   if (!Number.isFinite(value) || value < 1) return null;
-  if (value > ACTIVITY_MAX_PEOPLE) return null;
+  if (value > maxPeople) return null;
   return value;
 }
 
@@ -91,7 +99,7 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, kind")
+      .select("id, title, price, duration_months, kind, price_tiers")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -102,6 +110,7 @@ async function loadActivePlan(
           price: Number(data.price),
           durationMonths: data.duration_months,
           programKind: data.kind,
+          priceTiers: parseActivityPriceTiers(data.price_tiers),
         }
       : null;
   }
@@ -120,6 +129,7 @@ async function loadActivePlan(
           price: Number(data.price),
           durationMonths: null,
           programKind: null,
+          priceTiers: [],
         }
       : null;
   }
@@ -137,8 +147,9 @@ async function loadActivePlan(
         price: Number(data.price),
         durationMonths: null,
         programKind: null,
+        priceTiers: [],
       }
-    : null;
+      : null;
 }
 
 /** ההשתתפויות בהזמנה: ילדים שנבחרו, ובנוסף ההורה עצמו אם סימן זאת. */
@@ -147,6 +158,17 @@ function resolveParticipants(childIds: string[], includeSelf: boolean) {
   const participants: (string | null)[] = [...uniqueChildIds];
   if (includeSelf) participants.push(null);
   return { uniqueChildIds, participants };
+}
+
+function planSubtotal(
+  plan: PlanRecord,
+  quantity: number,
+  participantCount: number
+): number | null {
+  if (isActivityProgram(plan.programKind)) {
+    return quoteActivityPrice(quantity, plan.price, plan.priceTiers)?.amount ?? null;
+  }
+  return Math.round(plan.price * quantity * participantCount * 100) / 100;
 }
 
 function planNotFoundError(kind: PlanKind): string {
@@ -192,7 +214,8 @@ export async function previewPlanCoupon(input: {
   const quantity = normalizeQuantity(
     input.kind,
     plan.programKind,
-    input.quantity
+    input.quantity,
+    activityPeopleCap(plan.priceTiers)
   );
   if (quantity === null) {
     return {
@@ -208,9 +231,13 @@ export async function previewPlanCoupon(input: {
     return { success: false, error: "נא לבחור למי הרכישה." };
   }
 
-  const subtotal = isActivityProgram(plan.programKind)
-    ? Math.round(plan.price * quantity * 100) / 100
-    : Math.round(plan.price * quantity * participants.length * 100) / 100;
+  const subtotal = planSubtotal(plan, quantity, participants.length);
+  if (subtotal === null) {
+    return {
+      success: false,
+      error: "מספר המשתתפים שנבחר אינו במחירון. בחרו כמות מאחת המדרגות.",
+    };
+  }
 
   const { data, error } = await supabase.rpc("preview_coupon", {
     p_code: code,
@@ -277,7 +304,12 @@ export async function completePlanPurchase(input: {
   }
 
   const isActivity = isActivityProgram(plan.programKind);
-  const quantity = normalizeQuantity(kind, plan.programKind, input.quantity);
+  const quantity = normalizeQuantity(
+    kind,
+    plan.programKind,
+    input.quantity,
+    activityPeopleCap(plan.priceTiers)
+  );
   if (quantity === null) {
     return {
       success: false,
@@ -329,9 +361,13 @@ export async function completePlanPurchase(input: {
   }
 
   const unitPrice = plan.price;
-  const listTotal = isActivity
-    ? Math.round(unitPrice * quantity * 100) / 100
-    : Math.round(unitPrice * quantity * participants.length * 100) / 100;
+  const listTotal = planSubtotal(plan, quantity, participants.length);
+  if (listTotal === null) {
+    return {
+      success: false,
+      error: "מספר המשתתפים שנבחר אינו במחירון. בחרו כמות מאחת המדרגות.",
+    };
+  }
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
   const requestedCode = input.couponCode

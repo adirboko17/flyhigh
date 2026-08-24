@@ -22,12 +22,14 @@ import {
   useClassSessionNotesByDate,
 } from "@/components/classes/SessionNotesPanel";
 import { ClassAttendanceForm } from "@/components/instructor/ClassAttendanceForm";
+import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { setClassStatus } from "@/lib/admin/classStatus";
@@ -40,9 +42,12 @@ import {
   CLASS_STATUS,
   ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
+  DAYS_OF_WEEK,
   WAITLIST_STATUS,
   dayLabel,
 } from "@/lib/constants";
+import { parseBillingMonths } from "@/lib/finance/classPricing";
+import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { cn } from "@/utils/cn";
 import type { Enums, Json } from "@/types/database.types";
 import { calcAge, formatCurrency, formatDate, formatTime } from "@/utils/format";
@@ -55,6 +60,7 @@ export type AdminClassEnrollment = {
   admin_assigned: boolean;
   status: keyof typeof ENROLLMENT_STATUS;
   payment_status: keyof typeof ENROLLMENT_PAYMENT_STATUS;
+  weekly_slot_id: string | null;
   created_at: string;
   children: { full_name: string; birth_date: string | null } | null;
   profiles: { full_name: string; phone: string | null } | null;
@@ -65,6 +71,7 @@ export type AdminClassWaitlistEntry = {
   class_id: string | null;
   parent_id: string;
   child_id: string | null;
+  weekly_slot_id: string | null;
   status: keyof typeof WAITLIST_STATUS;
   created_at: string;
   children: { full_name: string } | null;
@@ -78,6 +85,16 @@ export type AdminClassAttendance = {
   status: keyof typeof ATTENDANCE_STATUS;
   children: { full_name: string } | null;
   instructors: { full_name: string } | null;
+};
+
+export type AdminClassSlot = {
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  gender_policy: Enums<"class_gender_policy">;
+  registeredCount: number;
+  waitlistCount: number;
 };
 
 export type AdminClassRow = {
@@ -97,6 +114,8 @@ export type AdminClassRow = {
   grade_min: number | null;
   grade_max: number | null;
   price: number;
+  billing_months: number | null;
+  pick_one_slot: boolean;
   capacity: number;
   status: keyof typeof CLASS_STATUS;
   schedule_type: Enums<"schedule_type">;
@@ -107,6 +126,7 @@ export type AdminClassRow = {
   instructor_id: string | null;
   registeredCount: number;
   waitlistCount: number;
+  slots: AdminClassSlot[];
   enrollments: AdminClassEnrollment[];
   waitlist: AdminClassWaitlistEntry[];
   attendance: AdminClassAttendance[];
@@ -151,6 +171,12 @@ function attendanceRate(item: AdminClassRow) {
   return Math.round((present / item.attendance.length) * 100);
 }
 
+function adminClassPriceLabel(item: Pick<AdminClassRow, "price" | "billing_months">) {
+  const months = parseBillingMonths(item.billing_months);
+  if (!months) return formatCurrency(item.price);
+  return `${formatCurrency(item.price)} לחודש × ${months}`;
+}
+
 function audienceLabel(item: AdminClassRow) {
   const parts = [
     formatClassGenderPolicy(item.gender_policy),
@@ -176,6 +202,7 @@ export function ClassList({ classes }: ClassListProps) {
     cls: AdminClassRow;
     tab: PanelTab;
     attendanceMode?: AttendanceMode;
+    weeklySlotId?: string | null;
   } | null>(null);
   const [previewed, setPreviewed] = useState<AdminClassRow | null>(null);
   const [manualAssign, setManualAssign] = useState<AdminClassRow | null>(null);
@@ -228,8 +255,8 @@ export function ClassList({ classes }: ClassListProps) {
             <ClassCard
               key={cls.id}
               cls={cls}
-              onOpenPanel={(tab, attendanceMode) =>
-                setSelected({ cls, tab, attendanceMode })
+              onOpenPanel={(tab, attendanceMode, weeklySlotId) =>
+                setSelected({ cls, tab, attendanceMode, weeklySlotId })
               }
               onPreview={() => setPreviewed(cls)}
               onAssign={() => setManualAssign(cls)}
@@ -243,6 +270,7 @@ export function ClassList({ classes }: ClassListProps) {
           cls={classes.find((c) => c.id === selected.cls.id) ?? selected.cls}
           initialTab={selected.tab}
           initialAttendanceMode={selected.attendanceMode ?? "mark"}
+          weeklySlotId={selected.weeklySlotId ?? null}
           onClose={() => setSelected(null)}
         />
       )}
@@ -274,20 +302,24 @@ function ClassCard({
   onAssign,
 }: {
   cls: AdminClassRow;
-  onOpenPanel: (tab: PanelTab, attendanceMode?: AttendanceMode) => void;
+  onOpenPanel: (
+    tab: PanelTab,
+    attendanceMode?: AttendanceMode,
+    weeklySlotId?: string | null
+  ) => void;
   onPreview: () => void;
   onAssign: () => void;
 }) {
   const router = useRouter();
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
+  const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const status = CLASS_STATUS[cls.status];
   const registered = cls.registeredCount;
   const waiting = cls.waitlistCount;
   const rate = attendanceRate(cls);
-  const ratio = cls.capacity > 0 ? registered / cls.capacity : 0;
   const ageLabel = audienceLabel(cls);
-
-  const barTone =
-    ratio >= 1 ? "bg-red-500" : ratio >= 0.75 ? "bg-amber-500" : "bg-aqua-500";
+  const multiSlot = cls.pick_one_slot && cls.slots.length > 1;
+  const activeSlot = cls.slots.find((slot) => slot.id === activeSlotId) ?? null;
 
   return (
     <Card className="flex flex-col overflow-hidden">
@@ -389,7 +421,7 @@ function ClassCard({
         </div>
       </div>
 
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+      <CardContent className="flex flex-col gap-3 p-4">
         <div>
           <h3 className="font-display text-lg font-bold leading-tight text-ink-900">
             {cls.title}
@@ -407,50 +439,237 @@ function ClassCard({
           <DetailLine icon="👩‍🏫" label="מדריכה">
             {cls.instructors?.full_name ?? "לא שובצה"}
           </DetailLine>
-          <DetailLine icon="🗓️" label="מועד">
-            {scheduleLabel(cls)}
-          </DetailLine>
+          {cls.slots.length <= 1 && (
+            <DetailLine icon="🗓️" label="מועד">
+              {cls.slots[0]
+                ? formatWeeklySlotLabel(
+                    cls.slots[0].day_of_week,
+                    cls.slots[0].start_time,
+                    cls.slots[0].end_time,
+                    cls.slots[0].gender_policy
+                  )
+                : scheduleLabel(cls)}
+            </DetailLine>
+          )}
           <DetailLine icon="💰" label="מחיר">
-            {formatCurrency(cls.price)}
+            {adminClassPriceLabel(cls)}
           </DetailLine>
         </dl>
 
-        <div className="mt-auto space-y-2.5 border-t border-ink-100 pt-3">
-          <div className="flex items-baseline justify-between text-sm">
-            <span className="text-ink-500">תפוסה</span>
-            <span className="font-semibold text-ink-900">
-              {registered}
-              <span className="text-ink-400"> / {cls.capacity}</span>
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
-            <div
-              className={cn("h-full rounded-full transition-all", barTone)}
-              style={{ width: `${Math.min(100, ratio * 100)}%` }}
+        <div className="space-y-2.5 border-t border-ink-100 pt-3">
+          {multiSlot ? (
+            <div className="space-y-2.5">
+              <AdminSlotPickerTrigger
+                slotsCount={cls.slots.length}
+                selectedSlot={activeSlot}
+                onOpen={() => setSlotPickerOpen(true)}
+              />
+              {activeSlot && (
+                <SlotStats
+                  registered={activeSlot.registeredCount}
+                  waiting={activeSlot.waitlistCount}
+                  capacity={cls.capacity}
+                  attendanceLabel="—"
+                  onEnrollments={() =>
+                    onOpenPanel("enrollments", undefined, activeSlot.id)
+                  }
+                  onWaitlist={() =>
+                    onOpenPanel("waitlist", undefined, activeSlot.id)
+                  }
+                  onAttendance={() =>
+                    onOpenPanel("attendance", "mark", activeSlot.id)
+                  }
+                />
+              )}
+              <Modal
+                open={slotPickerOpen}
+                onClose={() => setSlotPickerOpen(false)}
+                title="בחירת מועד"
+                description="בחרו מועד כדי לראות נרשמים, המתנה ונוכחות שלו."
+              >
+                <div className="space-y-2">
+                  {cls.slots.map((slot) => {
+                    const selected = activeSlotId === slot.id;
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveSlotId(slot.id);
+                          setSlotPickerOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-right transition-colors",
+                          selected
+                            ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                            : "border-ink-100 bg-white hover:border-brand-200"
+                        )}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-base font-bold text-ink-900">
+                            יום {DAYS_OF_WEEK[slot.day_of_week] ?? slot.day_of_week}
+                          </span>
+                          <span className="mt-0.5 block text-sm font-medium text-ink-700">
+                            {formatTime(slot.start_time)}–{formatTime(slot.end_time)}
+                            {" · "}
+                            {formatClassGenderPolicy(slot.gender_policy)}
+                          </span>
+                          <span className="mt-1 block text-xs text-ink-500">
+                            {slot.registeredCount} נרשמים
+                            {slot.waitlistCount > 0
+                              ? ` · ${slot.waitlistCount} בהמתנה`
+                              : ""}
+                            {` · ${slot.registeredCount} / ${cls.capacity} תפוסה`}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                            selected
+                              ? "border-brand-600 bg-brand-600 text-white"
+                              : "border-ink-300"
+                          )}
+                        >
+                          {selected && <Icon name="check" size={12} stroke={2.5} />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Modal>
+            </div>
+          ) : (
+            <SlotStats
+              registered={registered}
+              waiting={waiting}
+              capacity={cls.capacity}
+              attendanceLabel={rate === null ? "—" : `${rate}%`}
+              onEnrollments={() =>
+                onOpenPanel("enrollments", undefined, cls.slots[0]?.id)
+              }
+              onWaitlist={() =>
+                onOpenPanel("waitlist", undefined, cls.slots[0]?.id)
+              }
+              onAttendance={() =>
+                onOpenPanel("attendance", "mark", cls.slots[0]?.id)
+              }
             />
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5">
-            <StatButton
-              value={registered}
-              label="נרשמים"
-              onClick={() => onOpenPanel("enrollments")}
-            />
-            <StatButton
-              value={waiting}
-              label="בהמתנה"
-              highlight={waiting > 0}
-              onClick={() => onOpenPanel("waitlist")}
-            />
-            <StatButton
-              value={rate === null ? "—" : `${rate}%`}
-              label="נוכחות"
-              onClick={() => onOpenPanel("attendance", "mark")}
-            />
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function AdminSlotPickerTrigger({
+  slotsCount,
+  selectedSlot,
+  onOpen,
+}: {
+  slotsCount: number;
+  selectedSlot: AdminClassSlot | null;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-right transition-colors",
+        selectedSlot
+          ? "border-brand-200 bg-brand-50 hover:border-brand-300"
+          : "border-dashed border-brand-300 bg-brand-50/50 hover:border-brand-400 hover:bg-brand-50"
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white",
+          selectedSlot ? "bg-brand-600" : "bg-brand-500"
+        )}
+      >
+        <Icon name={selectedSlot ? "check" : "calendar"} size={18} />
+      </span>
+      <span className="min-w-0 flex-1">
+        {selectedSlot ? (
+          <>
+            <span className="block text-[11px] font-medium text-brand-700">
+              המועד שנבחר
+            </span>
+            <span className="mt-0.5 block text-sm font-bold text-ink-900">
+              יום {DAYS_OF_WEEK[selectedSlot.day_of_week] ?? selectedSlot.day_of_week}
+              {" · "}
+              {formatTime(selectedSlot.start_time)}–{formatTime(selectedSlot.end_time)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="block text-sm font-bold text-ink-900">
+              בחירת מועד
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              יש {slotsCount} מועדים · בחרו אחד כדי לראות נרשמים
+            </span>
+          </>
+        )}
+      </span>
+      <span className="shrink-0 text-sm font-semibold text-brand-700">
+        {selectedSlot ? "שינוי" : "בחירה"}
+      </span>
+    </button>
+  );
+}
+
+function SlotStats({
+  registered,
+  waiting,
+  capacity,
+  attendanceLabel,
+  onEnrollments,
+  onWaitlist,
+  onAttendance,
+}: {
+  registered: number;
+  waiting: number;
+  capacity: number;
+  attendanceLabel: string;
+  onEnrollments: () => void;
+  onWaitlist: () => void;
+  onAttendance: () => void;
+}) {
+  const ratio = capacity > 0 ? registered / capacity : 0;
+  const barTone =
+    ratio >= 1 ? "bg-red-500" : ratio >= 0.75 ? "bg-amber-500" : "bg-aqua-500";
+
+  return (
+    <>
+      <div className="flex items-baseline justify-between text-sm">
+        <span className="text-ink-500">תפוסה</span>
+        <span className="font-semibold text-ink-900">
+          {registered}
+          <span className="text-ink-400"> / {capacity}</span>
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
+        <div
+          className={cn("h-full rounded-full transition-all", barTone)}
+          style={{ width: `${Math.min(100, ratio * 100)}%` }}
+        />
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <StatButton value={registered} label="נרשמים" onClick={onEnrollments} />
+        <StatButton
+          value={waiting}
+          label="בהמתנה"
+          highlight={waiting > 0}
+          onClick={onWaitlist}
+        />
+        <StatButton
+          value={attendanceLabel}
+          label="נוכחות"
+          onClick={onAttendance}
+        />
+      </div>
+    </>
   );
 }
 
@@ -517,11 +736,13 @@ function ClassDetailPanel({
   cls,
   initialTab,
   initialAttendanceMode = "mark",
+  weeklySlotId = null,
   onClose,
 }: {
   cls: AdminClassRow;
   initialTab: PanelTab;
   initialAttendanceMode?: AttendanceMode;
+  weeklySlotId?: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<PanelTab>(initialTab);
@@ -553,35 +774,56 @@ function ClassDetailPanel({
     ? { ...cls, enrollments: roster.enrollments, waitlist: roster.waitlist }
     : cls;
 
+  const selectedSlot =
+    weeklySlotId
+      ? cls.slots.find((slot) => slot.id === weeklySlotId) ?? null
+      : null;
+
   const enrollments = useMemo(() => {
-    const rows = activeEnrollments(rosterClass);
+    const rows = activeEnrollments(rosterClass).filter((row) =>
+      weeklySlotId ? row.weekly_slot_id === weeklySlotId : true
+    );
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [rosterClass]);
+  }, [rosterClass, weeklySlotId]);
 
   const cancelled = useMemo(() => {
-    const rows = rosterClass.enrollments.filter((e) => e.status === "cancelled");
+    const rows = rosterClass.enrollments.filter(
+      (e) =>
+        e.status === "cancelled" &&
+        (!weeklySlotId || e.weekly_slot_id === weeklySlotId)
+    );
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [rosterClass.enrollments]);
+  }, [rosterClass.enrollments, weeklySlotId]);
 
-  const waiting = openWaitlist(rosterClass);
+  const waiting = useMemo(
+    () =>
+      openWaitlist(rosterClass).filter((row) =>
+        weeklySlotId ? row.weekly_slot_id === weeklySlotId : true
+      ),
+    [rosterClass, weeklySlotId]
+  );
 
   const students = useMemo(() => {
     const seen = new Set<string>();
-    const list: { id: string; full_name: string }[] = [];
+    const list: { id: string; full_name: string; weekly_slot_id: string | null }[] = [];
     for (const e of enrollments) {
       if (!e.child_id || !e.children?.full_name || seen.has(e.child_id)) continue;
       seen.add(e.child_id);
-      list.push({ id: e.child_id, full_name: e.children.full_name });
+      list.push({
+        id: e.child_id,
+        full_name: e.children.full_name,
+        weekly_slot_id: e.weekly_slot_id,
+      });
     }
     return list;
   }, [enrollments]);
@@ -676,8 +918,18 @@ function ClassDetailPanel({
             {cls.title}
           </h2>
           <p className="mt-1 text-sm text-white/80">
-            {(rosterLoading ? cls.registeredCount : enrollments.length)} מתוך{" "}
-            {cls.capacity} מקומות · {scheduleLabel(cls)}
+            {(rosterLoading
+              ? selectedSlot?.registeredCount ?? cls.registeredCount
+              : enrollments.length)}{" "}
+            מתוך {cls.capacity} מקומות
+            {selectedSlot
+              ? ` · ${formatWeeklySlotLabel(
+                  selectedSlot.day_of_week,
+                  selectedSlot.start_time,
+                  selectedSlot.end_time,
+                  selectedSlot.gender_policy
+                )}`
+              : ` · ${scheduleLabel(cls)}`}
           </p>
         </div>
 
@@ -778,6 +1030,7 @@ function ClassDetailPanel({
             <AttendanceTab
               cls={cls}
               students={students}
+              weeklySlotId={weeklySlotId}
               mode={attendanceMode}
               onModeChange={setAttendanceMode}
               query={listQuery}
@@ -998,12 +1251,14 @@ function WaitlistRow({
 function AttendanceTab({
   cls,
   students,
+  weeklySlotId = null,
   mode,
   onModeChange,
   query,
 }: {
   cls: AdminClassRow;
-  students: { id: string; full_name: string }[];
+  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
+  weeklySlotId?: string | null;
   mode: AttendanceMode;
   onModeChange: (mode: AttendanceMode) => void;
   query: string;
@@ -1082,6 +1337,7 @@ function AttendanceTab({
             classId={cls.id}
             instructorId={cls.instructor_id}
             students={students}
+            weeklySlotId={weeklySlotId}
             emptySessionsHint="לא נמצאו מפגשים מתוכננים. עדכנו את לוח המפגשים בעריכת החוג."
           />
         </div>

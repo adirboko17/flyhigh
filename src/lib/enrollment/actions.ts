@@ -3,6 +3,7 @@
 import {
   childEligibilityError,
   type ClassAudienceFields,
+  type ClassGenderPolicy,
 } from "@/lib/class-audience";
 import { requireRole } from "@/lib/auth";
 import {
@@ -20,6 +21,10 @@ import {
   countFamilyChildrenInCategory,
   listFamilyChildrenInCategory,
 } from "@/lib/enrollment/categorySiblings";
+import {
+  classInstallmentOptions,
+  classPeriodTotal,
+} from "@/lib/finance/classPricing";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
@@ -46,6 +51,26 @@ const ALLOWED_CHECKOUT_METHODS: readonly CheckoutPaymentMethod[] = [
   "credit_card",
   ...DEFERRED_PAYMENT_METHODS,
 ];
+
+function childrenEligibilityError(
+  cls: Omit<ClassAudienceFields, "gender_policy"> & {
+    gender_policy: ClassGenderPolicy;
+  },
+  children: Parameters<typeof childEligibilityError>[1][],
+  slotGenders: ClassGenderPolicy[]
+): string | null {
+  const genders = slotGenders.length > 0 ? slotGenders : [cls.gender_policy];
+  for (const child of children) {
+    for (const gender of genders) {
+      const eligibilityError = childEligibilityError(
+        { ...cls, gender_policy: gender },
+        child
+      );
+      if (eligibilityError) return eligibilityError;
+    }
+  }
+  return null;
+}
 
 export type CompleteEnrollmentResult =
   | {
@@ -78,6 +103,7 @@ export async function previewClassCoupon(input: {
   code: string;
   classId: string;
   childIds: string[];
+  weeklySlotId?: string | null;
 }): Promise<CouponPreviewResult> {
   const profile = await requireRole("parent");
   const code = normalizeCouponCode(input.code);
@@ -96,7 +122,8 @@ export async function previewClassCoupon(input: {
     supabase,
     profile.id,
     input.classId,
-    uniqueChildIds
+    uniqueChildIds,
+    input.weeklySlotId
   );
 
   if (subtotal === null) {
@@ -133,12 +160,18 @@ export async function previewClassCoupon(input: {
 async function loadClassUnitPrice(
   supabase: Awaited<ReturnType<typeof createClient>>,
   classId: string,
-  fullPrice: number
+  fullPrice: number,
+  weeklySlotId?: string | null
 ) {
-  const { data: sessions } = await supabase
+  let query = supabase
     .from("class_sessions")
     .select("session_date, start_time, status")
     .eq("class_id", classId);
+  if (weeklySlotId) {
+    query = query.eq("weekly_slot_id", weeklySlotId);
+  }
+
+  const { data: sessions } = await query;
 
   return prorateClassPrice(fullPrice, sessions ?? [], todayInIsrael());
 }
@@ -148,12 +181,13 @@ async function classSubtotal(
   supabase: Awaited<ReturnType<typeof createClient>>,
   parentId: string,
   classId: string,
-  childIds: string[]
+  childIds: string[],
+  weeklySlotId?: string | null
 ): Promise<number | null> {
   const [{ data: cls }, { data: tiersJson }] = await Promise.all([
     supabase
       .from("classes")
-      .select("price, category")
+      .select("price, category, billing_months, pick_one_slot")
       .eq("id", classId)
       .in("status", ["active", "full"])
       .maybeSingle(),
@@ -163,7 +197,12 @@ async function classSubtotal(
   if (!cls) return null;
 
   const [proration, categorySiblingIds] = await Promise.all([
-    loadClassUnitPrice(supabase, classId, Number(cls.price)),
+    loadClassUnitPrice(
+      supabase,
+      classId,
+      classPeriodTotal(Number(cls.price), cls.billing_months),
+      cls.pick_one_slot ? weeklySlotId : null
+    ),
     listFamilyChildrenInCategory(supabase, parentId, classId, cls.category),
   ]);
   if (proration.hasEnded) return null;
@@ -188,6 +227,7 @@ export async function completeClassEnrollmentPayment(input: {
   couponCode?: string | null;
   /** תווית לקבלה — אם נבחרה, מחליפה את שם החוג בתיאור החיוב/הקבלה. */
   receiptLabelId?: string | null;
+  weeklySlotId?: string | null;
 }): Promise<CompleteEnrollmentResult> {
   const profile = await requireRole("parent");
   const { classId, childIds, paymentMethod } = input;
@@ -210,7 +250,7 @@ export async function completeClassEnrollmentPayment(input: {
       supabase
         .from("classes")
         .select(
-          "id, title, price, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -234,6 +274,33 @@ export async function completeClassEnrollmentPayment(input: {
     return { success: false, error: "החוג לא נמצא או אינו זמין להרשמה." };
   }
 
+  let weeklySlotId: string | null = null;
+  let slotGenders: ClassGenderPolicy[] = [];
+  if (cls.pick_one_slot) {
+    if (!input.weeklySlotId) {
+      return { success: false, error: "נא לבחור מועד לחוג." };
+    }
+    const { data: slot } = await supabase
+      .from("class_weekly_slots")
+      .select("id, gender_policy")
+      .eq("id", input.weeklySlotId)
+      .eq("class_id", classId)
+      .maybeSingle();
+    if (!slot) {
+      return { success: false, error: "המועד שנבחר אינו שייך לחוג זה." };
+    }
+    weeklySlotId = slot.id;
+    slotGenders = [slot.gender_policy];
+  } else {
+    const { data: slots } = await supabase
+      .from("class_weekly_slots")
+      .select("gender_policy")
+      .eq("class_id", classId);
+    if (slots && slots.length > 0) {
+      slotGenders = [...new Set(slots.map((row) => row.gender_policy))];
+    }
+  }
+
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
@@ -245,19 +312,9 @@ export async function completeClassEnrollmentPayment(input: {
   );
   if (healthError) return { success: false, error: healthError };
 
-  const audience: ClassAudienceFields = {
-    gender_policy: cls.gender_policy,
-    audience_type: cls.audience_type,
-    age_min: cls.age_min,
-    age_max: cls.age_max,
-    grade_min: cls.grade_min,
-    grade_max: cls.grade_max,
-  };
-  for (const child of children) {
-    const eligibilityError = childEligibilityError(audience, child);
-    if (eligibilityError) {
-      return { success: false, error: eligibilityError };
-    }
+  const eligibilityError = childrenEligibilityError(cls, children, slotGenders);
+  if (eligibilityError) {
+    return { success: false, error: eligibilityError };
   }
 
   const alreadyEnrolled = new Set(
@@ -270,11 +327,15 @@ export async function completeClassEnrollmentPayment(input: {
     return { success: false, error: "אחד או יותר מהילדים כבר רשומים לחוג זה." };
   }
 
-  const { count: takenCount } = await supabase
+  let takenQuery = supabase
     .from("enrollments")
     .select("id", { count: "exact", head: true })
     .eq("class_id", classId)
     .in("status", ["active", "pending"]);
+  if (weeklySlotId) {
+    takenQuery = takenQuery.eq("weekly_slot_id", weeklySlotId);
+  }
+  const { count: takenCount } = await takenQuery;
 
   const available = cls.capacity - (takenCount ?? 0);
   if (uniqueChildIds.length > available) {
@@ -282,8 +343,8 @@ export async function completeClassEnrollmentPayment(input: {
       success: false,
       error:
         available <= 0
-          ? "אין מקומות פנויים בחוג."
-          : `נותרו רק ${available} מקומות פנויים בחוג.`,
+          ? "אין מקומות פנויים במועד זה."
+          : `נותרו רק ${available} מקומות פנויים במועד זה.`,
     };
   }
 
@@ -299,7 +360,12 @@ export async function completeClassEnrollmentPayment(input: {
     ),
   ]);
 
-  const proration = await loadClassUnitPrice(supabase, classId, Number(cls.price));
+  const proration = await loadClassUnitPrice(
+    supabase,
+    classId,
+    classPeriodTotal(Number(cls.price), cls.billing_months),
+    weeklySlotId
+  );
   if (proration.hasEnded) {
     return { success: false, error: "החוג כבר הסתיים ולא ניתן להירשם אליו." };
   }
@@ -392,6 +458,7 @@ export async function completeClassEnrollmentPayment(input: {
       parent_id: profile.id,
       child_id: childId,
       class_id: classId,
+      weekly_slot_id: weeklySlotId,
       type: "class" as const,
       status: "active" as const,
       payment_status:
@@ -462,7 +529,8 @@ export async function completeClassEnrollmentPayment(input: {
       method: paymentMethod,
       paymentIds: createdPayments.map((payment) => payment.id),
       couponRedemptionId: redemptionId,
-      metadata: { classId, childIds: uniqueChildIds },
+      metadata: { classId, childIds: uniqueChildIds, weeklySlotId },
+      installments: classInstallmentOptions(cls.billing_months),
     });
 
     if (!charge.success || !charge.redirectUrl) {
@@ -520,6 +588,7 @@ export async function completeClassEnrollmentPayment(input: {
 export async function joinClassWaitlist(input: {
   classId: string;
   childIds: string[];
+  weeklySlotId?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("parent");
   const uniqueChildIds = [...new Set(input.childIds.filter(Boolean))];
@@ -535,7 +604,7 @@ export async function joinClassWaitlist(input: {
       supabase
         .from("classes")
         .select(
-          "id, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, pick_one_slot, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
         )
         .eq("id", input.classId)
         .maybeSingle(),
@@ -571,6 +640,31 @@ export async function joinClassWaitlist(input: {
     return { success: false, error: "החוג כבר הסתיים ולא ניתן להצטרף לרשימת ההמתנה." };
   }
 
+  let slotGenders: ClassGenderPolicy[] = [];
+  if (cls.pick_one_slot) {
+    if (!input.weeklySlotId) {
+      return { success: false, error: "נא לבחור מועד לחוג." };
+    }
+    const { data: slot } = await supabase
+      .from("class_weekly_slots")
+      .select("id, gender_policy")
+      .eq("id", input.weeklySlotId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+    if (!slot) {
+      return { success: false, error: "המועד שנבחר אינו שייך לחוג זה." };
+    }
+    slotGenders = [slot.gender_policy];
+  } else {
+    const { data: slots } = await supabase
+      .from("class_weekly_slots")
+      .select("gender_policy")
+      .eq("class_id", input.classId);
+    if (slots && slots.length > 0) {
+      slotGenders = [...new Set(slots.map((row) => row.gender_policy))];
+    }
+  }
+
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
@@ -582,19 +676,9 @@ export async function joinClassWaitlist(input: {
   );
   if (healthError) return { success: false, error: healthError };
 
-  const audience: ClassAudienceFields = {
-    gender_policy: cls.gender_policy,
-    audience_type: cls.audience_type,
-    age_min: cls.age_min,
-    age_max: cls.age_max,
-    grade_min: cls.grade_min,
-    grade_max: cls.grade_max,
-  };
-  for (const child of children) {
-    const eligibilityError = childEligibilityError(audience, child);
-    if (eligibilityError) {
-      return { success: false, error: eligibilityError };
-    }
+  const eligibilityError = childrenEligibilityError(cls, children, slotGenders);
+  if (eligibilityError) {
+    return { success: false, error: eligibilityError };
   }
 
   const alreadyWaitlisted = new Set(
@@ -613,6 +697,7 @@ export async function joinClassWaitlist(input: {
       parent_id: profile.id,
       child_id: childId,
       class_id: input.classId,
+      weekly_slot_id: input.weeklySlotId ?? null,
       status: "waiting" as const,
     }))
   );

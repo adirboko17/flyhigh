@@ -1,4 +1,20 @@
 import type { IconName } from "@/components/icons/paths";
+import type { PlanTicketStub } from "@/components/programs/PlanTicketCard";
+import {
+  activityStartingPrice,
+  extraHalfHourLabel,
+  parseActivityPriceTiers,
+  shortActivityPeopleRange,
+  usesGroupPricing,
+} from "@/lib/finance/activityPricing";
+import { formatCurrency } from "@/utils/format";
+import type { Json } from "@/types/database.types";
+
+export type ActivityPriceRow = {
+  range: string;
+  price: string;
+  note: string | null;
+};
 
 export interface PlanCardTemplate {
   icon: IconName;
@@ -34,6 +50,56 @@ export const ACTIVITY_CARD_TEMPLATE: PlanCardTemplate = {
     "משלמים, ואז מתאמים מועד מול המשרד",
   ],
 };
+
+export function activityCardPresentation(program: {
+  price: number;
+  price_tiers?: Json | null;
+  extra_half_hour_price?: number | null;
+}) {
+  const tiers = parseActivityPriceTiers(program.price_tiers);
+  const extra = extraHalfHourLabel(program.extra_half_hour_price);
+  const features = extra
+    ? [...ACTIVITY_CARD_TEMPLATE.features, extra]
+    : ACTIVITY_CARD_TEMPLATE.features;
+
+  if (!usesGroupPricing(tiers)) {
+    return {
+      price: formatCurrency(program.price),
+      period: ACTIVITY_CARD_TEMPLATE.period,
+      pricePrefix: null as string | null,
+      hint: "פעילות בבריכה לפי מספר המשתתפים",
+      priceRows: [] as ActivityPriceRow[],
+      extraLine: extra,
+      stub: { kind: "people", label: "למשתתף" } satisfies PlanTicketStub,
+      features,
+    };
+  }
+
+  const starting = activityStartingPrice(tiers, program.price);
+  const stubValue = Number.isInteger(starting)
+    ? String(starting)
+    : starting.toFixed(2);
+
+  return {
+    price: formatCurrency(starting),
+    period: "/ לקבוצה",
+    pricePrefix: "החל מ־",
+    hint: "המחיר לפי מספר המשתתפים",
+    priceRows: tiers.map((tier) => ({
+      range: shortActivityPeopleRange(tier),
+      price: formatCurrency(tier.price),
+      note: tier.note,
+    })),
+    extraLine: extra,
+    stub: {
+      kind: "people",
+      eyebrow: "החל מ־",
+      value: stubValue,
+      unit: "₪",
+    } satisfies PlanTicketStub,
+    features,
+  };
+}
 
 export function programDurationLabel(months: number): string {
   return months === 1 ? "/ חודש" : `/ ${months} חודשים`;

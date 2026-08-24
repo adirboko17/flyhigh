@@ -1,10 +1,15 @@
+import { parseBillingMonths } from "@/lib/finance/classPricing";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatCurrency } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
-export function classPriceLabel(proration: ProratedClassPrice): string {
+export function classPriceLabel(
+  proration: ProratedClassPrice,
+  billingMonths?: number | null
+): string {
   if (proration.hasEnded) return "החוג הסתיים";
   if (proration.isLate) return "מחיר מעכשיו";
+  if (parseBillingMonths(billingMonths)) return "מחיר לחודש";
   return "מחיר";
 }
 
@@ -12,15 +17,21 @@ export function ClassPriceAmount({
   proration,
   soldOut = false,
   size = "card",
+  billingMonths,
 }: {
   proration: ProratedClassPrice;
   soldOut?: boolean;
   size?: "card" | "panel";
+  billingMonths?: number | null;
 }) {
+  const months = parseBillingMonths(billingMonths);
   const amountClass =
     size === "panel"
       ? "font-display text-3xl font-extrabold sm:text-4xl"
       : "font-display text-[26px] font-extrabold leading-none tabular-nums";
+  const monthlyPrice = months
+    ? Math.round((proration.fullPrice / months) * 100) / 100
+    : null;
 
   if (proration.hasEnded) {
     return (
@@ -32,11 +43,24 @@ export function ClassPriceAmount({
 
   if (!proration.isLate) {
     return (
-      <p
-        className={cn(amountClass, soldOut ? "text-ink-400" : "text-brand-700")}
-      >
-        {formatCurrency(proration.unitPrice)}
-      </p>
+      <div>
+        <p
+          className={cn(amountClass, soldOut ? "text-ink-400" : "text-brand-700")}
+        >
+          {formatCurrency(monthlyPrice ?? proration.unitPrice)}
+        </p>
+        {monthlyPrice != null && (
+          <p
+            className={cn(
+              "font-semibold",
+              size === "panel" ? "mt-0.5 text-sm" : "text-[11px] leading-tight",
+              soldOut ? "text-ink-400" : "text-ink-500"
+            )}
+          >
+            לחודש
+          </p>
+        )}
+      </div>
     );
   }
 
@@ -57,14 +81,28 @@ export function ClassPriceAmount({
 export function ClassPriceNote({
   proration,
   compact = false,
+  billingMonths,
 }: {
   proration: ProratedClassPrice;
   compact?: boolean;
+  billingMonths?: number | null;
 }) {
+  const months = parseBillingMonths(billingMonths);
+
   if (proration.hasEnded) {
     return (
       <p className={cn("text-ink-500", compact ? "text-xs" : "text-sm")}>
         כל המפגשים כבר התקיימו
+      </p>
+    );
+  }
+
+  if (months && !proration.isLate) {
+    return (
+      <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
+        {compact
+          ? `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)}`
+          : `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)} · ניתן לפרוס בתשלומים`}
       </p>
     );
   }

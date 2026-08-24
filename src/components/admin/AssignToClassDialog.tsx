@@ -22,6 +22,11 @@ import {
   countFamilyChildrenInCategory,
   listFamilyChildrenInCategory,
 } from "@/lib/enrollment/categorySiblings";
+import {
+  classPeriodTotal,
+  parseBillingMonths,
+} from "@/lib/finance/classPricing";
+import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
@@ -68,7 +73,8 @@ export function AssignToClassDialog({
   );
   const [tiers, setTiers] = useState<SiblingDiscountTier[]>([]);
   const [categorySiblingIds, setCategorySiblingIds] = useState<string[]>([]);
-  const [unitPrice, setUnitPrice] = useState(Number(cls.price));
+  const periodTotal = classPeriodTotal(Number(cls.price), cls.billing_months);
+  const [unitPrice, setUnitPrice] = useState(periodTotal);
   const [prorationNote, setProrationNote] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [parentId, setParentId] = useState<string | null>(
@@ -77,6 +83,18 @@ export function AssignToClassDialog({
   const [childIds, setChildIds] = useState<string[]>(
     isWaitlist && mode.entry.child_id ? [mode.entry.child_id] : []
   );
+  const [weeklySlotId, setWeeklySlotId] = useState(
+    isWaitlist ? mode.entry.weekly_slot_id ?? "" : ""
+  );
+  const [slots, setSlots] = useState<
+    {
+      id: string;
+      day_of_week: number;
+      start_time: string;
+      end_time: string;
+      gender_policy: "male" | "female" | "mixed";
+    }[]
+  >([]);
   const [method, setMethod] = useState<AssignChargeMethod>("cash");
   const [markPaid, setMarkPaid] = useState(false);
   const [amount, setAmount] = useState("");
@@ -101,7 +119,7 @@ export function AssignToClassDialog({
       .then(({ data }) => {
         if (!active) return;
         const proration = prorateClassPrice(
-          Number(cls.price),
+          classPeriodTotal(Number(cls.price), cls.billing_months),
           data ?? [],
           todayInIsrael()
         );
@@ -114,6 +132,18 @@ export function AssignToClassDialog({
               : null
         );
       });
+
+    if (cls.pick_one_slot) {
+      supabase
+        .from("class_weekly_slots")
+        .select("id, day_of_week, start_time, end_time, gender_policy")
+        .eq("class_id", cls.id)
+        .order("day_of_week")
+        .order("start_time")
+        .then(({ data }) => {
+          if (active) setSlots(data ?? []);
+        });
+    }
 
     if (!isWaitlist) {
       supabase
@@ -129,7 +159,7 @@ export function AssignToClassDialog({
     return () => {
       active = false;
     };
-  }, [cls.id, cls.price, isWaitlist]);
+  }, [cls.id, cls.price, cls.billing_months, isWaitlist]);
 
   useEffect(() => {
     if (!parentId) {
@@ -220,6 +250,10 @@ export function AssignToClassDialog({
       setError("נא לבחור לקוח ולפחות ילד/ה אחד/ת.");
       return;
     }
+    if (cls.pick_one_slot && !weeklySlotId) {
+      setError("נא לבחור מועד לשיבוץ.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -236,6 +270,7 @@ export function AssignToClassDialog({
           classId: cls.id,
           parentId,
           childIds,
+          weeklySlotId: weeklySlotId || null,
           ...payload,
         });
 
@@ -276,11 +311,18 @@ export function AssignToClassDialog({
               {formatCurrency(unitPrice)}
             </span>
           </div>
-          {unitPrice !== Number(cls.price) && (
+          {unitPrice !== periodTotal && (
             <div className="mt-1 flex justify-between gap-3 text-ink-400">
               <span>מחיר מלא לתקופה</span>
-              <span className="line-through">{formatCurrency(cls.price)}</span>
+              <span className="line-through">{formatCurrency(periodTotal)}</span>
             </div>
+          )}
+          {parseBillingMonths(cls.billing_months) && (
+            <p className="mt-2 text-xs leading-relaxed text-ink-500">
+              {formatCurrency(cls.price)} לחודש ×{" "}
+              {parseBillingMonths(cls.billing_months)} חודשים. בדף הסליקה אפשר
+              לפרוס לתשלומים.
+            </p>
           )}
           {prorationNote && (
             <p className="mt-2 text-xs leading-relaxed text-amber-800">
@@ -288,6 +330,28 @@ export function AssignToClassDialog({
             </p>
           )}
         </div>
+
+        {cls.pick_one_slot && (
+          <Field label="מועד" required>
+            <Select
+              value={weeklySlotId}
+              onChange={(e) => setWeeklySlotId(e.target.value)}
+              required
+            >
+              <option value="">בחרו מועד...</option>
+              {slots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {formatWeeklySlotLabel(
+                    slot.day_of_week,
+                    slot.start_time,
+                    slot.end_time,
+                    slot.gender_policy
+                  )}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         {isWaitlist ? (
           <div className="rounded-2xl border border-ink-100 p-4">
@@ -373,7 +437,11 @@ export function AssignToClassDialog({
 
         {method !== "none" && (
           <>
-            {isCreditCard && <CardcomRedirectHint />}
+            {isCreditCard && (
+              <CardcomRedirectHint
+                installmentsMax={parseBillingMonths(cls.billing_months)}
+              />
+            )}
 
             <Field
               label="סכום לחיוב"

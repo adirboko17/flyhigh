@@ -17,8 +17,8 @@ export function isActivityProgram(
   return kind === "activity";
 }
 
-/** כמות נפשות שמותר לבחור ברכישת פעילות. */
-export const ACTIVITY_MAX_PEOPLE = 20;
+/** כמות נפשות שמותר לבחור ברכישת פעילות, כולל מדרגת 16 ומעלה. */
+export const ACTIVITY_MAX_PEOPLE = 30;
 
 /** משך ברירת מחדל לתיאום מועד פעילות, בדקות. */
 export const ACTIVITY_DEFAULT_DURATION_MINUTES = 60;

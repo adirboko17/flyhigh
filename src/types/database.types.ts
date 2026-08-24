@@ -97,6 +97,7 @@ export type Database = {
           id: string
           instructor_id: string | null
           notes: string | null
+          session_id: string | null
           status: Database["public"]["Enums"]["attendance_status"]
         }
         Insert: {
@@ -107,6 +108,7 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           notes?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
         }
         Update: {
@@ -117,6 +119,7 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           notes?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
         }
         Relationships: [
@@ -312,6 +315,7 @@ export type Database = {
           start_time: string
           status: Database["public"]["Enums"]["class_session_status"]
           substitute_instructor_id: string | null
+          weekly_slot_id: string | null
         }
         Insert: {
           class_id: string
@@ -323,6 +327,7 @@ export type Database = {
           start_time: string
           status?: Database["public"]["Enums"]["class_session_status"]
           substitute_instructor_id?: string | null
+          weekly_slot_id?: string | null
         }
         Update: {
           class_id?: string
@@ -334,6 +339,7 @@ export type Database = {
           start_time?: string
           status?: Database["public"]["Enums"]["class_session_status"]
           substitute_instructor_id?: string | null
+          weekly_slot_id?: string | null
         }
         Relationships: [
           {
@@ -358,6 +364,7 @@ export type Database = {
           created_at: string
           day_of_week: number
           end_time: string
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           id: string
           start_time: string
         }
@@ -366,6 +373,7 @@ export type Database = {
           created_at?: string
           day_of_week: number
           end_time: string
+          gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
           start_time: string
         }
@@ -374,6 +382,7 @@ export type Database = {
           created_at?: string
           day_of_week?: number
           end_time?: string
+          gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
           start_time?: string
         }
@@ -392,6 +401,7 @@ export type Database = {
           age_max: number | null
           age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
+          billing_months: number | null
           capacity: number
           category: string | null
           created_at: string
@@ -406,6 +416,7 @@ export type Database = {
           image_url: string | null
           instructor_id: string | null
           level: string | null
+          pick_one_slot: boolean
           price: number
           schedule_type: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers: Json | null
@@ -418,6 +429,7 @@ export type Database = {
           age_max?: number | null
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
+          billing_months?: number | null
           capacity?: number
           category?: string | null
           created_at?: string
@@ -432,6 +444,7 @@ export type Database = {
           image_url?: string | null
           instructor_id?: string | null
           level?: string | null
+          pick_one_slot?: boolean
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers?: Json | null
@@ -444,6 +457,7 @@ export type Database = {
           age_max?: number | null
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
+          billing_months?: number | null
           capacity?: number
           category?: string | null
           created_at?: string
@@ -458,6 +472,7 @@ export type Database = {
           image_url?: string | null
           instructor_id?: string | null
           level?: string | null
+          pick_one_slot?: boolean
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers?: Json | null
@@ -639,11 +654,13 @@ export type Database = {
           starts_on: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
+          weekly_slot_id: string | null
         }
         Insert: {
           admin_assigned?: boolean
           child_id?: string | null
           class_id?: string | null
+          weekly_slot_id?: string | null
           created_at?: string
           discount_percent?: number
           ends_on?: string | null
@@ -675,6 +692,7 @@ export type Database = {
           starts_on?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type?: Database["public"]["Enums"]["enrollment_type"]
+          weekly_slot_id?: string | null
         }
         Relationships: [
           {
@@ -1224,9 +1242,11 @@ export type Database = {
           created_at: string
           description: string | null
           duration_months: number
+          extra_half_hour_price: number | null
           id: string
           kind: Database["public"]["Enums"]["program_kind"]
           price: number
+          price_tiers: Json
           status: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1235,9 +1255,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_months?: number
+          extra_half_hour_price?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
+          price_tiers?: Json
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1246,9 +1268,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           duration_months?: number
+          extra_half_hour_price?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
+          price_tiers?: Json
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
         }
@@ -1390,6 +1414,7 @@ export type Database = {
           id: string
           parent_id: string
           status: Database["public"]["Enums"]["waitlist_status"]
+          weekly_slot_id: string | null
         }
         Insert: {
           child_id?: string | null
@@ -1398,6 +1423,7 @@ export type Database = {
           id?: string
           parent_id: string
           status?: Database["public"]["Enums"]["waitlist_status"]
+          weekly_slot_id?: string | null
         }
         Update: {
           child_id?: string | null
@@ -1406,6 +1432,7 @@ export type Database = {
           id?: string
           parent_id?: string
           status?: Database["public"]["Enums"]["waitlist_status"]
+          weekly_slot_id?: string | null
         }
         Relationships: [
           {
@@ -1557,6 +1584,20 @@ export type Database = {
           start_time: string
           status: Database["public"]["Enums"]["class_session_status"]
           substitute_instructor_name: string
+          weekly_slot_id: string | null
+        }[]
+      }
+      list_public_class_slots: {
+        Args: { p_class_id: string }
+        Returns: {
+          available: number
+          capacity: number
+          day_of_week: number
+          end_time: string
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          id: string
+          start_time: string
+          taken_count: number
         }[]
       }
       list_public_classes: {
@@ -1567,6 +1608,7 @@ export type Database = {
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           available: number
           billable_session_count: number
+          billing_months: number | null
           capacity: number
           category: string
           day_of_week: number
@@ -1580,6 +1622,7 @@ export type Database = {
           image_url: string
           instructor_name: string
           level: string
+          pick_one_slot: boolean
           price: number
           remaining_session_count: number
           schedule_days: string
@@ -1632,7 +1675,7 @@ export type Database = {
     }
     Enums: {
       attendance_status: "present" | "absent" | "late"
-      class_audience_type: "age" | "grade"
+      class_audience_type: "age" | "grade" | "open"
       class_gender_policy: "male" | "female" | "mixed"
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
@@ -1796,7 +1839,7 @@ export const Constants = {
   public: {
     Enums: {
       attendance_status: ["present", "absent", "late"],
-      class_audience_type: ["age", "grade"],
+      class_audience_type: ["age", "grade", "open"],
       class_gender_policy: ["male", "female", "mixed"],
       class_session_status: ["scheduled", "cancelled", "completed"],
       class_status: ["active", "inactive", "full"],

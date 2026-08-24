@@ -20,7 +20,7 @@ const NAV_LINKS = [
   { href: "/contact", label: "צור קשר" },
 ] as const;
 
-/** קישורים משפטיים בשורה התחתונה. עמוד התקנון עדיין לא נבנה. */
+/** קישורים משפטיים בשורה התחתונה. */
 const LEGAL_LINKS = [
   { href: "/accessibility", label: "הצהרת נגישות" },
   { href: "/terms", label: "תקנון" },

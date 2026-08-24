@@ -9,9 +9,11 @@ import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CLASS_SESSION_STATUS, CLASS_STATUS, dayLabel } from "@/lib/constants";
 import {
+  formatAudienceFieldLabel,
   formatClassAudience,
   formatClassGenderPolicy,
 } from "@/lib/class-audience";
+import { classPeriodTotal, parseBillingMonths } from "@/lib/finance/classPricing";
 import { describeTier, parseSiblingTiers } from "@/lib/finance/siblingDiscount";
 import { createClient } from "@/lib/supabase/client";
 import type { Enums } from "@/types/database.types";
@@ -139,10 +141,18 @@ export function ClassPreviewDialog({
           <DetailBox icon="👥" label="מיועד ל" value={genderLabel} />
           <DetailBox
             icon="🎂"
-            label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
+            label={formatAudienceFieldLabel(cls.audience_type)}
             value={audienceLabel}
           />
-          <DetailBox icon="💰" label="מחיר" value={formatCurrency(cls.price)} />
+          <DetailBox
+            icon="💰"
+            label="מחיר"
+            value={
+              parseBillingMonths(cls.billing_months)
+                ? `${formatCurrency(cls.price)} לחודש × ${parseBillingMonths(cls.billing_months)} · סה״כ ${formatCurrency(classPeriodTotal(cls.price, cls.billing_months))}`
+                : formatCurrency(cls.price)
+            }
+          />
           <DetailBox
             icon="👨‍👩‍👧"
             label="תפוסה"

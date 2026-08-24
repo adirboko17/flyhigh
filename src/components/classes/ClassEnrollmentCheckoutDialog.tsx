@@ -24,6 +24,7 @@ import {
   EMPTY_RECEIPT_LABEL_CHOICE,
   type ReceiptLabelChoice,
 } from "@/lib/receipt-labels";
+import { parseBillingMonths } from "@/lib/finance/classPricing";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatCurrency, formatDate } from "@/utils/format";
 import {
@@ -42,10 +43,13 @@ interface ClassEnrollmentCheckoutDialogProps {
   classTitle: string;
   unitPrice: number;
   proration: ProratedClassPrice;
+  billingMonths?: number | null;
   selectedChildren: Child[];
   siblingTiers: SiblingDiscountTier[];
   /** אחים שכבר רשומים לאותה קטגוריה — נספרים למדרגת ההנחה. */
   enrolledSiblings: number;
+  weeklySlotId?: string | null;
+  weeklySlotLabel?: string | null;
 }
 
 export function ClassEnrollmentCheckoutDialog({
@@ -55,9 +59,12 @@ export function ClassEnrollmentCheckoutDialog({
   classTitle,
   unitPrice,
   proration,
+  billingMonths,
   selectedChildren,
   siblingTiers,
   enrolledSiblings,
+  weeklySlotId,
+  weeklySlotLabel,
 }: ClassEnrollmentCheckoutDialogProps) {
   const router = useRouter();
   const [step, setStep] = useState<"summary" | "payment" | "success">("summary");
@@ -74,6 +81,7 @@ export function ClassEnrollmentCheckoutDialog({
     EMPTY_RECEIPT_LABEL_CHOICE
   );
 
+  const months = parseBillingMonths(billingMonths);
   const count = selectedChildren.length;
   const order = calculateOrderTotal(
     unitPrice,
@@ -108,6 +116,7 @@ export function ClassEnrollmentCheckoutDialog({
       code: couponInput,
       classId,
       childIds: selectedChildren.map((c) => c.id),
+      weeklySlotId,
     });
 
     setCouponLoading(false);
@@ -144,6 +153,7 @@ export function ClassEnrollmentCheckoutDialog({
       paymentMethod: method,
       couponCode: coupon?.code ?? null,
       receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
+      weeklySlotId,
     });
 
     setLoading(false);
@@ -192,6 +202,11 @@ export function ClassEnrollmentCheckoutDialog({
           <ClassLateRegistrationBanner proration={proration} />
 
           <div className="rounded-2xl bg-ink-50 p-4">
+            {weeklySlotLabel && (
+              <p className="mb-3 text-sm font-semibold text-brand-800">
+                מועד: {weeklySlotLabel}
+              </p>
+            )}
             <p className="text-sm font-semibold text-ink-700">ילדים להרשמה</p>
             <ul className="mt-2 space-y-1.5">
               {selectedChildren.map((child) => (
@@ -227,6 +242,26 @@ export function ClassEnrollmentCheckoutDialog({
           />
 
           <div className="space-y-2 border-t border-ink-100 pt-4 text-sm">
+            {months && !proration.isLate && (
+              <>
+                <div className="flex justify-between gap-3 text-ink-600">
+                  <span>מחיר לחודש</span>
+                  <span className="shrink-0">
+                    {formatCurrency(proration.fullPrice / months)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3 text-ink-600">
+                  <span>{months} חודשים</span>
+                  <span className="shrink-0">
+                    {formatCurrency(proration.fullPrice)}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-ink-500">
+                  אי אפשר לרכוש חודש בודד — החיוב הוא על כל התקופה, עם אפשרות
+                  לפריסה בתשלומים בדף הסליקה.
+                </p>
+              </>
+            )}
             {proration.isLate && (
               <>
                 <div className="flex justify-between gap-3 text-ink-500">
@@ -250,10 +285,14 @@ export function ClassEnrollmentCheckoutDialog({
                 </div>
               </>
             )}
-            <div className="flex justify-between gap-3 text-ink-600">
-              <span>{proration.isLate ? "מחיר לילד/ה מעכשיו" : "מחיר לילד/ה"}</span>
-              <span className="shrink-0">{formatCurrency(unitPrice)}</span>
-            </div>
+            {(!months || proration.isLate) && (
+              <div className="flex justify-between gap-3 text-ink-600">
+                <span>
+                  {proration.isLate ? "מחיר לילד/ה מעכשיו" : "מחיר לילד/ה"}
+                </span>
+                <span className="shrink-0">{formatCurrency(unitPrice)}</span>
+              </div>
+            )}
             <div className="flex justify-between gap-3 text-ink-600">
               <span>כמות ילדים</span>
               <span className="shrink-0">{count}</span>
@@ -359,7 +398,7 @@ export function ClassEnrollmentCheckoutDialog({
               </p>
             </div>
           ) : (
-            <CardcomRedirectHint />
+            <CardcomRedirectHint installmentsMax={months} />
           )}
 
           {error && (

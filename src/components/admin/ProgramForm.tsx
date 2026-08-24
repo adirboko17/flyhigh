@@ -2,12 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
-import { createClient } from "@/lib/supabase/client";
+import { ActivityPriceTierEditor } from "@/components/admin/ActivityPriceTierEditor";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
+import {
+  HAFUGA_EXTRA_HALF_HOUR_PRICE,
+  activityStartingPrice,
+  parseActivityPriceTiers,
+  serializeActivityPriceTiers,
+  validateActivityPriceTiers,
+  type ActivityPriceTier,
+} from "@/lib/finance/activityPricing";
 import { isActivityProgram, type ProgramKind } from "@/lib/programs";
+import { createClient } from "@/lib/supabase/client";
+import type { Json } from "@/types/database.types";
 import { cn } from "@/utils/cn";
 
 export type ProgramFormData = {
@@ -18,6 +28,8 @@ export type ProgramFormData = {
   duration_months: number;
   kind: ProgramKind;
   status: "draft" | "active" | "inactive";
+  price_tiers?: Json | null;
+  extra_half_hour_price?: number | null;
 };
 
 const emptyForm = {
@@ -60,12 +72,21 @@ export function ProgramForm({
   const isEdit = Boolean(existing);
   const inModal = Boolean(onClose);
   const [form, setForm] = useState(() => toFormState(existing, defaultKind));
+  const [priceTiers, setPriceTiers] = useState<ActivityPriceTier[]>(() =>
+    parseActivityPriceTiers(existing?.price_tiers)
+  );
+  const [extraHalfHour, setExtraHalfHour] = useState(
+    existing?.extra_half_hour_price != null
+      ? String(existing.extra_half_hour_price)
+      : ""
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kind: ProgramKind = isActivityProgram(form.kind)
     ? "activity"
     : "membership";
   const isActivity = kind === "activity";
+  const usesGroupPricing = isActivity && priceTiers.length > 0;
   const tracksHash = isActivity ? "#activities" : "#programs";
 
   const set =
@@ -95,12 +116,37 @@ export function ProgramForm({
       return;
     }
 
+    const tiers = isActivity ? priceTiers : [];
+    const tiersError = validateActivityPriceTiers(tiers);
+    if (tiersError) {
+      setError(tiersError);
+      setLoading(false);
+      return;
+    }
+
+    const extraHalfHourPrice = isActivity
+      ? extraHalfHour.trim() === ""
+        ? null
+        : Number(extraHalfHour)
+      : null;
+    if (
+      extraHalfHourPrice != null &&
+      (!Number.isFinite(extraHalfHourPrice) || extraHalfHourPrice < 0)
+    ) {
+      setError("תוספת חצי שעה חייבת להיות מספר תקין.");
+      setLoading(false);
+      return;
+    }
+
+    const unitPrice = Number(form.price) || 0;
     const payload = {
       title: form.title,
       description: form.description || null,
-      price: Number(form.price) || 0,
+      price: activityStartingPrice(tiers, unitPrice),
       duration_months: durationMonths,
       kind,
+      price_tiers: serializeActivityPriceTiers(tiers),
+      extra_half_hour_price: extraHalfHourPrice,
       // פריט חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
@@ -160,26 +206,84 @@ export function ProgramForm({
           }
         />
       </Field>
-      <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
-        <Field
-          label={isActivity ? "מחיר למשתתף (₪)" : "מחיר (₪)"}
-          required
-        >
-          <Input
-            type="number"
-            min={0}
-            step="1"
-            value={form.price}
-            onChange={set("price")}
-            required
-          />
-        </Field>
-        {isActivity ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:col-span-1">
-            הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה
-            בתיאום מועדים כדי לחייג ולתאם מועד.
+      {isActivity ? (
+        <div className="space-y-4">
+          <Field label="איך מחשבים את המחיר">
+            <Select
+              value={usesGroupPricing ? "group" : "per_person"}
+              onChange={(e) => {
+                if (e.target.value === "per_person") {
+                  setPriceTiers([]);
+                  return;
+                }
+                if (priceTiers.length === 0) {
+                  setPriceTiers([
+                    { minPeople: 2, maxPeople: 2, price: 250, note: null },
+                  ]);
+                }
+              }}
+            >
+              <option value="per_person">מחיר למשתתף × מספר האנשים</option>
+              <option value="group">מחיר לפי גודל קבוצה</option>
+            </Select>
+          </Field>
+
+          {usesGroupPricing ? (
+            <Field label="מדרגות מחיר לקבוצה" required>
+              <ActivityPriceTierEditor
+                tiers={priceTiers}
+                onChange={setPriceTiers}
+                onFillHafuga={() =>
+                  setExtraHalfHour(String(HAFUGA_EXTRA_HALF_HOUR_PRICE))
+                }
+                disabled={loading}
+              />
+            </Field>
+          ) : (
+            <Field label="מחיר למשתתף (₪)" required>
+              <Input
+                type="number"
+                min={0}
+                step="1"
+                value={form.price}
+                onChange={set("price")}
+                required
+              />
+            </Field>
+          )}
+
+          <Field
+            label="תוספת חצי שעה (₪)"
+            hint="מוצג ללקוח בלבד. התוספת מתווספת בתיאום הטלפוני, לא בתשלום הראשוני."
+          >
+            <Input
+              type="number"
+              min={0}
+              step="1"
+              value={extraHalfHour}
+              onChange={(e) => setExtraHalfHour(e.target.value)}
+              placeholder="לדוגמה: 100"
+            />
+          </Field>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {usesGroupPricing
+              ? "הלקוח בוחר כמה משתתפים ומשלם את מחיר המדרגה המתאימה לקבוצה. אחרי התשלום הבקשה מופיעה בתיאום מועדים."
+              : "הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה בתיאום מועדים כדי לחייג ולתאם מועד."}
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          <Field label="מחיר (₪)" required>
+            <Input
+              type="number"
+              min={0}
+              step="1"
+              value={form.price}
+              onChange={set("price")}
+              required
+            />
+          </Field>
           <Field label="משך המנוי" required hint="לפי זה תחושב התראת הסיום למנהל">
             <Select value={form.duration_months} onChange={set("duration_months")}>
               {Array.from({ length: 12 }, (_, index) => index + 1).map((months) => (
@@ -192,17 +296,26 @@ export function ProgramForm({
               <option value="36">36 חודשים</option>
             </Select>
           </Field>
-        )}
-        {isEdit && (
-          <Field label="סטטוס">
-            <Select value={form.status} onChange={set("status")}>
-              <option value="draft">טיוטה</option>
-              <option value="active">פעיל</option>
-              <option value="inactive">לא פעיל</option>
-            </Select>
-          </Field>
-        )}
-      </div>
+          {isEdit && (
+            <Field label="סטטוס">
+              <Select value={form.status} onChange={set("status")}>
+                <option value="draft">טיוטה</option>
+                <option value="active">פעיל</option>
+                <option value="inactive">לא פעיל</option>
+              </Select>
+            </Field>
+          )}
+        </div>
+      )}
+      {isActivity && isEdit && (
+        <Field label="סטטוס">
+          <Select value={form.status} onChange={set("status")}>
+            <option value="draft">טיוטה</option>
+            <option value="active">פעיל</option>
+            <option value="inactive">לא פעיל</option>
+          </Select>
+        </Field>
+      )}
     </>
   );
 

@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createPublicClient } from "@/lib/supabase/public";
-import type { PublicClass, PoolPass, Program, PrivateLesson } from "@/types";
+import type { PublicClass, PublicClassSlot, PoolPass, Program, PrivateLesson } from "@/types";
 
 const PUBLIC_DATA_REVALIDATE_SECONDS = 60;
 
@@ -62,6 +62,23 @@ export const getPublicPlans = unstable_cache(
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-plans"],
+  }
+);
+
+export const getPublicClassSlots = unstable_cache(
+  async (classId: string): Promise<PublicClassSlot[]> => {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase.rpc("list_public_class_slots", {
+      p_class_id: classId,
+    });
+
+    if (error) throw error;
+    return (data as PublicClassSlot[]) ?? [];
+  },
+  ["public-class-slots-v2"],
+  {
+    revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
+    tags: ["public-class-slots"],
   }
 );
 

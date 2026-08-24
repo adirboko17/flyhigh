@@ -150,7 +150,14 @@ export function PaymentMethodPicker({
   );
 }
 
-export function CardcomRedirectHint() {
+export function CardcomRedirectHint({
+  installmentsMax,
+}: {
+  installmentsMax?: number | null;
+}) {
+  const months =
+    installmentsMax && installmentsMax >= 2 ? Math.floor(installmentsMax) : null;
+
   return (
     <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">
       <p className="font-semibold">תשלום מאובטח בקארדקום</p>
@@ -158,6 +165,12 @@ export function CardcomRedirectHint() {
         בלחיצה תועברו לדף הסליקה של קארדקום להזנת כרטיס האשראי. אחרי התשלום
         תחזרו לאתר עם אישור, והחשבונית תופק אוטומטית.
       </p>
+      {months ? (
+        <p className="mt-2">
+          החיוב הוא על כל התקופה. בדף הסליקה אפשר לפרוס עד {months} תשלומים
+          (ברירת המחדל: {months} תשלומים).
+        </p>
+      ) : null}
     </div>
   );
 }

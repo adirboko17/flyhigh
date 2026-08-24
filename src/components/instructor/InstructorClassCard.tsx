@@ -25,7 +25,7 @@ export interface InstructorClassData {
   endTime: string | null;
   capacity: number;
   studentCount: number;
-  students: { id: string; full_name: string }[];
+  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
   attendanceHistory: AttendanceRecord[];
   /** האם החוג מתקיים היום — הכרטיס מודגש והפעולה הופכת לראשית. */
   isToday: boolean;

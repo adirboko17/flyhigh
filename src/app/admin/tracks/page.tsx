@@ -10,7 +10,9 @@ export default async function AdminTracksPage() {
     await Promise.all([
       supabase
         .from("programs")
-        .select("id, title, description, price, duration_months, kind, status")
+        .select(
+          "id, title, description, price, duration_months, kind, status, price_tiers, extra_half_hour_price"
+        )
         .order("created_at", { ascending: false }),
       supabase
         .from("pool_passes")

@@ -26,7 +26,9 @@ interface ClassAttendanceFormProps {
   classId: string;
   /** מדריכת החוג; אצל מנהל יכול להיות null אם אין שיוך. */
   instructorId: string | null;
-  students: { id: string; full_name: string }[];
+  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
+  /** כשמוגדר — מציגים רק מפגשים של המועד הזה. */
+  weeklySlotId?: string | null;
   /** הודעה כשאין מפגשים — ברירת מחדל מתאימה למדריכה. */
   emptySessionsHint?: string;
   onSaved?: () => void;
@@ -36,6 +38,7 @@ export function ClassAttendanceForm({
   classId,
   instructorId,
   students,
+  weeklySlotId = null,
   emptySessionsHint = "לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.",
   onSaved,
 }: ClassAttendanceFormProps) {
@@ -50,9 +53,19 @@ export function ClassAttendanceForm({
 
   const selectedSession = sessions[selectedIndex];
   const date = selectedSession?.session_date ?? "";
+  const sessionStudents = selectedSession?.weekly_slot_id
+    ? students.filter(
+        (child) =>
+          !child.weekly_slot_id ||
+          child.weekly_slot_id === selectedSession.weekly_slot_id
+      )
+    : students;
   const allMarked =
-    students.length > 0 && students.every((child) => marks[child.id] !== undefined);
-  const unmarkedCount = students.filter((child) => marks[child.id] === undefined).length;
+    sessionStudents.length > 0 &&
+    sessionStudents.every((child) => marks[child.id] !== undefined);
+  const unmarkedCount = sessionStudents.filter(
+    (child) => marks[child.id] === undefined
+  ).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +73,17 @@ export function ClassAttendanceForm({
     async function loadSessions() {
       setSessionsLoading(true);
       const supabase = createClient();
-      const { data } = await supabase
+      let query = supabase
         .from("class_sessions")
-        .select("id, session_date, start_time, end_time, status")
+        .select("id, session_date, start_time, end_time, status, weekly_slot_id")
         .eq("class_id", classId)
         .neq("status", "cancelled")
         .order("session_date")
         .order("start_time");
+      if (weeklySlotId) {
+        query = query.eq("weekly_slot_id", weeklySlotId);
+      }
+      const { data } = await query;
 
       if (cancelled) return;
 
@@ -80,7 +97,7 @@ export function ClassAttendanceForm({
     return () => {
       cancelled = true;
     };
-  }, [classId]);
+  }, [classId, weeklySlotId]);
 
   useEffect(() => {
     if (students.length === 0 || !date) return;
@@ -90,11 +107,15 @@ export function ClassAttendanceForm({
       setLoading(true);
       setSaved(false);
       const supabase = createClient();
-      const { data } = await supabase
+      let query = supabase
         .from("attendance")
         .select("child_id, status")
         .eq("class_id", classId)
         .eq("date", date);
+      if (selectedSession?.id) {
+        query = query.eq("session_id", selectedSession.id);
+      }
+      const { data } = await query;
 
       if (cancelled) return;
 
@@ -110,7 +131,7 @@ export function ClassAttendanceForm({
     return () => {
       cancelled = true;
     };
-  }, [classId, date, students.length]);
+  }, [classId, date, selectedSession?.id, students.length]);
 
   function handleSessionChange(index: number) {
     setSelectedIndex(index);
@@ -122,22 +143,27 @@ export function ClassAttendanceForm({
     setSaving(true);
     setSaved(false);
     const supabase = createClient();
-    const rows = students
+    const rows = sessionStudents
       .filter((child) => marks[child.id] !== undefined)
       .map((child) => ({
         class_id: classId,
         child_id: child.id,
         instructor_id: instructorId,
         date,
+        session_id: selectedSession?.id ?? null,
         status: marks[child.id]!,
       }));
 
     if (rows.length > 0) {
-      await supabase
+      let deleteQuery = supabase
         .from("attendance")
         .delete()
         .eq("class_id", classId)
         .eq("date", date);
+      if (selectedSession?.id) {
+        deleteQuery = deleteQuery.eq("session_id", selectedSession.id);
+      }
+      await deleteQuery;
       await supabase.from("attendance").insert(rows);
     }
 
@@ -171,15 +197,15 @@ export function ClassAttendanceForm({
             <SessionNotesPanel sessionId={selectedSession.id} classId={classId} />
           )}
 
-          {students.length === 0 ? (
+          {sessionStudents.length === 0 ? (
             <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
-              אין תלמידים רשומים בחוג זה.
+              אין תלמידים רשומים למועד זה.
             </p>
           ) : loading ? (
             <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
           ) : (
             <div className="space-y-2">
-              {students.map((child) => {
+              {sessionStudents.map((child) => {
                 const current = marks[child.id];
                 return (
                   <div
@@ -219,7 +245,7 @@ export function ClassAttendanceForm({
             </div>
           )}
 
-          {students.length > 0 && (
+          {sessionStudents.length > 0 && (
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={save}

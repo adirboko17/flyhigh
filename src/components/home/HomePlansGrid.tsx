@@ -13,9 +13,12 @@ import {
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
+  activityCardPresentation,
   programDurationLabel,
 } from "@/lib/program-cards";
+import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
 import { isActivityProgram, type ProgramKind } from "@/lib/programs";
+import type { Json } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 
 const HOME_PREVIEW_LIMIT = 2;
@@ -27,6 +30,8 @@ type Program = {
   price: number;
   duration_months: number;
   kind: ProgramKind;
+  price_tiers?: Json | null;
+  extra_half_hour_price?: number | null;
 };
 
 type PoolPass = {
@@ -128,12 +133,14 @@ export function HomePlansGrid({
             <SectionHead
               eyebrow="הפוגה"
               title="פעילויות"
-              sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
+              sub="בוחרים כמה אנשים, משלמים לפי המחירון, ומתאמים מועד"
               accent="var(--logo-magenta)"
             />
           </ScrollReveal>
           <div className="grid gap-5 sm:grid-cols-2">
-            {previewActivities.map((p, index) => (
+            {previewActivities.map((p, index) => {
+              const card = activityCardPresentation(p);
+              return (
               <ScrollReveal
                 key={p.id}
                 delay={Math.min((index % 2) * 80, 80)}
@@ -145,6 +152,8 @@ export function HomePlansGrid({
                   planTitle={p.title}
                   price={p.price}
                   programKind={p.kind}
+                  priceTiers={parseActivityPriceTiers(p.price_tiers)}
+                  extraHalfHourPrice={p.extra_half_hour_price}
                   viewer={viewer}
                   className="h-full hover:translate-y-0 hover:shadow-none"
                 >
@@ -152,16 +161,20 @@ export function HomePlansGrid({
                     compact
                     name={p.title}
                     desc={p.description}
-                    price={formatCurrency(p.price)}
-                    period={ACTIVITY_CARD_TEMPLATE.period}
-                    stub={{ kind: "people" }}
-                    features={ACTIVITY_CARD_TEMPLATE.features}
+                    price={card.price}
+                    period={card.period}
+                    pricePrefix={card.pricePrefix}
+                    priceRows={card.priceRows}
+                    extraLine={card.extraLine}
+                    stub={card.stub}
+                    features={card.features}
                     icon={ACTIVITY_CARD_TEMPLATE.icon}
                     accent={ACTIVITY_CARD_TEMPLATE.accent}
                   />
                 </PlanPurchaseTrigger>
               </ScrollReveal>
-            ))}
+              );
+            })}
           </div>
           {activities.length > HOME_PREVIEW_LIMIT && (
             <SeeAllLink href="/programs#activities" />

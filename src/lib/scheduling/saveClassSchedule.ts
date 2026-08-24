@@ -2,25 +2,128 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import {
   syncLegacyClassFields,
+  weeklySlotKey,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
+
+function sessionWeekday(sessionDate: string) {
+  const [year, month, day] = sessionDate.split("-").map(Number);
+  return new Date(year, month - 1, day).getDay();
+}
 
 export async function saveClassSchedule(
   supabase: SupabaseClient<Database>,
   classId: string,
   schedule: ClassScheduleState
 ): Promise<{ error: string | null }> {
-  const { error: deleteSlotsError } = await supabase
+  const { data: existingSlots, error: loadSlotsError } = await supabase
     .from("class_weekly_slots")
-    .delete()
+    .select("id, day_of_week, start_time, end_time")
     .eq("class_id", classId);
 
-  if (deleteSlotsError) {
+  if (loadSlotsError) {
     return { error: "שמירת לוח הזמנים נכשלה." };
   }
 
-  // המפגשים נבנים מחדש בכל שמירה, ולכן שיבוצי המחליפות נשמרים לפי תאריך ושעה
-  // ומוחזרים למפגשים המקבילים אחרי היצירה מחדש.
+  const slotIdByKey = new Map<string, string>();
+
+  if (schedule.scheduleType === "weekly") {
+    const incoming = schedule.weeklySlots.filter(
+      (slot) => slot.startTime.trim() && slot.endTime.trim()
+    );
+    const unusedExisting = [...(existingSlots ?? [])];
+
+    for (const slot of incoming) {
+      const key = weeklySlotKey(slot);
+      const byId = slot.id
+        ? unusedExisting.find((row) => row.id === slot.id)
+        : undefined;
+      const byKey = unusedExisting.find(
+        (row) =>
+          row.day_of_week === slot.dayOfWeek &&
+          row.start_time.slice(0, 5) === slot.startTime.slice(0, 5)
+      );
+      const match = byId ?? byKey;
+
+      if (match) {
+        slotIdByKey.set(key, match.id);
+        unusedExisting.splice(unusedExisting.indexOf(match), 1);
+        const { error: updateError } = await supabase
+          .from("class_weekly_slots")
+          .update({
+            day_of_week: slot.dayOfWeek,
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            gender_policy: slot.genderPolicy ?? "mixed",
+          })
+          .eq("id", match.id);
+        if (updateError) {
+          return { error: "שמירת ימי החוג נכשלה." };
+        }
+      } else {
+        const { data: inserted, error: insertError } = await supabase
+          .from("class_weekly_slots")
+          .insert({
+            class_id: classId,
+            day_of_week: slot.dayOfWeek,
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            gender_policy: slot.genderPolicy ?? "mixed",
+          })
+          .select("id")
+          .single();
+        if (insertError || !inserted) {
+          return { error: "שמירת ימי החוג נכשלה." };
+        }
+        slotIdByKey.set(key, inserted.id);
+      }
+    }
+
+    const removable = unusedExisting.map((row) => row.id);
+    if (removable.length > 0) {
+      const { count: enrolledOnRemoved } = await supabase
+        .from("enrollments")
+        .select("id", { count: "exact", head: true })
+        .in("weekly_slot_id", removable)
+        .neq("status", "cancelled");
+
+      if ((enrolledOnRemoved ?? 0) > 0) {
+        return {
+          error: "לא ניתן למחוק מועד שיש בו נרשמים. העבירו אותם למועד אחר קודם.",
+        };
+      }
+
+      const { error: deleteUnusedError } = await supabase
+        .from("class_weekly_slots")
+        .delete()
+        .in("id", removable);
+      if (deleteUnusedError) {
+        return { error: "שמירת ימי החוג נכשלה." };
+      }
+    }
+  } else if ((existingSlots ?? []).length > 0) {
+    const existingIds = (existingSlots ?? []).map((row) => row.id);
+    const { count: enrolledOnSlots } = await supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .in("weekly_slot_id", existingIds)
+      .neq("status", "cancelled");
+
+    if ((enrolledOnSlots ?? 0) > 0) {
+      return {
+        error: "לא ניתן לעבור לתאריכים מותאמים כשיש נרשמים למועד מסוים.",
+      };
+    }
+
+    const { error: deleteSlotsError } = await supabase
+      .from("class_weekly_slots")
+      .delete()
+      .eq("class_id", classId);
+    if (deleteSlotsError) {
+      return { error: "שמירת לוח הזמנים נכשלה." };
+    }
+  }
+
   const { data: previousSessions } = await supabase
     .from("class_sessions")
     .select("session_date, start_time, substitute_instructor_id")
@@ -43,21 +146,6 @@ export async function saveClassSchedule(
     return { error: "שמירת לוח הזמנים נכשלה." };
   }
 
-  if (schedule.scheduleType === "weekly" && schedule.weeklySlots.length > 0) {
-    const { error: slotsError } = await supabase.from("class_weekly_slots").insert(
-      schedule.weeklySlots.map((slot) => ({
-        class_id: classId,
-        day_of_week: slot.dayOfWeek,
-        start_time: slot.startTime,
-        end_time: slot.endTime,
-      }))
-    );
-
-    if (slotsError) {
-      return { error: "שמירת ימי החוג נכשלה." };
-    }
-  }
-
   if (schedule.sessions.length > 0) {
     const { error: sessionsError } = await supabase.from("class_sessions").insert(
       schedule.sessions.map((session) => ({
@@ -67,6 +155,13 @@ export async function saveClassSchedule(
         end_time: session.endTime,
         status: session.status,
         notes: session.notes || null,
+        weekly_slot_id:
+          slotIdByKey.get(
+            weeklySlotKey({
+              dayOfWeek: sessionWeekday(session.sessionDate),
+              startTime: session.startTime,
+            })
+          ) ?? null,
         substitute_instructor_id:
           substituteBySlot.get(
             `${session.sessionDate}|${session.startTime.slice(0, 5)}`

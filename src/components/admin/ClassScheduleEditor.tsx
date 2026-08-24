@@ -1,18 +1,27 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/icons/Icon";
-import { Field, Input } from "@/components/ui/Input";
+import { Field, Input, Select } from "@/components/ui/Input";
 import { DAYS_OF_WEEK } from "@/lib/constants";
+import { CLASS_GENDER_POLICY, type ClassGenderPolicy } from "@/lib/class-audience";
 import {
+  formatWeeklySlotLabel,
   generateWeeklySessions,
+  groupSessionsByWeeklySlot,
+  lastSessionDate,
   mergeGeneratedSessions,
+  nextWeeklySessionDate,
+  parseSessionCount,
   formatScheduleSummary,
+  sessionSlotKey,
+  weeklySlotKey,
   type ClassScheduleState,
   type ClassSessionDraft,
+  type WeeklySlot,
 } from "@/lib/scheduling/classSchedule";
-import { formatDate, formatTime } from "@/utils/format";
+import { formatDate, formatDateShort, formatTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
 interface Props {
@@ -28,37 +37,38 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
     onChange({ ...value, scheduleType });
   }
 
-  function toggleDay(dayOfWeek: number) {
-    const exists = value.weeklySlots.some((s) => s.dayOfWeek === dayOfWeek);
-    const defaultTime = value.weeklySlots[0] ?? {
-      startTime: "16:00",
-      endTime: "17:00",
-    };
-
-    const weeklySlots = exists
-      ? value.weeklySlots.filter((s) => s.dayOfWeek !== dayOfWeek)
-      : [
-          ...value.weeklySlots,
-          {
-            dayOfWeek,
-            startTime: defaultTime.startTime || "16:00",
-            endTime: defaultTime.endTime || "17:00",
-          },
-        ].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-
-    onChange({ ...value, weeklySlots });
+  function addWeeklySlot() {
+    const last = value.weeklySlots[value.weeklySlots.length - 1];
+    onChange({
+      ...value,
+      weeklySlots: [
+        ...value.weeklySlots,
+        {
+          dayOfWeek: last?.dayOfWeek ?? 1,
+          startTime: last?.startTime || "16:00",
+          endTime: last?.endTime || "16:45",
+          genderPolicy: last?.genderPolicy ?? "mixed",
+        },
+      ],
+    });
   }
 
-  function updateSlotTime(
-    dayOfWeek: number,
-    field: "startTime" | "endTime",
-    time: string,
+  function updateWeeklySlot(
+    index: number,
+    patch: Partial<(typeof value.weeklySlots)[number]>
   ) {
     onChange({
       ...value,
-      weeklySlots: value.weeklySlots.map((slot) =>
-        slot.dayOfWeek === dayOfWeek ? { ...slot, [field]: time } : slot,
+      weeklySlots: value.weeklySlots.map((slot, i) =>
+        i === index ? { ...slot, ...patch } : slot
       ),
+    });
+  }
+
+  function removeWeeklySlot(index: number) {
+    onChange({
+      ...value,
+      weeklySlots: value.weeklySlots.filter((_, i) => i !== index),
     });
   }
 
@@ -67,10 +77,12 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
       value.weeklySlots,
       value.rangeStart,
       value.rangeEnd,
+      parseSessionCount(value.sessionCount),
     );
     onChange({
       ...value,
       sessions: mergeGeneratedSessions(value.sessions, generated),
+      rangeEnd: lastSessionDate(generated) || value.rangeEnd,
     });
   }
 
@@ -104,6 +116,28 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
     });
   }
 
+  function addSessionToSlot(slot: WeeklySlot) {
+    const key = weeklySlotKey(slot);
+    const lastDate = value.sessions
+      .filter((session) => session.sessionDate && sessionSlotKey(session) === key)
+      .map((session) => session.sessionDate)
+      .sort()
+      .at(-1);
+
+    onChange({
+      ...value,
+      sessions: [
+        ...value.sessions,
+        {
+          sessionDate: nextWeeklySessionDate(slot, lastDate, value.rangeStart),
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          status: "scheduled",
+        },
+      ],
+    });
+  }
+
   return (
     <div className="min-w-0 max-w-full space-y-5 overflow-hidden">
       <Field label="סוג לוח זמנים">
@@ -127,77 +161,103 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
 
       {value.scheduleType === "weekly" && (
         <>
-          <Field label="ימים בשבוע" hint="ניתן לבחור יום אחד או יותר">
-            <div className="flex flex-wrap gap-2">
-              {DAYS_OF_WEEK.map((label, dayOfWeek) => {
-                const selected = value.weeklySlots.some(
-                  (s) => s.dayOfWeek === dayOfWeek,
-                );
-                return (
-                  <button
-                    key={dayOfWeek}
-                    type="button"
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-ink-800">מועדים בשבוע</p>
+              <p className="mt-0.5 text-xs text-ink-500">
+                כל שורה היא מועד נפרד. אפשר להוסיף את אותו יום כמה פעמים, למשל
+                שני 14:15 ושני 15:00. לכל מועד בוחרים אם הוא לבנים, לבנות או
+                מעורב. כשבוחרים «בחירת מועד אחד» — הילד נרשם רק לאחד מהם.
+              </p>
+            </div>
+            {value.weeklySlots.map((slot, index) => (
+              <div
+                key={slot.id ?? `new-${index}`}
+                className="grid grid-cols-1 items-end gap-2 rounded-xl border border-ink-100 bg-ink-50/60 p-3 sm:grid-cols-[minmax(6.5rem,1fr)_1fr_1fr_minmax(6.5rem,1fr)_auto] sm:gap-3"
+              >
+                <Field label="יום">
+                  <Select
+                    value={String(slot.dayOfWeek)}
+                    onChange={(e) =>
+                      updateWeeklySlot(index, {
+                        dayOfWeek: Number(e.target.value),
+                      })
+                    }
                     disabled={disabled}
-                    onClick={() => toggleDay(dayOfWeek)}
-                    className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                      selected
-                        ? "border-brand-500 bg-brand-50 text-brand-700"
-                        : "border-ink-200 bg-white text-ink-600 hover:border-brand-300"
-                    } disabled:opacity-50`}
                   >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-
-          {value.weeklySlots.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-ink-800">
-                שעות לפי יום
-              </p>
-              <p className="text-xs text-ink-500">
-                אפשר להגדיר שעה שונה לכל יום. אחרי יצירת הרשימה אפשר גם לשנות
-                שעה לכל מפגש בנפרד.
-              </p>
-              {value.weeklySlots.map((slot) => (
-                <div
-                  key={slot.dayOfWeek}
-                  className="grid grid-cols-[minmax(4.5rem,auto)_1fr_1fr] items-end gap-2 rounded-xl border border-ink-100 bg-ink-50/60 p-3 sm:gap-3"
+                    {DAYS_OF_WEEK.map((label, dayOfWeek) => (
+                      <option key={dayOfWeek} value={dayOfWeek}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="התחלה">
+                  <ScheduleInput
+                    type="time"
+                    placeholder="התחלה"
+                    value={slot.startTime}
+                    onChange={(e) =>
+                      updateWeeklySlot(index, { startTime: e.target.value })
+                    }
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="סיום">
+                  <ScheduleInput
+                    type="time"
+                    placeholder="סיום"
+                    value={slot.endTime}
+                    onChange={(e) =>
+                      updateWeeklySlot(index, { endTime: e.target.value })
+                    }
+                    disabled={disabled}
+                  />
+                </Field>
+                <Field label="מגדר">
+                  <Select
+                    value={slot.genderPolicy}
+                    onChange={(e) =>
+                      updateWeeklySlot(index, {
+                        genderPolicy: e.target.value as ClassGenderPolicy,
+                      })
+                    }
+                    disabled={disabled}
+                  >
+                    {(Object.keys(CLASS_GENDER_POLICY) as ClassGenderPolicy[]).map(
+                      (value) => (
+                        <option key={value} value={value}>
+                          {CLASS_GENDER_POLICY[value]}
+                        </option>
+                      )
+                    )}
+                  </Select>
+                </Field>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mb-0.5"
+                  disabled={disabled || value.weeklySlots.length <= 1}
+                  onClick={() => removeWeeklySlot(index)}
                 >
-                  <p className="pb-2.5 text-sm font-bold text-ink-800">
-                    {DAYS_OF_WEEK[slot.dayOfWeek]}
-                  </p>
-                  <Field label="התחלה">
-                    <ScheduleInput
-                      type="time"
-                      placeholder="התחלה"
-                      value={slot.startTime}
-                      onChange={(e) =>
-                        updateSlotTime(slot.dayOfWeek, "startTime", e.target.value)
-                      }
-                      disabled={disabled}
-                    />
-                  </Field>
-                  <Field label="סיום">
-                    <ScheduleInput
-                      type="time"
-                      placeholder="סיום"
-                      value={slot.endTime}
-                      onChange={(e) =>
-                        updateSlotTime(slot.dayOfWeek, "endTime", e.target.value)
-                      }
-                      disabled={disabled}
-                    />
-                  </Field>
-                </div>
-              ))}
-            </div>
-          )}
+                  הסרה
+                </Button>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled}
+              onClick={addWeeklySlot}
+            >
+              הוספת מועד
+            </Button>
+          </div>
 
-          <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="תאריך התחלה (טווח)">
+          <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-3">
+            <Field label="תאריך התחלה">
               <ScheduleInput
                 type="date"
                 placeholder="בחרו תאריך התחלה"
@@ -208,7 +268,27 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
                 disabled={disabled}
               />
             </Field>
-            <Field label="תאריך סיום (טווח)">
+            <Field
+              label="מספר מפגשים"
+              hint="לכל מועד בנפרד. לדוגמה 22 = 22 תאריכים פעם בשבוע לכל שורה"
+            >
+              <Input
+                type="number"
+                min={1}
+                max={80}
+                inputMode="numeric"
+                placeholder="לדוגמה 22"
+                value={value.sessionCount}
+                onChange={(e) =>
+                  onChange({ ...value, sessionCount: e.target.value })
+                }
+                disabled={disabled}
+              />
+            </Field>
+            <Field
+              label="תאריך סיום"
+              hint="אופציונלי — מתמלא אוטומטית אחרי יצירת המפגשים"
+            >
               <ScheduleInput
                 type="date"
                 placeholder="בחרו תאריך סיום"
@@ -228,7 +308,7 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
               disabled ||
               value.weeklySlots.length === 0 ||
               !value.rangeStart ||
-              !value.rangeEnd
+              (!parseSessionCount(value.sessionCount) && !value.rangeEnd)
             }
             onClick={generateSessions}
           >
@@ -239,10 +319,12 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
 
       <SessionList
         sessions={value.sessions}
+        weeklySlots={value.weeklySlots}
         scheduleType={value.scheduleType}
         onUpdate={updateSession}
         onRemove={removeSession}
         onAdd={addCustomSession}
+        onAddToSlot={addSessionToSlot}
         disabled={disabled}
       />
 
@@ -372,17 +454,21 @@ function ScheduleInput({
 
 function SessionList({
   sessions,
+  weeklySlots,
   scheduleType,
   onUpdate,
   onRemove,
   onAdd,
+  onAddToSlot,
   disabled,
 }: {
   sessions: ClassSessionDraft[];
+  weeklySlots: WeeklySlot[];
   scheduleType: ClassScheduleState["scheduleType"];
   onUpdate: (index: number, patch: Partial<ClassSessionDraft>) => void;
   onRemove: (index: number) => void;
   onAdd: () => void;
+  onAddToSlot: (slot: WeeklySlot) => void;
   disabled?: boolean;
 }) {
   if (sessions.length === 0 && scheduleType === "custom") {
@@ -405,115 +491,258 @@ function SessionList({
 
   if (sessions.length === 0) return null;
 
+  const grouped =
+    scheduleType === "weekly" && weeklySlots.length > 0
+      ? groupSessionsByWeeklySlot(weeklySlots, sessions)
+      : null;
+
   return (
     <Field
       label="מפגשים"
-      hint="לחצו על השעה של כל מפגש כדי לשנות אותה. אפשר גם לשנות תאריך, לבטל מפגש או להוסיף מפגש"
+      hint={
+        grouped
+          ? "כל כרטיס הוא מועד. לחצו כדי לפתוח ולערוך את המפגשים שלו"
+          : "לחצו על השעה של כל מפגש כדי לשנות אותה. אפשר גם לשנות תאריך, לבטל מפגש או להוסיף מפגש"
+      }
     >
-      <div className="space-y-3">
-        {sessions.map((session, index) => (
-          <div
-            key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
-            className={`rounded-xl border p-3 ${
-              session.status === "cancelled"
-                ? "border-red-200 bg-red-50/50 opacity-75"
-                : "border-ink-100 bg-white"
-            }`}
+      {grouped ? (
+        <GroupedSessionList
+          groups={grouped}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onAddToSlot={onAddToSlot}
+          disabled={disabled}
+        />
+      ) : (
+        <div className="space-y-3">
+          {sessions.map((session, index) => (
+            <SessionCard
+              key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
+              session={session}
+              onUpdate={(patch) => onUpdate(index, patch)}
+              onRemove={() => onRemove(index)}
+              disabled={disabled}
+            />
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAdd}
+            disabled={disabled}
           >
-            <div className="grid gap-2 sm:grid-cols-[1.2fr_0.9fr_0.9fr]">
-              <Field label="תאריך">
-                <ScheduleInput
-                  type="date"
-                  placeholder="תאריך המפגש"
-                  value={session.sessionDate}
-                  onChange={(e) =>
-                    onUpdate(index, { sessionDate: e.target.value })
-                  }
-                  disabled={disabled || session.status === "cancelled"}
-                />
-              </Field>
-              <Field label="שעת התחלה">
-                <ScheduleInput
-                  type="time"
-                  placeholder="התחלה"
-                  value={session.startTime}
-                  onChange={(e) =>
-                    onUpdate(index, { startTime: e.target.value })
-                  }
-                  disabled={disabled || session.status === "cancelled"}
-                />
-              </Field>
-              <Field label="שעת סיום">
-                <ScheduleInput
-                  type="time"
-                  placeholder="סיום"
-                  value={session.endTime}
-                  onChange={(e) => onUpdate(index, { endTime: e.target.value })}
-                  disabled={disabled || session.status === "cancelled"}
-                />
-              </Field>
-            </div>
+            הוספת מפגש
+          </Button>
+        </div>
+      )}
+    </Field>
+  );
+}
 
-            <div className="mt-2 flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 sm:flex-none"
-                disabled={disabled}
-                onClick={() =>
-                  onUpdate(index, {
-                    status:
-                      session.status === "cancelled" ? "scheduled" : "cancelled",
-                    notes:
-                      session.status === "cancelled"
-                        ? undefined
-                        : session.notes ?? "בוטל",
-                  })
-                }
-              >
-                {session.status === "cancelled" ? "שחזור" : "ביטול"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 sm:flex-none"
-                disabled={disabled}
-                onClick={() => onRemove(index)}
-              >
-                מחיקה
-              </Button>
-            </div>
+function GroupedSessionList({
+  groups,
+  onUpdate,
+  onRemove,
+  onAddToSlot,
+  disabled,
+}: {
+  groups: ReturnType<typeof groupSessionsByWeeklySlot>;
+  onUpdate: (index: number, patch: Partial<ClassSessionDraft>) => void;
+  onRemove: (index: number) => void;
+  onAddToSlot: (slot: WeeklySlot) => void;
+  disabled?: boolean;
+}) {
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
 
-            {session.status === "cancelled" && (
-              <p className="mt-2 text-xs font-medium text-red-600">
-                מפגש מבוטל · {formatDate(session.sessionDate)}{" "}
-                {formatTime(session.startTime)}
-              </p>
-            )}
-            {session.status !== "cancelled" && (
-              <Input
-                className="mt-2"
-                placeholder="הערה (למשל: דחייה בגלל חג)"
-                value={session.notes ?? ""}
-                onChange={(e) => onUpdate(index, { notes: e.target.value })}
-                disabled={disabled}
+  function toggle(key: string) {
+    setOpenKeys((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => {
+        const open = openKeys.includes(group.key);
+        const active = group.items.filter(
+          (item) => item.session.status !== "cancelled"
+        );
+        const cancelled = group.items.length - active.length;
+        const dates = active
+          .map((item) => item.session.sessionDate)
+          .filter(Boolean)
+          .sort();
+        const title = group.slot
+          ? formatWeeklySlotLabel(
+              group.slot.dayOfWeek,
+              group.slot.startTime,
+              group.slot.endTime,
+              group.slot.genderPolicy
+            )
+          : "מפגשים אחרים";
+        const range =
+          dates.length > 0
+            ? dates[0] === dates[dates.length - 1]
+              ? formatDateShort(dates[0])
+              : `${formatDateShort(dates[0])} – ${formatDateShort(dates[dates.length - 1])}`
+            : null;
+
+        return (
+          <div
+            key={group.key}
+            className="overflow-hidden rounded-2xl border border-ink-200 bg-white"
+          >
+            <button
+              type="button"
+              onClick={() => toggle(group.key)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
+            >
+              <span className="min-w-0">
+                <span className="block font-semibold text-ink-900">{title}</span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  {active.length} מפגשים
+                  {cancelled > 0 ? ` · ${cancelled} מבוטלים` : ""}
+                  {range ? ` · ${range}` : ""}
+                </span>
+              </span>
+              <Icon
+                name="chevron"
+                size={18}
+                className={cn(
+                  "shrink-0 text-ink-400 transition-transform",
+                  open && "-rotate-90"
+                )}
               />
+            </button>
+
+            {open && (
+              <div className="space-y-3 border-t border-ink-100 bg-ink-50/50 p-3">
+                {group.items.map(({ session, index }) => (
+                  <SessionCard
+                    key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
+                    session={session}
+                    onUpdate={(patch) => onUpdate(index, patch)}
+                    onRemove={() => onRemove(index)}
+                    disabled={disabled}
+                  />
+                ))}
+                {group.slot && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onAddToSlot(group.slot!)}
+                    disabled={disabled}
+                  >
+                    הוספת מפגש למועד
+                  </Button>
+                )}
+              </div>
             )}
           </div>
-        ))}
+        );
+      })}
+    </div>
+  );
+}
 
+function SessionCard({
+  session,
+  onUpdate,
+  onRemove,
+  disabled,
+}: {
+  session: ClassSessionDraft;
+  onUpdate: (patch: Partial<ClassSessionDraft>) => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        session.status === "cancelled"
+          ? "border-red-200 bg-red-50/50 opacity-75"
+          : "border-ink-100 bg-white"
+      }`}
+    >
+      <div className="grid gap-2 sm:grid-cols-[1.2fr_0.9fr_0.9fr]">
+        <Field label="תאריך">
+          <ScheduleInput
+            type="date"
+            placeholder="תאריך המפגש"
+            value={session.sessionDate}
+            onChange={(e) => onUpdate({ sessionDate: e.target.value })}
+            disabled={disabled || session.status === "cancelled"}
+          />
+        </Field>
+        <Field label="שעת התחלה">
+          <ScheduleInput
+            type="time"
+            placeholder="התחלה"
+            value={session.startTime}
+            onChange={(e) => onUpdate({ startTime: e.target.value })}
+            disabled={disabled || session.status === "cancelled"}
+          />
+        </Field>
+        <Field label="שעת סיום">
+          <ScheduleInput
+            type="time"
+            placeholder="סיום"
+            value={session.endTime}
+            onChange={(e) => onUpdate({ endTime: e.target.value })}
+            disabled={disabled || session.status === "cancelled"}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-2 flex gap-2">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={onAdd}
+          className="flex-1 sm:flex-none"
           disabled={disabled}
+          onClick={() =>
+            onUpdate({
+              status: session.status === "cancelled" ? "scheduled" : "cancelled",
+              notes:
+                session.status === "cancelled"
+                  ? undefined
+                  : session.notes ?? "בוטל",
+            })
+          }
         >
-          הוספת מפגש
+          {session.status === "cancelled" ? "שחזור" : "ביטול"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 sm:flex-none"
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          מחיקה
         </Button>
       </div>
-    </Field>
+
+      {session.status === "cancelled" && (
+        <p className="mt-2 text-xs font-medium text-red-600">
+          מפגש מבוטל · {formatDate(session.sessionDate)}{" "}
+          {formatTime(session.startTime)}
+        </p>
+      )}
+      {session.status !== "cancelled" && (
+        <Input
+          className="mt-2"
+          placeholder="הערה (למשל: דחייה בגלל חג)"
+          value={session.notes ?? ""}
+          onChange={(e) => onUpdate({ notes: e.target.value })}
+          disabled={disabled}
+        />
+      )}
+    </div>
   );
 }

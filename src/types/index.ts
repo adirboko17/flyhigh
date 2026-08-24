@@ -29,4 +29,10 @@ export type ClassWithInstructor = Class & {
 export type PublicClass =
   Database["public"]["Functions"]["list_public_classes"]["Returns"][number];
 
+export type PublicClassSlot =
+  Database["public"]["Functions"]["list_public_class_slots"]["Returns"][number];
+
+export type PublicClassSession =
+  Database["public"]["Functions"]["list_public_class_sessions"]["Returns"][number];
+
 export type { Tables, TablesInsert, TablesUpdate, Enums } from "./database.types";

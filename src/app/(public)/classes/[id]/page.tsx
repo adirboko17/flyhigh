@@ -1,17 +1,24 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
+import { ClassSessionGroups } from "@/components/classes/ClassSessionGroups";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
-import { formatClassAudience, formatClassGenderPolicy } from "@/lib/class-audience";
+import {
+  formatAudienceFieldLabel,
+  formatClassAudience,
+  formatClassGenderPolicy,
+} from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import {
   getPublicClasses,
   getPublicClassSessions,
+  getPublicClassSlots,
 } from "@/lib/public-data";
+import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
+import { classPeriodTotal } from "@/lib/finance/classPricing";
 import {
   billableClassSessions,
-  isElapsedClassSession,
   prorateClassPrice,
 } from "@/lib/finance/proratedClassPrice";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
@@ -33,9 +40,10 @@ export default async function ClassDetailPage({
 }) {
   const { id } = await params;
 
-  const [classes, allSessions] = await Promise.all([
+  const [classes, allSessions, slots] = await Promise.all([
     getPublicClasses(),
     getPublicClassSessions(id),
+    getPublicClassSlots(id),
   ]);
 
   const cls = classes.find((candidate) => candidate.id === id);
@@ -43,18 +51,34 @@ export default async function ClassDetailPage({
   if (!cls) notFound();
 
   const today = todayInIsrael();
-  const proration = prorateClassPrice(Number(cls.price), allSessions, today);
+  const pricingSessions =
+    cls.pick_one_slot && slots[0]
+      ? allSessions.filter((session) => session.weekly_slot_id === slots[0].id)
+      : allSessions;
+  const proration = prorateClassPrice(
+    classPeriodTotal(Number(cls.price), cls.billing_months),
+    pricingSessions,
+    today
+  );
   const sessions = billableClassSessions(allSessions);
   const soldOut = cls.available <= 0 || cls.status === "full";
   const scheduleLabel = cls.schedule_days
     ? `ימים ${cls.schedule_days}`
     : cls.schedule_type === "custom"
       ? "תאריכים מותאמים"
-      : `יום ${dayLabel(cls.day_of_week)}`;
+      : cls.day_of_week != null
+        ? `יום ${dayLabel(cls.day_of_week)}`
+        : null;
+  const startDateLabel = formatDate(cls.start_date);
+  const endDateLabel = formatDate(cls.end_date);
 
   const heroDescription =
     cls.description?.trim() ||
-    `${scheduleLabel} · ${formatTime(cls.start_time)}–${formatTime(cls.end_time)}${cls.instructor_name ? ` · ${cls.instructor_name}` : ""}`;
+    [scheduleLabel, formatTime(cls.start_time) !== "-" && cls.end_time
+      ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
+      : null, cls.instructor_name?.trim()]
+      .filter(Boolean)
+      .join(" · ");
 
   return (
     <div className="bg-ink-50">
@@ -96,27 +120,87 @@ export default async function ClassDetailPage({
           </div>
 
           <div className="order-3 lg:mt-6">
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:gap-4 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
-              <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name ?? "-"} />
-              <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
-              <DetailRow
-                icon="🕒"
-                label="שעות"
-                value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
-              />
-              <DetailRow
-                icon="👥"
-                label="מיועד ל"
-                value={formatClassGenderPolicy(cls.gender_policy)}
-              />
-              <DetailRow
-                icon="🎂"
-                label={cls.audience_type === "grade" ? "כיתות" : "גילאים"}
-                value={formatClassAudience(cls)}
-              />
-              <DetailRow icon="🗓️" label="תאריך התחלה" value={formatDate(cls.start_date)} />
-              <DetailRow icon="🏁" label="תאריך סיום" value={formatDate(cls.end_date)} />
+            <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
+              <div className="grid grid-cols-2 gap-px sm:gap-4">
+                <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name} />
+                <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
+                <DetailRow
+                  icon="🕒"
+                  label={cls.pick_one_slot ? "הרשמה" : "שעות"}
+                  value={
+                    cls.pick_one_slot
+                      ? "בחירת מועד אחד בשבוע"
+                      : cls.start_time && cls.end_time
+                        ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
+                        : null
+                  }
+                />
+                <DetailRow
+                  icon="👥"
+                  label="מיועד ל"
+                  value={
+                    slots.length > 1 &&
+                    new Set(slots.map((slot) => slot.gender_policy)).size > 1
+                      ? "לפי המועד שנבחר"
+                      : formatClassGenderPolicy(
+                          slots[0]?.gender_policy ?? cls.gender_policy
+                        )
+                  }
+                />
+                <DetailRow
+                  icon="🎂"
+                  label={formatAudienceFieldLabel(cls.audience_type)}
+                  value={formatClassAudience(cls)}
+                />
+              </div>
+              {(hasDetailValue(startDateLabel) || hasDetailValue(endDateLabel)) && (
+                <div className="grid grid-cols-1 gap-px sm:mt-4 sm:grid-cols-2 sm:gap-4">
+                  <DetailRow
+                    icon="🗓️"
+                    label="תאריך התחלה"
+                    value={startDateLabel}
+                  />
+                  <DetailRow
+                    icon="🏁"
+                    label="תאריך סיום"
+                    value={endDateLabel}
+                  />
+                </div>
+              )}
             </div>
+
+            {cls.pick_one_slot && slots.length > 0 && (
+              <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
+                <h2 className="font-display text-lg font-bold text-ink-900">
+                  מועדים לבחירה
+                </h2>
+                <p className="mt-1 text-sm text-ink-500">
+                  הילד נרשם למועד אחד וחוזר אליו כל שבוע עד סוף התקופה.
+                </p>
+                <ul className="mt-4 divide-y divide-ink-100">
+                  {slots.map((slot) => (
+                    <li
+                      key={slot.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
+                    >
+                      <span className="font-semibold text-ink-900">
+                        {formatWeeklySlotLabel(
+                          slot.day_of_week,
+                          slot.start_time,
+                          slot.end_time,
+                          slot.gender_policy
+                        )}
+                      </span>
+                      <span className="text-ink-500">
+                        {slot.available > 0
+                          ? `${slot.available} מקומות פנויים`
+                          : "מלא"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {sessions.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
@@ -124,62 +208,20 @@ export default async function ClassDetailPage({
                   מפגשים
                 </h2>
                 <p className="mt-1 text-sm text-ink-500">
-                  {proration.isLate
+                  {slots.length > 0
+                    ? "לחצו על מועד כדי לראות את כל המפגשים שלו."
+                    : proration.isLate
                     ? `ההרשמה כוללת ממפגש ${proration.firstSessionNumber} והלאה`
                     : cls.schedule_type === "custom"
                       ? "תאריכים מותאמים לחוג זה"
                       : "רשימת המפגשים בפועל — כולל שינויים ודחיות"}
                 </p>
-                <ul className="mt-4 divide-y divide-ink-100">
-                  {sessions.map((session, index) => {
-                    const sessionNumber = index + 1;
-                    const elapsed = isElapsedClassSession(session, today);
-                    const startsHere =
-                      proration.isLate &&
-                      sessionNumber === proration.firstSessionNumber;
-
-                    return (
-                      <li
-                        key={session.id}
-                        className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
-                      >
-                        <span
-                          className={
-                            elapsed
-                              ? "font-semibold text-ink-400"
-                              : "font-semibold text-ink-900"
-                          }
-                        >
-                          <span className="ms-1 text-xs font-medium text-ink-400">
-                            מפגש {sessionNumber}
-                          </span>{" "}
-                          {formatDate(session.session_date)}
-                        </span>
-                        <span className={elapsed ? "text-ink-400" : "text-ink-600"}>
-                          {formatTime(session.start_time)}–{formatTime(session.end_time)}
-                        </span>
-                        {elapsed && (
-                          <Badge tone="neutral" className="w-full justify-center sm:w-auto">
-                            התקיים
-                          </Badge>
-                        )}
-                        {startsHere && (
-                          <Badge tone="brand" className="w-full justify-center sm:w-auto">
-                            נרשמים מכאן
-                          </Badge>
-                        )}
-                        {session.substitute_instructor_name && !elapsed && (
-                          <Badge tone="warning" className="w-full justify-center sm:w-auto">
-                            מדריכה מחליפה: {session.substitute_instructor_name}
-                          </Badge>
-                        )}
-                        {session.notes && (
-                          <span className="w-full text-xs text-ink-400">{session.notes}</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <ClassSessionGroups
+                  sessions={sessions}
+                  slots={slots}
+                  today={today}
+                  showLateBadge={proration.isLate}
+                />
               </div>
             )}
           </div>
@@ -190,11 +232,17 @@ export default async function ClassDetailPage({
             cls={cls}
             soldOut={soldOut}
             proration={proration}
+            slots={slots}
           />
         </div>
       </div>
     </div>
   );
+}
+
+function hasDetailValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return Boolean(trimmed && trimmed !== "-");
 }
 
 function DetailRow({
@@ -204,8 +252,10 @@ function DetailRow({
 }: {
   icon: string;
   label: string;
-  value: string;
+  value: string | null | undefined;
 }) {
+  if (!hasDetailValue(value)) return null;
+
   return (
     <div className="flex min-w-0 items-center gap-2 bg-white p-3 sm:gap-3 sm:rounded-2xl sm:border sm:border-ink-100 sm:p-4">
       <span className="shrink-0 text-lg sm:text-xl">{icon}</span>

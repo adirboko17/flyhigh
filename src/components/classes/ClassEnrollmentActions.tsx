@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/icons/Icon";
 import { cn } from "@/utils/cn";
 import {
+  DAYS_OF_WEEK,
   parentEnrollmentDisplayBadge,
   WAITLIST_STATUS,
 } from "@/lib/constants";
+import { formatClassGenderPolicy } from "@/lib/class-audience";
+import { formatTime } from "@/utils/format";
 import { joinClassWaitlist } from "@/lib/enrollment/actions";
 import {
   formatAgeRange,
@@ -19,7 +23,10 @@ import {
 import { countFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
+import { Modal } from "@/components/ui/Modal";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
+import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
+import type { PublicClassSlot } from "@/types";
 import type { Enums } from "@/types/database.types";
 
 type Child = {
@@ -50,6 +57,7 @@ interface ClassEnrollmentActionsProps {
   classTitle: string;
   classPrice: number;
   proration: ProratedClassPrice;
+  billingMonths?: number | null;
   ageMin: number | null;
   ageMax: number | null;
   soldOut: boolean;
@@ -61,6 +69,8 @@ interface ClassEnrollmentActionsProps {
   siblingTiers: SiblingDiscountTier[];
   /** אחים שכבר רשומים לאותה קטגוריה — גם בחוג אחר. */
   categorySiblingIds: string[];
+  pickOneSlot?: boolean;
+  slots?: PublicClassSlot[];
 }
 
 export function ClassEnrollmentActions({
@@ -68,6 +78,7 @@ export function ClassEnrollmentActions({
   classTitle,
   classPrice,
   proration,
+  billingMonths,
   ageMin,
   ageMax,
   soldOut,
@@ -78,6 +89,8 @@ export function ClassEnrollmentActions({
   waitlist,
   siblingTiers,
   categorySiblingIds,
+  pickOneSlot = false,
+  slots = [],
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
   const ageRestricted = hasAgeRestriction(ageMin, ageMax);
@@ -95,6 +108,7 @@ export function ClassEnrollmentActions({
             : {
                 eligible: false,
                 age: null,
+                ageLabel: null,
                 reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
               };
           return [child.id, eligibility] as const;
@@ -138,18 +152,26 @@ export function ClassEnrollmentActions({
     [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
   );
 
-  const maxSelectable = useMemo(
-    () =>
-      soldOut
-        ? availableChildren.length
-        : Math.min(availableChildren.length, Math.max(0, availableSpots)),
-    [availableChildren.length, availableSpots, soldOut]
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [weeklySlotId, setWeeklySlotId] = useState<string>(
+    () => (pickOneSlot && slots.length === 1 ? slots[0].id : "")
   );
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedSlot = slots.find((slot) => slot.id === weeklySlotId) ?? null;
+  const needsSlot = pickOneSlot && slots.length > 0 && !selectedSlot;
+  const slotSpots = selectedSlot ? selectedSlot.available : availableSpots;
+  const slotSoldOut = pickOneSlot
+    ? Boolean(selectedSlot && selectedSlot.available <= 0)
+    : soldOut;
+
+  const maxSelectable = useMemo(() => {
+    if (needsSlot || slotSoldOut) return availableChildren.length;
+    return Math.min(availableChildren.length, Math.max(0, slotSpots));
+  }, [availableChildren.length, needsSlot, slotSoldOut, slotSpots]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [slotPickerOpen, setSlotPickerOpen] = useState(false);
+  const [childPickerOpen, setChildPickerOpen] = useState(false);
   const [enrollmentsExpanded, setEnrollmentsExpanded] = useState(false);
-  const [childrenExpanded, setChildrenExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,7 +188,7 @@ export function ClassEnrollmentActions({
     selectedIds
   );
 
-  const atSelectionLimit = !soldOut && selectedIds.length >= maxSelectable;
+  const atSelectionLimit = !slotSoldOut && selectedIds.length >= maxSelectable;
 
   function toggleChild(childId: string) {
     const eligibility = eligibilityByChildId.get(childId);
@@ -180,7 +202,7 @@ export function ClassEnrollmentActions({
         setError(null);
         return prev.filter((id) => id !== childId);
       }
-      if (!soldOut && prev.length >= maxSelectable) {
+      if (!slotSoldOut && prev.length >= maxSelectable) {
         setError(
           maxSelectable <= 0
             ? "אין מקומות פנויים בחוג."
@@ -203,6 +225,10 @@ export function ClassEnrollmentActions({
   }
 
   async function handleWaitlistJoin() {
+    if (pickOneSlot && !weeklySlotId) {
+      setError("נא לבחור מועד לחוג.");
+      return;
+    }
     if (selectedIds.length === 0) {
       setError("נא לבחור לפחות ילד/ה אחד/ת.");
       return;
@@ -214,6 +240,7 @@ export function ClassEnrollmentActions({
     const result = await joinClassWaitlist({
       classId,
       childIds: selectedIds,
+      weeklySlotId: pickOneSlot ? weeklySlotId || null : null,
     });
 
     setLoading(false);
@@ -227,20 +254,24 @@ export function ClassEnrollmentActions({
   }
 
   function handleContinue() {
+    if (pickOneSlot && !weeklySlotId) {
+      setError("נא לבחור מועד לחוג.");
+      return;
+    }
     if (selectedIds.length === 0) {
       setError("נא לבחור לפחות ילד/ה אחד/ת.");
       return;
     }
-    if (!soldOut && selectedIds.length > maxSelectable) {
+    if (!slotSoldOut && selectedIds.length > maxSelectable) {
       setError(
         maxSelectable <= 0
-          ? "אין מקומות פנויים בחוג."
-          : `נותרו רק ${maxSelectable} מקומות פנויים בחוג.`
+          ? "אין מקומות פנויים במועד זה."
+          : `נותרו רק ${maxSelectable} מקומות פנויים במועד זה.`
       );
       return;
     }
     setError(null);
-    if (soldOut) {
+    if (slotSoldOut) {
       void handleWaitlistJoin();
       return;
     }
@@ -332,6 +363,14 @@ export function ClassEnrollmentActions({
 
         {!ended && (availableChildren.length > 0 || ineligibleChildren.length > 0) ? (
           <div className="space-y-3">
+            {pickOneSlot && slots.length > 0 && (
+              <SlotPickerTrigger
+                slotsCount={slots.length}
+                selectedSlot={selectedSlot}
+                onOpen={() => setSlotPickerOpen(true)}
+              />
+            )}
+
             {enrollments.length > 0 && availableChildren.length > 0 && (
               <p className="text-sm text-ink-600">
                 ניתן להירשם גם עבור ילד/ה נוסף/ת:
@@ -344,7 +383,7 @@ export function ClassEnrollmentActions({
               </p>
             )}
 
-            {!soldOut && maxSelectable < availableChildren.length && (
+            {!slotSoldOut && maxSelectable < availableChildren.length && (
               <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 {maxSelectable <= 0
                   ? "אין מקומות פנויים בחוג."
@@ -352,107 +391,12 @@ export function ClassEnrollmentActions({
               </p>
             )}
 
-            <CollapsibleSummaryCard
-              id="class-children-list"
-              tone="brand"
-              count={availableChildren.length + ineligibleChildren.length}
-              title="בחירת ילדים"
-              subtitle={
-                availableChildren.length === 0
-                  ? "אין ילדים מתאימים לטווח הגילאים"
-                  : maxSelectable < availableChildren.length
-                    ? `${selectedIds.length} מתוך ${maxSelectable} נבחרו`
-                    : `${selectedIds.length} מתוך ${availableChildren.length} נבחרו`
-              }
-              expanded={childrenExpanded}
-              onToggle={() => setChildrenExpanded((open) => !open)}
-            >
-              {availableChildren.length > 1 && maxSelectable > 0 && (
-                <div className="flex justify-end border-b border-brand-100 px-3.5 py-2 sm:px-4">
-                  <button
-                    type="button"
-                    onClick={toggleAll}
-                    className="text-xs font-semibold text-brand-600 hover:underline"
-                  >
-                    {selectedIds.length === maxSelectable
-                      ? "ביטול הכל"
-                      : maxSelectable < availableChildren.length
-                        ? `בחירת ${maxSelectable} הראשונים`
-                        : "בחירת כולם"}
-                  </button>
-                </div>
-              )}
-              <ul className="space-y-2 px-3.5 pb-3 pt-2 sm:px-4">
-                {availableChildren.map((child) => {
-                  const checked = selectedIds.includes(child.id);
-                  const disabled = atSelectionLimit && !checked;
-                  const eligibility = eligibilityByChildId.get(child.id);
-                  return (
-                    <li key={child.id}>
-                      <label
-                        className={cn(
-                          "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-colors",
-                          disabled
-                            ? "cursor-not-allowed border-ink-100 bg-ink-50 opacity-60"
-                            : checked
-                              ? "cursor-pointer border-brand-300 bg-brand-50"
-                              : "cursor-pointer border-ink-100 bg-white hover:border-ink-200"
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => toggleChild(child.id)}
-                          className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-400 disabled:cursor-not-allowed"
-                        />
-                        <span className="min-w-0 flex-1 font-medium text-ink-900">
-                          {child.full_name}
-                          {eligibility?.age !== null && eligibility?.age !== undefined && (
-                            <span className="mr-1.5 text-xs font-normal text-ink-400">
-                              גיל {eligibility.age}
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    </li>
-                  );
-                })}
-                {ineligibleChildren.map((child) => {
-                  const eligibility = eligibilityByChildId.get(child.id);
-                  return (
-                    <li key={child.id}>
-                      <div
-                        className="flex items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 opacity-75"
-                        title={eligibility?.reason ?? undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          disabled
-                          className="mt-0.5 h-4 w-4 cursor-not-allowed rounded border-ink-300"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium text-ink-700">
-                            {child.full_name}
-                            {eligibility?.age !== null && eligibility?.age !== undefined && (
-                              <span className="mr-1.5 text-xs font-normal text-ink-400">
-                                גיל {eligibility.age}
-                              </span>
-                            )}
-                          </span>
-                          {eligibility?.reason && (
-                            <p className="mt-1 text-xs text-amber-700">
-                              {eligibility.reason}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CollapsibleSummaryCard>
+            <ChildPickerTrigger
+              selectedChildren={selectedChildren}
+              availableCount={availableChildren.length}
+              eligibilityByChildId={eligibilityByChildId}
+              onOpen={() => setChildPickerOpen(true)}
+            />
 
             {error && (
               <p className="text-sm text-red-600" role="alert">
@@ -464,16 +408,25 @@ export function ClassEnrollmentActions({
               type="button"
               size="lg"
               className="w-full"
-              disabled={loading || selectedIds.length === 0}
-              onClick={handleContinue}
+              disabled={loading || (!needsSlot && selectedIds.length === 0)}
+              onClick={() => {
+                if (needsSlot) {
+                  setError(null);
+                  setSlotPickerOpen(true);
+                  return;
+                }
+                handleContinue();
+              }}
             >
               {loading
                 ? "שומר..."
-                : soldOut
-                  ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
-                  : selectedIds.length > 1
-                    ? `המשך לתשלום (${selectedIds.length} ילדים)`
-                    : "המשך לתשלום"}
+                : needsSlot
+                  ? "נא לבחור מועד"
+                  : slotSoldOut
+                    ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
+                    : selectedIds.length > 1
+                      ? `המשך לתשלום (${selectedIds.length} ילדים)`
+                      : "המשך לתשלום"}
             </Button>
           </div>
         ) : (
@@ -490,7 +443,177 @@ export function ClassEnrollmentActions({
         )}
       </div>
 
-      {!soldOut && !ended && (
+      {pickOneSlot && slots.length > 0 && (
+        <Modal
+          open={slotPickerOpen}
+          onClose={() => setSlotPickerOpen(false)}
+          title="בחירת יום ושעה"
+          description="בחרו מועד אחד. הילד יגיע אליו כל שבוע עד סוף התקופה."
+        >
+          <div className="space-y-2">
+            {slots.map((slot) => {
+              const selected = weeklySlotId === slot.id;
+              const full = slot.available <= 0;
+              return (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => {
+                    setWeeklySlotId(slot.id);
+                    setError(null);
+                    setSlotPickerOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-right transition-colors",
+                    selected
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                      : "border-ink-100 bg-white hover:border-brand-200"
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-base font-bold text-ink-900">
+                      יום {DAYS_OF_WEEK[slot.day_of_week] ?? slot.day_of_week}
+                    </span>
+                    <span className="mt-0.5 block text-sm font-medium text-ink-700">
+                      {formatTime(slot.start_time)}–{formatTime(slot.end_time)}
+                      {" · "}
+                      {formatClassGenderPolicy(slot.gender_policy)}
+                    </span>
+                    <span className="mt-1 block text-xs text-ink-500">
+                      {full
+                        ? "המועד מלא — אפשר להצטרף לרשימת המתנה"
+                        : `${slot.available} מקומות פנויים`}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                      selected
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-ink-300"
+                    )}
+                  >
+                    {selected && <Icon name="check" size={12} stroke={2.5} />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
+
+      <Modal
+        open={childPickerOpen}
+        onClose={() => setChildPickerOpen(false)}
+        title="בחירת ילדים"
+        description={
+          availableChildren.length === 0
+            ? "אין ילדים מתאימים להרשמה לחוג זה."
+            : maxSelectable < availableChildren.length
+              ? `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "ילד/ה" : "ילדים"} לפי המקומות הפנויים.`
+              : "סמנו את הילדים שנרשמים לחוג."
+        }
+      >
+        <div className="space-y-3">
+          {availableChildren.length > 1 && maxSelectable > 0 && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-xs font-semibold text-brand-600 hover:underline"
+              >
+                {selectedIds.length === maxSelectable
+                  ? "ביטול הכל"
+                  : maxSelectable < availableChildren.length
+                    ? `בחירת ${maxSelectable} הראשונים`
+                    : "בחירת כולם"}
+              </button>
+            </div>
+          )}
+          <ul className="space-y-2">
+            {availableChildren.map((child) => {
+              const checked = selectedIds.includes(child.id);
+              const disabled = atSelectionLimit && !checked;
+              const eligibility = eligibilityByChildId.get(child.id);
+              return (
+                <li key={child.id}>
+                  <label
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition-colors",
+                      disabled
+                        ? "cursor-not-allowed border-ink-100 bg-ink-50 opacity-60"
+                        : checked
+                          ? "cursor-pointer border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                          : "cursor-pointer border-ink-100 bg-white hover:border-brand-200"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={() => toggleChild(child.id)}
+                      className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-400 disabled:cursor-not-allowed"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-bold text-ink-900">
+                        {child.full_name}
+                      </span>
+                      {eligibility?.ageLabel && (
+                        <span className="mt-0.5 block text-xs text-ink-500">
+                          גיל {eligibility.ageLabel}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                        checked
+                          ? "border-brand-600 bg-brand-600 text-white"
+                          : "border-ink-300"
+                      )}
+                    >
+                      {checked && <Icon name="check" size={12} stroke={2.5} />}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+            {ineligibleChildren.map((child) => {
+              const eligibility = eligibilityByChildId.get(child.id);
+              return (
+                <li key={child.id}>
+                  <div className="flex items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3.5 opacity-75">
+                    <div className="min-w-0 flex-1">
+                      <span className="block font-medium text-ink-700">
+                        {child.full_name}
+                        {eligibility?.ageLabel && (
+                            <span className="mr-1.5 text-xs font-normal text-ink-400">
+                              גיל {eligibility.ageLabel}
+                            </span>
+                          )}
+                      </span>
+                      {eligibility?.reason && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          {eligibility.reason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => setChildPickerOpen(false)}
+          >
+            סיום בחירה
+          </Button>
+        </div>
+      </Modal>
+
+      {!slotSoldOut && !ended && (
         <ClassEnrollmentCheckoutDialog
           open={checkoutOpen}
           onClose={() => setCheckoutOpen(false)}
@@ -498,12 +621,169 @@ export function ClassEnrollmentActions({
           classTitle={classTitle}
           unitPrice={classPrice}
           proration={proration}
+          billingMonths={billingMonths}
           selectedChildren={selectedChildren}
           siblingTiers={siblingTiers}
           enrolledSiblings={enrollments.length}
+          weeklySlotId={weeklySlotId || null}
+          weeklySlotLabel={
+            selectedSlot
+              ? formatWeeklySlotLabel(
+                  selectedSlot.day_of_week,
+                  selectedSlot.start_time,
+                  selectedSlot.end_time,
+                  selectedSlot.gender_policy
+                )
+              : null
+          }
         />
       )}
     </>
+  );
+}
+
+function SlotPickerTrigger({
+  slotsCount,
+  selectedSlot,
+  onOpen,
+}: {
+  slotsCount: number;
+  selectedSlot: PublicClassSlot | null;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-right transition-colors",
+        selectedSlot
+          ? "border-brand-200 bg-brand-50 hover:border-brand-300"
+          : "border-dashed border-brand-300 bg-brand-50/50 hover:border-brand-400 hover:bg-brand-50"
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white",
+          selectedSlot ? "bg-brand-600" : "bg-brand-500"
+        )}
+      >
+        <Icon name={selectedSlot ? "check" : "calendar"} size={20} />
+      </span>
+      <span className="min-w-0 flex-1">
+        {selectedSlot ? (
+          <>
+            <span className="block text-xs font-medium text-brand-700">
+              המועד שנבחר
+            </span>
+            <span className="mt-0.5 block text-sm font-bold text-ink-900">
+              יום {DAYS_OF_WEEK[selectedSlot.day_of_week] ?? selectedSlot.day_of_week}
+              {" · "}
+              {formatTime(selectedSlot.start_time)}–{formatTime(selectedSlot.end_time)}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              {formatClassGenderPolicy(selectedSlot.gender_policy)}
+              {" · "}
+              {selectedSlot.available > 0
+                ? `${selectedSlot.available} מקומות פנויים`
+                : "המועד מלא"}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="block text-sm font-bold text-ink-900">
+              בחירת יום ושעה
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              יש {slotsCount} מועדים בשבוע · הילד מגיע לאחד מהם כל שבוע
+            </span>
+          </>
+        )}
+      </span>
+      <span className="shrink-0 text-sm font-semibold text-brand-700">
+        {selectedSlot ? "שינוי" : "בחירה"}
+      </span>
+    </button>
+  );
+}
+
+function ChildPickerTrigger({
+  selectedChildren,
+  availableCount,
+  eligibilityByChildId,
+  onOpen,
+}: {
+  selectedChildren: Child[];
+  availableCount: number;
+  eligibilityByChildId: Map<string, AgeEligibility>;
+  onOpen: () => void;
+}) {
+  const selected = selectedChildren.length > 0;
+  const first = selectedChildren[0];
+  const firstAge = first
+    ? eligibilityByChildId.get(first.id)?.ageLabel
+    : null;
+  const title = !selected
+    ? "בחירת ילדים"
+    : selectedChildren.length === 1
+      ? first.full_name
+      : selectedChildren.map((child) => child.full_name).join(", ");
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-right transition-colors",
+        selected
+          ? "border-brand-200 bg-brand-50 hover:border-brand-300"
+          : "border-dashed border-brand-300 bg-brand-50/50 hover:border-brand-400 hover:bg-brand-50"
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white",
+          selected ? "bg-brand-600" : "bg-brand-500"
+        )}
+      >
+        <Icon name={selected ? "check" : "child"} size={20} />
+      </span>
+      <span className="min-w-0 flex-1">
+        {selected ? (
+          <>
+            <span className="block text-xs font-medium text-brand-700">
+              {selectedChildren.length === 1 ? "הילד/ה שנבחר/ה" : "הילדים שנבחרו"}
+            </span>
+            <span className="mt-0.5 block truncate text-sm font-bold text-ink-900">
+              {title}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              {selectedChildren.length === 1
+                ? firstAge != null
+                  ? `גיל ${firstAge}`
+                  : "נרשם לחוג"
+                : `${selectedChildren.length} ילדים נבחרו`}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="block text-sm font-bold text-ink-900">
+              בחירת ילדים
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-500">
+              {availableCount === 0
+                ? "אין ילדים מתאימים לחוג זה"
+                : availableCount === 1
+                  ? "בחרו את הילד/ה שנרשם/ת לחוג"
+                  : `יש ${availableCount} ילדים בחשבון · בחרו מי נרשם`}
+            </span>
+          </>
+        )}
+      </span>
+      <span className="shrink-0 text-sm font-semibold text-brand-700">
+        {selected ? "שינוי" : "בחירה"}
+      </span>
+    </button>
   );
 }
 
