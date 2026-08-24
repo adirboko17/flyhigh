@@ -1281,10 +1281,20 @@ function validateBirthDate(value: string): string | null {
 }
 
 function translateAuthError(message: string): string {
+  const lower = message.toLowerCase();
   if (message.includes("already registered"))
     return "כתובת האימייל כבר רשומה במערכת.";
-  if (message.toLowerCase().includes("password"))
+  if (lower.includes("password") && !lower.includes("authentication credentials"))
     return `הסיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים.`;
+  if (
+    lower.includes("535") ||
+    lower.includes("authentication credentials") ||
+    lower.includes("error sending confirmation") ||
+    lower.includes("error sending") ||
+    lower.includes("smtp")
+  ) {
+    return "לא הצלחנו לשלוח מייל אימות. בדקו את הגדרות ה־SMTP ב־Supabase Auth.";
+  }
   return "אירעה שגיאה ביצירת החשבון. נסו שוב.";
 }
 
