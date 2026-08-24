@@ -150,25 +150,14 @@ export function PaymentMethodPicker({
   );
 }
 
-export function DemoCardFields() {
-  const cardId = useId();
-  const expiryId = useId();
-  const cvvId = useId();
-
+export function CardcomRedirectHint() {
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-ink-400">זהו מסך דמו — לא מתבצע חיוב אמיתי.</p>
-      <Field label="מספר כרטיס" htmlFor={cardId}>
-        <Input id={cardId} dir="ltr" defaultValue="4580 0000 0000 0001" readOnly />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="תוקף" htmlFor={expiryId}>
-          <Input id={expiryId} dir="ltr" defaultValue="12/28" readOnly />
-        </Field>
-        <Field label="CVV" htmlFor={cvvId}>
-          <Input id={cvvId} dir="ltr" defaultValue="123" readOnly />
-        </Field>
-      </div>
+    <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">
+      <p className="font-semibold">תשלום מאובטח בקארדקום</p>
+      <p className="mt-1">
+        בלחיצה תועברו לדף הסליקה של קארדקום להזנת כרטיס האשראי. אחרי התשלום
+        תחזרו לאתר עם אישור, והחשבונית תופק אוטומטית.
+      </p>
     </div>
   );
 }

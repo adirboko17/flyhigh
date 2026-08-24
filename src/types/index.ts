@@ -4,17 +4,21 @@ export type Profile = Tables<"profiles">;
 export type Child = Tables<"children">;
 export type Instructor = Tables<"instructors">;
 export type InstructorDocument = Tables<"instructor_documents">;
+export type BusinessDocument = Tables<"business_documents">;
 export type Class = Tables<"classes">;
 export type Program = Tables<"programs">;
 export type PoolPass = Tables<"pool_passes">;
 export type PrivateLesson = Tables<"private_lessons">;
 export type PrivateLessonSlot = Tables<"private_lesson_slots">;
+export type ActivityBooking = Tables<"activity_bookings">;
 export type Enrollment = Tables<"enrollments">;
 export type Waitlist = Tables<"waitlist">;
 export type Attendance = Tables<"attendance">;
+export type ClassSessionNote = Tables<"class_session_notes">;
 export type Payment = Tables<"payments">;
 export type Receipt = Tables<"receipts">;
 export type SystemSetting = Tables<"system_settings">;
+export type RecurringIncome = Tables<"recurring_incomes">;
 
 /** חוג עם פרטי מדריכה (לתצוגה). */
 export type ClassWithInstructor = Class & {

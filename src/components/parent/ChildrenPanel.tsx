@@ -7,9 +7,18 @@ import { Badge } from "@/components/ui/Badge";
 import { BirthDateInput } from "@/components/ui/BirthDateInput";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { GENDER } from "@/lib/constants";
+import {
+  declarationSchoolYear,
+  isSignedHealthDraft,
+  MISSING_HEALTH_DECLARATION_ERROR,
+  type HealthDeclarationDraft,
+  type HealthDeclarationRecord,
+} from "@/lib/health-declaration";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import {
   currentSchoolYear,
   formatSchoolGrade,
@@ -34,6 +43,7 @@ export type ParentChild = {
   /** הרשמות ורשימות המתנה שמונעות מחיקה בטוחה. */
   linkedRecords: number;
   canDelete: boolean;
+  healthDeclaration: HealthDeclarationRecord | null;
 };
 
 /** כמה ילדים להציג בכרטיס עצמו לפני שעוברים ל"צפה בהכל". */
@@ -61,9 +71,14 @@ export function ChildrenPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [addHealth, setAddHealth] = useState<HealthDeclarationDraft | null>(null);
+  const [addHealthOpen, setAddHealthOpen] = useState(false);
+  const [healthChild, setHealthChild] = useState<ParentChild | null>(null);
 
   function closeAdd() {
     setAddOpen(false);
+    setAddHealthOpen(false);
+    setAddHealth(null);
     setError(null);
     setForm(EMPTY_FORM);
   }
@@ -106,21 +121,47 @@ export function ChildrenPanel({
       setError("נא לבחור כיתה.");
       return;
     }
+    if (!isSignedHealthDraft(addHealth)) {
+      setSaving(false);
+      setError(MISSING_HEALTH_DECLARATION_ERROR);
+      return;
+    }
 
-    const { error: insertError } = await createClient().from("children").insert({
+    const supabase = createClient();
+    const { data: created, error: insertError } = await supabase
+      .from("children")
+      .insert({
+        parent_id: parentId,
+        full_name: form.name.trim(),
+        birth_date: form.birth || null,
+        gender: (form.gender || null) as Enums<"gender_type"> | null,
+        school_grade: schoolGrade,
+        grade_school_year: currentSchoolYear(),
+        notes: form.notes.trim() || null,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !created) {
+      setSaving(false);
+      setError("שמירת הפרטים נכשלה. נסו שוב בעוד רגע.");
+      return;
+    }
+
+    const { error: healthError } = await supabase.from("health_declarations").insert({
+      child_id: created.id,
       parent_id: parentId,
-      full_name: form.name.trim(),
-      birth_date: form.birth || null,
-      gender: (form.gender || null) as Enums<"gender_type"> | null,
-      school_grade: schoolGrade,
-      grade_school_year: currentSchoolYear(),
-      notes: form.notes.trim() || null,
+      child_name: form.name.trim(),
+      id_number: addHealth.idNumber,
+      school_year: declarationSchoolYear(),
+      accepted: true,
+      signed_at: addHealth.signedAt,
     });
 
     setSaving(false);
 
-    if (insertError) {
-      setError("שמירת הפרטים נכשלה. נסו שוב בעוד רגע.");
+    if (healthError) {
+      setError("הילד/ה נשמר/ה, אבל הצהרת הבריאות לא נקלטה. מלאו אותה שוב מהכרטיס.");
       return;
     }
 
@@ -248,6 +289,12 @@ export function ChildrenPanel({
                 <p className="text-xs text-ink-500">{childMeta(child)}</p>
               </div>
               <Badge
+                tone={child.healthDeclaration ? "success" : "warning"}
+                className="shrink-0"
+              >
+                {child.healthDeclaration ? "הצהרת בריאות" : "חסרה הצהרה"}
+              </Badge>
+              <Badge
                 tone={child.activities.length > 0 ? "success" : "neutral"}
                 className="shrink-0"
               >
@@ -259,6 +306,7 @@ export function ChildrenPanel({
                 child={child}
                 onEdit={openEdit}
                 onRemove={setRemovingChild}
+                onHealth={setHealthChild}
               />
             </div>
           ))}
@@ -354,6 +402,10 @@ export function ChildrenPanel({
                     setAllOpen(false);
                     setRemovingChild(selectedChild);
                   }}
+                  onHealth={(selectedChild) => {
+                    setAllOpen(false);
+                    setHealthChild(selectedChild);
+                  }}
                 />
               </div>
 
@@ -371,6 +423,14 @@ export function ChildrenPanel({
                 <Detail
                   label="מין"
                   value={child.gender ? GENDER[child.gender] : "לא צוין"}
+                />
+                <Detail
+                  label="הצהרת בריאות"
+                  value={
+                    child.healthDeclaration
+                      ? `נחתמה ב-${formatDate(child.healthDeclaration.signed_at)}`
+                      : "חסרה — נדרשת לפני הרשמה לחוג"
+                  }
                 />
               </dl>
 
@@ -466,6 +526,36 @@ export function ChildrenPanel({
               className="min-h-20"
             />
           </Field>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!form.name.trim()) {
+                setError("נא למלא קודם את שם הילד/ה לפני הצהרת הבריאות.");
+                return;
+              }
+              setError(null);
+              setAddHealthOpen(true);
+            }}
+            className={`sm:col-span-2 flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-right ${
+              isSignedHealthDraft(addHealth)
+                ? "border-aqua-200 bg-aqua-50 text-aqua-800"
+                : "border-brand-200 bg-brand-50/60 text-brand-800"
+            }`}
+          >
+            <span>
+              <span className="block text-sm font-bold">הצהרת בריאות</span>
+              <span className="block text-xs font-medium opacity-80">
+                {isSignedHealthDraft(addHealth)
+                  ? "נחתמה — לחצו לצפייה או עדכון"
+                  : "חובה לפני שמירה והרשמה לחוג"}
+              </span>
+            </span>
+            <Icon
+              name={isSignedHealthDraft(addHealth) ? "check" : "shield"}
+              size={18}
+            />
+          </button>
 
           {error && (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 sm:col-span-2">
@@ -628,6 +718,52 @@ export function ChildrenPanel({
           </div>
         )}
       </Modal>
+
+      <HealthDeclarationModal
+        open={addHealthOpen}
+        onClose={() => setAddHealthOpen(false)}
+        childName={form.name}
+        today={todayInIsrael()}
+        schoolYear={declarationSchoolYear()}
+        initial={addHealth}
+        onSave={setAddHealth}
+      />
+
+      <HealthDeclarationModal
+        open={Boolean(healthChild)}
+        onClose={() => setHealthChild(null)}
+        childName={healthChild?.full_name ?? ""}
+        today={todayInIsrael()}
+        schoolYear={declarationSchoolYear()}
+        initial={
+          healthChild?.healthDeclaration
+            ? {
+                idNumber: healthChild.healthDeclaration.id_number,
+                accepted: healthChild.healthDeclaration.accepted,
+                signedAt: healthChild.healthDeclaration.signed_at,
+              }
+            : null
+        }
+        readOnly={Boolean(healthChild?.healthDeclaration)}
+        onSave={async (draft) => {
+          if (!healthChild || healthChild.healthDeclaration) return;
+          const { error: healthError } = await createClient()
+            .from("health_declarations")
+            .insert({
+              child_id: healthChild.id,
+              parent_id: parentId,
+              child_name: healthChild.full_name,
+              id_number: draft.idNumber,
+              school_year: declarationSchoolYear(),
+              accepted: true,
+              signed_at: draft.signedAt,
+            });
+          if (healthError) {
+            return false;
+          }
+          router.refresh();
+        }}
+      />
     </>
   );
 }
@@ -636,13 +772,32 @@ function ChildActions({
   child,
   onEdit,
   onRemove,
+  onHealth,
 }: {
   child: ParentChild;
   onEdit: (child: ParentChild) => void;
   onRemove: (child: ParentChild) => void;
+  onHealth: (child: ParentChild) => void;
 }) {
   return (
     <span className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onHealth(child)}
+        aria-label={
+          child.healthDeclaration
+            ? `צפייה בהצהרת הבריאות של ${child.full_name}`
+            : `מילוי הצהרת בריאות עבור ${child.full_name}`
+        }
+        title="הצהרת בריאות"
+        className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+          child.healthDeclaration
+            ? "text-aqua-600 hover:bg-aqua-50 focus-visible:ring-aqua-300"
+            : "text-amber-600 hover:bg-amber-50 focus-visible:ring-amber-300"
+        }`}
+      >
+        <Icon name="shield" size={17} />
+      </button>
       <button
         type="button"
         onClick={() => onEdit(child)}

@@ -14,10 +14,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { PayOpenChargeButton } from "@/components/payments/PayOpenChargeButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
 import { ViewAllDialog } from "@/components/ui/ViewAllDialog";
 import { requireProfile } from "@/lib/auth";
+import { declarationSchoolYear } from "@/lib/health-declaration";
 import {
   DAY_ABBR,
   ENROLLMENT_STATUS,
@@ -52,12 +54,14 @@ export default async function ParentDashboard() {
   const weekEnd = addDays(today, 6);
   const horizon = addDays(today, AGENDA_HORIZON_DAYS);
 
+  const healthYear = declarationSchoolYear();
   const [
     { data: children },
     { data: enrollments },
     { data: payments },
     { data: receipts },
     { data: waitlist },
+    { data: healthDeclarations },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -66,7 +70,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, classes(id, title, day_of_week, start_time, end_time), programs(title), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time)"
+        "*, people_count, classes(id, title, day_of_week, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -81,6 +85,13 @@ export default async function ParentDashboard() {
       .from("waitlist")
       .select("id, child_id, classes(title), children(full_name)")
       .eq("status", "waiting"),
+    supabase
+      .from("health_declarations")
+      .select(
+        "id, child_id, parent_id, child_name, id_number, school_year, accepted, signed_at"
+      )
+      .eq("parent_id", profile.id)
+      .eq("school_year", healthYear),
   ]);
 
   const allChildren = children ?? [];
@@ -143,6 +154,13 @@ export default async function ParentDashboard() {
     activitiesByChild.set(enrollment.child_id, current);
   }
 
+  const declarationByChild = new Map(
+    (healthDeclarations ?? []).map((declaration) => [
+      declaration.child_id,
+      declaration,
+    ])
+  );
+
   const kids: ParentChild[] = allChildren.map((child) => {
     const enrollmentCount = allEnrollments.filter(
       (enrollment) => enrollment.child_id === child.id
@@ -162,6 +180,7 @@ export default async function ParentDashboard() {
       activities: activitiesByChild.get(child.id) ?? [],
       linkedRecords: enrollmentCount + waitlistCount,
       canDelete: enrollmentCount === 0 && waitlistCount === 0,
+      healthDeclaration: declarationByChild.get(child.id) ?? null,
     };
   });
   const enrolledChildren = kids.filter((kid) => kid.activities.length > 0).length;
@@ -279,6 +298,13 @@ export default async function ParentDashboard() {
       tone: "aqua" as const,
       title: "הוסיפו את הילדים שלכם",
       detail: "אחרי ההוספה תוכלו לרשום אותם לחוגים בלחיצה",
+      href: "#children",
+    },
+    kids.some((kid) => !kid.healthDeclaration) && {
+      icon: "🩺",
+      tone: "amber" as const,
+      title: "חסרה הצהרת בריאות",
+      detail: "בלי הצהרה חתומה אי אפשר לרשום ילד/ה לחוג",
       href: "#children",
     },
     allEnrollments.length === 0 && {
@@ -750,13 +776,14 @@ type EnrollmentRowData = {
   payment_status: Enums<"enrollment_payment_status">;
   created_at: string;
   ends_on?: string | null;
+  people_count?: number | null;
   classes: {
     title: string;
     day_of_week: number | null;
     start_time: string | null;
     end_time: string | null;
   } | null;
-  programs: { title: string } | null;
+  programs: { title: string; kind?: "membership" | "activity" | null } | null;
   pool_passes: { title: string; entries_count: number } | null;
   private_lessons: { title: string; duration_minutes: number } | null;
   private_lesson_slots:
@@ -766,6 +793,16 @@ type EnrollmentRowData = {
         session_date: string | null;
         start_time: string | null;
         end_time: string | null;
+      }[]
+    | null;
+  activity_bookings:
+    | {
+        id: string;
+        status: Enums<"private_lesson_slot_status">;
+        session_date: string | null;
+        start_time: string | null;
+        end_time: string | null;
+        people_count: number;
       }[]
     | null;
   children: { full_name: string } | null;
@@ -866,15 +903,22 @@ function PlanRow({
 }) {
   const isPass = enrollment.type === "pool_pass";
   const isPrivate = enrollment.type === "private_lesson";
+  const isActivity = enrollment.programs?.kind === "activity";
   const entries = enrollment.pool_passes?.entries_count ?? null;
   const duration = enrollment.private_lessons?.duration_minutes ?? null;
+  const peopleCount = enrollment.people_count ?? null;
   const slots = enrollment.private_lesson_slots ?? [];
-  const awaitingSlots = slots.filter((s) => s.status === "awaiting_schedule");
-  const scheduledSlots = slots
-    .filter((s) => s.status === "scheduled" && s.session_date)
-    .sort((a, b) =>
-      (a.session_date ?? "").localeCompare(b.session_date ?? "")
-    );
+  const activityBookings = enrollment.activity_bookings ?? [];
+  const awaitingSlots = [
+    ...slots.filter((s) => s.status === "awaiting_schedule"),
+    ...activityBookings.filter((s) => s.status === "awaiting_schedule"),
+  ];
+  const scheduledSlots = [
+    ...slots.filter((s) => s.status === "scheduled" && s.session_date),
+    ...activityBookings.filter((s) => s.status === "scheduled" && s.session_date),
+  ].sort((a, b) =>
+    (a.session_date ?? "").localeCompare(b.session_date ?? "")
+  );
   const paymentBadge = parentEnrollmentPaymentBadge(
     enrollment.payment_status,
     paymentMethod
@@ -887,12 +931,14 @@ function PlanRow({
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base sm:h-11 sm:w-11 sm:rounded-xl sm:text-lg",
           isPrivate
             ? "bg-violet-100 text-violet-700"
-            : isPass
-              ? "bg-aqua-100 text-aqua-700"
-              : "bg-brand-100 text-brand-700"
+            : isActivity
+              ? "bg-amber-100 text-amber-700"
+              : isPass
+                ? "bg-aqua-100 text-aqua-700"
+                : "bg-brand-100 text-brand-700"
         )}
       >
-        {isPrivate ? "🎯" : isPass ? "🎫" : "🏊"}
+        {isPrivate ? "🎯" : isActivity ? "👨‍👩‍👧" : isPass ? "🎫" : "🏊"}
       </span>
 
       <div className="min-w-0 flex-1">
@@ -902,23 +948,27 @@ function PlanRow({
         <p className="truncate text-xs text-ink-500 sm:text-sm">
           {enrollment.children?.full_name ?? parentName}
           {" · "}
-          {ENROLLMENT_TYPE[enrollment.type]}
+          {isActivity ? "פעילות" : ENROLLMENT_TYPE[enrollment.type]}
           {isPass && entries !== null && ` · ${entries} כניסות`}
           {isPrivate && duration !== null && ` · ${duration} דק׳`}
           {isPrivate && slots.length > 0 && ` · ${slots.length} שיעורים`}
+          {isActivity && peopleCount !== null &&
+            ` · ${peopleCount} ${peopleCount === 1 ? "נפש" : "נפשות"}`}
         </p>
         <p className="mt-0.5 text-xs text-ink-400">
           נרכש ב-{formatDate(enrollment.created_at)}
-          {enrollment.type === "program" && enrollment.ends_on
+          {enrollment.type === "program" && !isActivity && enrollment.ends_on
             ? ` · בתוקף עד ${formatDate(enrollment.ends_on)}`
             : ""}
         </p>
-        {isPrivate && awaitingSlots.length > 0 && (
+        {(isPrivate || isActivity) && awaitingSlots.length > 0 && (
           <p className="mt-1 text-xs font-medium text-amber-700">
-            ממתין לתיאום תאריך ושעה ({awaitingSlots.length})
+            {isActivity
+              ? "ממתין לתיאום מועד"
+              : `ממתין לתיאום תאריך ושעה (${awaitingSlots.length})`}
           </p>
         )}
-        {isPrivate && scheduledSlots.length > 0 && (
+        {(isPrivate || isActivity) && scheduledSlots.length > 0 && (
           <p className="mt-1 text-xs text-ink-500">
             מתוזמן:{" "}
             {scheduledSlots
@@ -945,6 +995,8 @@ function PlanRow({
 
 function PaymentRow({ payment }: { payment: PaymentRowData }) {
   const paymentBadge = parentPaymentBadge(payment.status, payment.payment_method);
+  const canPayNow =
+    payment.status === "pending" && payment.payment_method === "credit_card";
 
   return (
     <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
@@ -960,9 +1012,10 @@ function PaymentRow({ payment }: { payment: PaymentRowData }) {
           {formatDate(payment.paid_at ?? payment.created_at)}
         </p>
       </div>
-      <Badge tone={paymentBadge.tone} className="shrink-0">
-        {paymentBadge.label}
-      </Badge>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <Badge tone={paymentBadge.tone}>{paymentBadge.label}</Badge>
+        {canPayNow && <PayOpenChargeButton paymentId={payment.id} />}
+      </div>
     </li>
   );
 }

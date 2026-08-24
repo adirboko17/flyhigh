@@ -1,12 +1,14 @@
 ﻿import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import type { Database } from "@/types/database.types";
 
 /**
  * לקוח Supabase לצד השרת (Server Components, Route Handlers, Server Actions).
  * משתמש בעוגיות הבקשה לניהול ה־session.
+ * cache מונע יצירת לקוח נפרד בכל קריאה באותה בקשה.
  */
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -29,4 +31,4 @@ export async function createClient() {
       },
     }
   );
-}
+});

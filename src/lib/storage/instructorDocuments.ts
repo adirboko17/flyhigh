@@ -9,6 +9,7 @@ export const INSTRUCTOR_DOC_CATEGORIES = [
   { value: "employment", label: "הסכם העסקה" },
   { value: "id", label: "צילום תעודת זהות" },
   { value: "bank", label: "פרטי בנק" },
+  { value: "account_management", label: "אישור ניהול חשבון" },
   { value: "other", label: "אחר" },
 ] as const;
 

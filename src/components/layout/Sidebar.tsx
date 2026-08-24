@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { Avatar } from "@/components/ui/Avatar";
@@ -52,6 +52,7 @@ export function Sidebar({
   defaultCollapsed = false,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const asideRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
@@ -227,15 +228,22 @@ export function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                // עמודי ניהול דינמיים וכבדים — prefetch ב-hover טוען כמה מסכים במקביל ומאט הכל.
+                // בלי prefetch גלובלי: טעינה מראש של כל התפריט מציפה את השרת.
+                // hover/focus על פריט אחד מתחיל את העמוד הבא לפני הלחיצה.
                 prefetch={false}
                 onClick={() => {
                   setOpen(false);
                   if (item.href !== pathname) setNavigatingTo(item.href);
                 }}
-                onMouseEnter={(event) => showTip(item.label, event.currentTarget)}
+                onMouseEnter={(event) => {
+                  showTip(item.label, event.currentTarget);
+                  if (item.href !== pathname) router.prefetch(item.href);
+                }}
                 onMouseLeave={() => setTip(null)}
-                onFocus={(event) => showTip(item.label, event.currentTarget)}
+                onFocus={(event) => {
+                  showTip(item.label, event.currentTarget);
+                  if (item.href !== pathname) router.prefetch(item.href);
+                }}
                 onBlur={() => setTip(null)}
                 aria-current={active ? "page" : undefined}
                 aria-label={rail ? item.label : undefined}

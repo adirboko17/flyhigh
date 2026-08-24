@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { SessionNotesWorkspace } from "@/components/classes/SessionNotesPanel";
 import { ClassAttendanceForm } from "@/components/instructor/ClassAttendanceForm";
 import {
   ClassAttendanceHistory,
@@ -40,6 +41,7 @@ export function InstructorClassCard({
   instructorId,
 }: InstructorClassCardProps) {
   const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const {
@@ -179,7 +181,7 @@ export function InstructorClassCard({
             )}
           </div>
 
-          <div className="mt-auto grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="mt-auto space-y-2.5">
             <Button
               variant={isToday ? "primary" : "secondary"}
               className="h-12 w-full text-sm sm:h-11"
@@ -187,19 +189,28 @@ export function InstructorClassCard({
             >
               סימון נוכחות
             </Button>
-            <Button
-              variant="outline"
-              className="h-12 w-full text-sm sm:h-11"
-              onClick={() => setHistoryOpen(true)}
-              disabled={sessionCount === 0}
-            >
-              היסטוריה
-              {sessionCount > 0 && (
-                <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs tabular-nums">
-                  {sessionCount}
-                </span>
-              )}
-            </Button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button
+                variant="outline"
+                className="h-12 w-full text-sm sm:h-11"
+                onClick={() => setNotesOpen(true)}
+              >
+                הערות מפגש
+              </Button>
+              <Button
+                variant="outline"
+                className="h-12 w-full text-sm sm:h-11"
+                onClick={() => setHistoryOpen(true)}
+                disabled={sessionCount === 0}
+              >
+                היסטוריה
+                {sessionCount > 0 && (
+                  <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs tabular-nums">
+                    {sessionCount}
+                  </span>
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -219,13 +230,26 @@ export function InstructorClassCard({
       </Modal>
 
       <Modal
+        open={notesOpen}
+        onClose={() => setNotesOpen(false)}
+        title={`הערות מפגש — ${title}`}
+        description="בחרו מפגש והוסיפו הערה — למשל דיווח פציעה. גלוי למדריכה ולמנהל בלבד."
+        className="max-w-xl"
+      >
+        <SessionNotesWorkspace classId={classData.id} />
+      </Modal>
+
+      <Modal
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         title={`היסטוריית נוכחות — ${title}`}
         description="סימוני נוכחות קודמים לפי תאריך"
         className="max-w-xl"
       >
-        <ClassAttendanceHistory records={attendanceHistory} />
+        <ClassAttendanceHistory
+          classId={classData.id}
+          records={attendanceHistory}
+        />
       </Modal>
     </>
   );

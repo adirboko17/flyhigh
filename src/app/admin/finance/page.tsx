@@ -37,7 +37,14 @@ import {
   shortMonthLabel,
   todayInIsrael,
 } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { MatnasIncomeCard } from "@/components/admin/MatnasIncomeCard";
+import {
+  MATNAS_INCOME_SOURCE,
+  hasOwnRecurringEntry,
+  recurringAmountByMonth,
+  recurringAmountForMonth,
+} from "@/lib/finance/recurringIncome";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
 
@@ -96,7 +103,7 @@ export default async function AdminFinancePage({
   const trendStart = monthRange(trendMonths[0]).start;
   const { start: monthStart, end: monthEnd } = monthRange(month);
 
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [
     { data: payments },
@@ -105,6 +112,7 @@ export default async function AdminFinancePage({
     { count: newEnrollmentsCount },
     { count: takenSeatsCount },
     { data: classes },
+    { data: matnasRows },
   ] = await Promise.all([
     supabase
       .from("payments")
@@ -134,6 +142,11 @@ export default async function AdminFinancePage({
       .select("id", { count: "exact", head: true })
       .eq("status", "active"),
     supabase.from("classes").select("capacity, status"),
+    supabase
+      .from("recurring_incomes")
+      .select("month, amount")
+      .eq("source", MATNAS_INCOME_SOURCE)
+      .order("month"),
   ]);
 
   const allPayments = payments ?? [];
@@ -176,7 +189,15 @@ export default async function AdminFinancePage({
   const monthPayroll = payrollTotal(payrollLines);
   const workingPayrollLines = payrollLines.filter((line) => line.sessions > 0);
 
-  const monthRevenue = revenueByMonth.get(month) ?? 0;
+  const matnasEntries = (matnasRows ?? []).map((row) => ({
+    month: row.month,
+    amount: Number(row.amount),
+  }));
+  const matnasByMonth = recurringAmountByMonth(matnasEntries, trendMonths);
+  const matnasAmount = recurringAmountForMonth(matnasEntries, month);
+
+  const paymentsRevenue = revenueByMonth.get(month) ?? 0;
+  const monthRevenue = paymentsRevenue + matnasAmount;
   const netProfit = monthRevenue - monthPayroll;
 
   const openCharges = allPayments.filter(
@@ -248,6 +269,16 @@ export default async function AdminFinancePage({
       className: KIND_COLORS[kind] ?? "text-ink-400",
     }));
 
+  if (matnasAmount > 0) {
+    kindSlices.push({
+      key: "matnas",
+      label: "מתנ״ס",
+      value: matnasAmount,
+      className: "text-teal-500",
+    });
+    kindSlices.sort((a, b) => b.value - a.value);
+  }
+
   const topCustomers: RankItem[] = [...customerTotals.values()]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 8)
@@ -309,7 +340,11 @@ export default async function AdminFinancePage({
           value={formatCurrency(monthRevenue)}
           icon="💰"
           tone="aqua"
-          hint={`${monthPaid.length} תשלומים שנגבו`}
+          hint={
+            matnasAmount > 0
+              ? `${formatCurrency(paymentsRevenue)} תשלומים · ${formatCurrency(matnasAmount)} מתנ״ס`
+              : `${monthPaid.length} תשלומים שנגבו`
+          }
         />
         <StatCard
           label="שכר מדריכות"
@@ -323,7 +358,7 @@ export default async function AdminFinancePage({
           value={formatCurrency(netProfit)}
           icon="📈"
           tone={netProfit >= 0 ? "brand" : "rose"}
-          hint="הכנסות בניכוי שכר מדריכות"
+          hint="תשלומים והמתנ״ס בניכוי שכר מדריכות"
         />
         <StatCard
           label="ממתין לגבייה"
@@ -333,6 +368,13 @@ export default async function AdminFinancePage({
           hint={`${openCharges.length} חיובים פתוחים`}
         />
       </div>
+
+      <MatnasIncomeCard
+        month={month}
+        monthTitle={monthTitle}
+        amount={matnasAmount}
+        isOwnEntry={hasOwnRecurringEntry(matnasEntries, month)}
+      />
 
       <Card>
         <CardHeader>
@@ -349,7 +391,8 @@ export default async function AdminFinancePage({
               key: trendMonth,
               label: shortMonthLabel(trendMonth),
               values: [
-                revenueByMonth.get(trendMonth) ?? 0,
+                (revenueByMonth.get(trendMonth) ?? 0) +
+                  (matnasByMonth.get(trendMonth) ?? 0),
                 payrollTotal(
                   buildPayroll(sessionsByMonth.get(trendMonth) ?? [], allInstructors)
                 ),
@@ -412,7 +455,7 @@ export default async function AdminFinancePage({
             <DonutChart
               slices={methodSlices}
               formatValue={formatCurrency}
-              centerValue={formatCurrency(monthRevenue)}
+              centerValue={formatCurrency(paymentsRevenue)}
               centerLabel="נגבה החודש"
               emptyLabel="לא נגבו תשלומים בחודש זה"
             />

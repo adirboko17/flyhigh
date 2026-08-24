@@ -14,6 +14,11 @@ import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
 } from "@/lib/enrollment/receiptLabel";
+import {
+  ACTIVITY_MAX_PEOPLE,
+  isActivityProgram,
+  type ProgramKind,
+} from "@/lib/programs";
 import type { CheckoutPaymentMethod, CouponPreviewResult } from "./actions";
 
 /** רכישה של מסלול, כרטיסייה או שיעור פרטי. */
@@ -28,8 +33,10 @@ export type CompletePlanPurchaseResult =
   | {
       success: true;
       enrollmentIds: string[];
-      /** אסמכתת סליקה — קיימת רק בתשלום מיידי בכרטיס אשראי. */
+      /** אסמכתת סליקה — קיימת אחרי פתיחת דף קארדקום או בתשלום שכבר הושלם. */
       paymentReference: string | null;
+      /** דף הסליקה של קארדקום — כשיש סכום לתשלום בכרטיס. */
+      checkoutUrl: string | null;
       /** תשלום שנגבה מול המשרד ונרשם כחוב פתוח בעמוד הגבייה. */
       deferred: boolean;
       total: number;
@@ -43,13 +50,35 @@ type PlanRecord = {
   title: string;
   price: number;
   durationMonths: number | null;
+  programKind: ProgramKind | null;
 };
 
-function normalizeQuantity(kind: PlanKind, quantity?: number) {
-  if (kind !== "private_lesson") return 1;
+async function rollbackPlanPurchase(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  enrollmentIds: string[],
+  paymentIds: string[] = []
+) {
+  if (paymentIds.length > 0) {
+    await supabase.from("payments").delete().in("id", paymentIds);
+  }
+  await supabase.from("private_lesson_slots").delete().in("enrollment_id", enrollmentIds);
+  await supabase.from("activity_bookings").delete().in("enrollment_id", enrollmentIds);
+  await supabase.from("enrollments").delete().in("id", enrollmentIds);
+}
+
+function usesQuantity(kind: PlanKind, programKind: ProgramKind | null) {
+  return kind === "private_lesson" || isActivityProgram(programKind);
+}
+
+function normalizeQuantity(
+  kind: PlanKind,
+  programKind: ProgramKind | null,
+  quantity?: number
+) {
+  if (!usesQuantity(kind, programKind)) return 1;
   const value = Math.floor(Number(quantity ?? 1));
   if (!Number.isFinite(value) || value < 1) return null;
-  if (value > 20) return null;
+  if (value > ACTIVITY_MAX_PEOPLE) return null;
   return value;
 }
 
@@ -61,7 +90,7 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months")
+      .select("id, title, price, duration_months, kind")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -71,6 +100,7 @@ async function loadActivePlan(
           title: data.title,
           price: Number(data.price),
           durationMonths: data.duration_months,
+          programKind: data.kind,
         }
       : null;
   }
@@ -83,7 +113,13 @@ async function loadActivePlan(
       .eq("status", "active")
       .maybeSingle();
     return data
-      ? { id: data.id, title: data.title, price: Number(data.price), durationMonths: null }
+      ? {
+          id: data.id,
+          title: data.title,
+          price: Number(data.price),
+          durationMonths: null,
+          programKind: null,
+        }
       : null;
   }
 
@@ -94,7 +130,13 @@ async function loadActivePlan(
     .eq("status", "active")
     .maybeSingle();
   return data
-    ? { id: data.id, title: data.title, price: Number(data.price), durationMonths: null }
+    ? {
+        id: data.id,
+        title: data.title,
+        price: Number(data.price),
+        durationMonths: null,
+        programKind: null,
+      }
     : null;
 }
 
@@ -139,16 +181,6 @@ export async function previewPlanCoupon(input: {
     return { success: false, error: "נא להזין קוד קופון תקין." };
   }
 
-  const quantity = normalizeQuantity(input.kind, input.quantity);
-  if (quantity === null) {
-    return { success: false, error: "נא לבחור כמות תקינה של שיעורים." };
-  }
-
-  const { participants } = resolveParticipants(input.childIds, input.includeSelf);
-  if (participants.length === 0) {
-    return { success: false, error: "נא לבחור למי הרכישה." };
-  }
-
   const supabase = await createClient();
   const plan = await loadActivePlan(supabase, input.kind, input.planId);
 
@@ -156,8 +188,28 @@ export async function previewPlanCoupon(input: {
     return { success: false, error: planNotFoundError(input.kind) };
   }
 
-  const subtotal =
-    Math.round(plan.price * quantity * participants.length * 100) / 100;
+  const quantity = normalizeQuantity(
+    input.kind,
+    plan.programKind,
+    input.quantity
+  );
+  if (quantity === null) {
+    return {
+      success: false,
+      error: isActivityProgram(plan.programKind)
+        ? "נא לבחור מספר נפשות תקין."
+        : "נא לבחור כמות תקינה של שיעורים.",
+    };
+  }
+
+  const { participants } = resolveParticipants(input.childIds, input.includeSelf);
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור למי הרכישה." };
+  }
+
+  const subtotal = isActivityProgram(plan.programKind)
+    ? Math.round(plan.price * quantity * 100) / 100
+    : Math.round(plan.price * quantity * participants.length * 100) / 100;
 
   const { data, error } = await supabase.rpc("preview_coupon", {
     p_code: code,
@@ -193,7 +245,7 @@ export async function completePlanPurchase(input: {
   includeSelf: boolean;
   paymentMethod: CheckoutPaymentMethod;
   couponCode?: string | null;
-  /** כמות שיעורים למשתתף — רלוונטי רק לשיעור פרטי. */
+  /** כמות שיעורים למשתתף, או מספר נפשות בפעילות הפוגה. */
   quantity?: number;
   /** תווית לקבלה — אם נבחרה, מחליפה את שם המוצר בתיאור החיוב/הקבלה. */
   receiptLabelId?: string | null;
@@ -205,15 +257,11 @@ export async function completePlanPurchase(input: {
     return { success: false, error: "אמצעי התשלום שנבחר אינו נתמך." };
   }
 
-  const quantity = normalizeQuantity(kind, input.quantity);
-  if (quantity === null) {
-    return { success: false, error: "נא לבחור כמות תקינה של שיעורים." };
-  }
-
   const deferred = isDeferredPaymentMethod(paymentMethod);
+  const includeSelf = input.includeSelf;
   const { uniqueChildIds, participants } = resolveParticipants(
     input.childIds,
-    input.includeSelf
+    includeSelf
   );
 
   if (participants.length === 0) {
@@ -225,6 +273,17 @@ export async function completePlanPurchase(input: {
 
   if (!plan) {
     return { success: false, error: planNotFoundError(kind) };
+  }
+
+  const isActivity = isActivityProgram(plan.programKind);
+  const quantity = normalizeQuantity(kind, plan.programKind, input.quantity);
+  if (quantity === null) {
+    return {
+      success: false,
+      error: isActivity
+        ? "נא לבחור מספר נפשות תקין."
+        : "נא לבחור כמות תקינה של שיעורים.",
+    };
   }
 
   if (uniqueChildIds.length > 0) {
@@ -242,9 +301,9 @@ export async function completePlanPurchase(input: {
     }
   }
 
-  // מסלול הוא מנוי מתמשך, ולכן אין טעם לרכוש אותו פעמיים לאותו משתתף.
-  // כרטיסייה ושיעור פרטי ניתנים לרכישה חוזרת ללא הגבלה.
-  if (kind === "program") {
+  // מסלול מנוי הוא מתמשך, ולכן אין טעם לרכוש אותו פעמיים לאותו משתתף.
+  // פעילות לפי נפשות, כרטיסייה ושיעור פרטי ניתנים לרכישה חוזרת.
+  if (kind === "program" && !isActivity) {
     const today = todayInIsrael();
     const { data: existing } = await supabase
       .from("enrollments")
@@ -267,8 +326,9 @@ export async function completePlanPurchase(input: {
   }
 
   const unitPrice = plan.price;
-  const listTotal =
-    Math.round(unitPrice * quantity * participants.length * 100) / 100;
+  const listTotal = isActivity
+    ? Math.round(unitPrice * quantity * 100) / 100
+    : Math.round(unitPrice * quantity * participants.length * 100) / 100;
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
   const requestedCode = input.couponCode
@@ -312,9 +372,16 @@ export async function completePlanPurchase(input: {
 
   const totalAmount =
     Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
-  const amounts = splitAmount(totalAmount, participants.length);
+  const activityChildId =
+    includeSelf || uniqueChildIds.length !== 1 ? null : uniqueChildIds[0];
+  const amounts = splitAmount(
+    totalAmount,
+    isActivity ? 1 : participants.length
+  );
   const amountByParticipant = new Map<string | null, number>(
-    participants.map((participant, index) => [participant, amounts[index]])
+    isActivity
+      ? [[activityChildId, amounts[0]]]
+      : participants.map((participant, index) => [participant, amounts[index]])
   );
 
   const receiptLabel = await resolveReceiptLabelForCheckout(
@@ -328,57 +395,55 @@ export async function completePlanPurchase(input: {
 
   const chargeDescription = chargeDescriptionForCheckout({
     productTitle: plan.title,
-    participantCount: participants.length,
+    participantCount: isActivity ? quantity : participants.length,
     kind: "plan",
     customLabel: receiptLabel.description,
   });
 
-  // תשלום נדחה (מזומן, העברה, מכבי, עמית) נגבה מול המשרד ולכן לא עובר סליקה,
-  // וגם הזמנה שהקופון מאפס אותה לא עוברת סליקה.
-  let paymentReference: string | null = null;
-
-  if (!deferred && totalAmount > 0) {
-    const charge = await getPaymentProvider().createCharge({
-      amount: totalAmount,
-      description: chargeDescription,
-      parentId: profile.id,
-      method: paymentMethod,
-      metadata: {
-        kind,
-        planId,
-        childIds: uniqueChildIds,
-        includeSelf: input.includeSelf,
-        quantity,
-      },
-    });
-
-    if (!charge.success) {
-      await releaseCoupon();
-      return { success: false, error: "התשלום נכשל. נסו שוב." };
-    }
-
-    paymentReference = charge.reference;
-  }
+  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד לאישור קארדקום.
+  const awaitingCardcom = !deferred && totalAmount > 0;
 
   const paidAt = new Date().toISOString();
-  const membershipStart = kind === "program" ? todayInIsrael() : null;
+  const membershipStart =
+    kind === "program" && !isActivity ? todayInIsrael() : null;
   const membershipEnd =
-    kind === "program" && plan.durationMonths
+    kind === "program" && !isActivity && plan.durationMonths
       ? addMonths(membershipStart!, plan.durationMonths)
       : null;
-  const enrollmentRows = participants.map((childId) => ({
-    parent_id: profile.id,
-    child_id: childId,
-    class_id: null,
-    program_id: kind === "program" ? planId : null,
-    pool_pass_id: kind === "pool_pass" ? planId : null,
-    private_lesson_id: kind === "private_lesson" ? planId : null,
-    type: kind,
-    status: "active" as const,
-    payment_status: deferred ? ("unpaid" as const) : ("paid" as const),
-    starts_on: membershipStart,
-    ends_on: membershipEnd,
-  }));
+  // פעילות לפי נפשות היא הזמנה אחת למשפחה, לא מנוי נפרד לכל משתתף.
+  const enrollmentRows = isActivity
+    ? [
+        {
+          parent_id: profile.id,
+          child_id: activityChildId,
+          class_id: null,
+          program_id: planId,
+          pool_pass_id: null,
+          private_lesson_id: null,
+          type: kind,
+          status: "active" as const,
+          payment_status:
+            deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+          starts_on: null,
+          ends_on: null,
+          people_count: quantity,
+        },
+      ]
+    : participants.map((childId) => ({
+        parent_id: profile.id,
+        child_id: childId,
+        class_id: null,
+        program_id: kind === "program" ? planId : null,
+        pool_pass_id: kind === "pool_pass" ? planId : null,
+        private_lesson_id: kind === "private_lesson" ? planId : null,
+        type: kind,
+        status: "active" as const,
+        payment_status:
+          deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+        starts_on: membershipStart,
+        ends_on: membershipEnd,
+        people_count: null as number | null,
+      }));
 
   const { data: createdEnrollments, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -421,6 +486,36 @@ export async function completePlanPurchase(input: {
     }
   }
 
+  if (isActivity) {
+    const bookingRows = createdEnrollments.map((enrollment) => ({
+      enrollment_id: enrollment.id,
+      parent_id: profile.id,
+      child_id: enrollment.child_id,
+      program_id: planId,
+      people_count: quantity,
+      status: "awaiting_schedule" as const,
+    }));
+
+    const { error: bookingError } = await supabase
+      .from("activity_bookings")
+      .insert(bookingRows);
+
+    if (bookingError) {
+      await releaseCoupon();
+      await supabase
+        .from("enrollments")
+        .delete()
+        .in(
+          "id",
+          createdEnrollments.map((e) => e.id)
+        );
+      return {
+        success: false,
+        error: "לא הצלחנו לשריין את הפעילות לתיאום. נסו שוב.",
+      };
+    }
+  }
+
   if (redemptionId) {
     await supabase.rpc("link_coupon_redemption", {
       p_redemption_id: redemptionId,
@@ -429,32 +524,77 @@ export async function completePlanPurchase(input: {
   }
 
   // חיוב נפרד לכל משתתף, כדי שברשימת הגבייה יהיה ברור על מה בדיוק החוב.
-  const { error: paymentError } = await supabase.from("payments").insert(
-    createdEnrollments.map((enrollment) => ({
-      parent_id: profile.id,
-      enrollment_id: enrollment.id,
-      amount:
-        amountByParticipant.get(enrollment.child_id) ?? unitPrice * quantity,
-      payment_method: paymentMethod,
-      status: deferred ? ("pending" as const) : ("paid" as const),
-      paid_at: deferred ? null : paidAt,
-      external_reference: paymentReference,
-      receipt_label_id: receiptLabel.labelId,
-      receipt_description: receiptLabel.description ?? chargeDescription,
-    }))
-  );
+  const { data: createdPayments, error: paymentError } = await supabase
+    .from("payments")
+    .insert(
+      createdEnrollments.map((enrollment) => ({
+        parent_id: profile.id,
+        enrollment_id: enrollment.id,
+        amount:
+          amountByParticipant.get(enrollment.child_id) ?? unitPrice * quantity,
+        payment_method: paymentMethod,
+        status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
+        paid_at: deferred || awaitingCardcom ? null : paidAt,
+        receipt_label_id: receiptLabel.labelId,
+        receipt_description: receiptLabel.description ?? chargeDescription,
+      }))
+    )
+    .select("id");
 
-  if (paymentError) {
+  if (paymentError || !createdPayments?.length) {
+    await rollbackPlanPurchase(
+      supabase,
+      createdEnrollments.map((e) => e.id)
+    );
+    await releaseCoupon();
     return {
       success: false,
       error: "הרכישה נשמרה אך רישום התשלום נכשל. פנו לצוות.",
     };
   }
 
+  let paymentReference: string | null = null;
+  let checkoutUrl: string | null = null;
+
+  if (awaitingCardcom) {
+    const charge = await getPaymentProvider().createCharge({
+      amount: totalAmount,
+      description: chargeDescription,
+      parentId: profile.id,
+      method: paymentMethod,
+      paymentIds: createdPayments.map((payment) => payment.id),
+      couponRedemptionId: redemptionId,
+      metadata: {
+        kind,
+        planId,
+        childIds: uniqueChildIds,
+        includeSelf: input.includeSelf,
+        quantity,
+      },
+    });
+
+    if (!charge.success || !charge.redirectUrl) {
+      await rollbackPlanPurchase(
+        supabase,
+        createdEnrollments.map((e) => e.id),
+        createdPayments.map((payment) => payment.id)
+      );
+      await releaseCoupon();
+      return {
+        success: false,
+        error: charge.error || "לא הצלחנו לפתוח את דף התשלום. נסו שוב.",
+      };
+    }
+
+    paymentReference = charge.reference;
+    checkoutUrl = charge.redirectUrl;
+  }
+
   return {
     success: true,
     enrollmentIds: createdEnrollments.map((e) => e.id),
     paymentReference,
+    checkoutUrl,
     deferred,
     total: totalAmount,
     couponCode,

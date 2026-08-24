@@ -1,11 +1,11 @@
 import { ReceiptLabelList } from "@/components/admin/ReceiptLabelList";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "תוויות לקבלה" };
 
 export default async function AdminReceiptLabelsPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
   const { data: labels } = await supabase
     .from("receipt_labels")
     .select("id, label, is_active, sort_order")

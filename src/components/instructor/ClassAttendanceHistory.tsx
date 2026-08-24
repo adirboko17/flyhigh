@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  SessionNotesList,
+  useClassSessionNotesByDate,
+} from "@/components/classes/SessionNotesPanel";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ATTENDANCE_STATUS } from "@/lib/constants";
@@ -14,10 +18,15 @@ export interface AttendanceRecord {
 }
 
 interface ClassAttendanceHistoryProps {
+  classId: string;
   records: AttendanceRecord[];
 }
 
-export function ClassAttendanceHistory({ records }: ClassAttendanceHistoryProps) {
+export function ClassAttendanceHistory({
+  classId,
+  records,
+}: ClassAttendanceHistoryProps) {
+  const notesByDate = useClassSessionNotesByDate(classId);
   if (records.length === 0) {
     return (
       <EmptyState
@@ -88,6 +97,14 @@ export function ClassAttendanceHistory({ records }: ClassAttendanceHistoryProps)
                 </li>
               ))}
             </ul>
+            {(notesByDate[date]?.length ?? 0) > 0 && (
+              <div className="border-t border-ink-100 px-4 py-3">
+                <p className="mb-2 text-xs font-semibold text-ink-500">
+                  הערות מפגש
+                </p>
+                <SessionNotesList notes={notesByDate[date] ?? []} />
+              </div>
+            )}
           </div>
         );
       })}

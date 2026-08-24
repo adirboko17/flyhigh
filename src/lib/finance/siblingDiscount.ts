@@ -1,8 +1,9 @@
 import type { Json } from "@/types/database.types";
 
 /**
- * הנחת אחים: כשמשפחה רושמת יותר מילד אחד לאותו חוג, ההנחה חלה רק על
- * הילד השני ומעלה — הילד הראשון משלם מחיר מלא.
+ * הנחת אחים: כשמשפחה רושמת יותר מילד אחד לאותה קטגוריה (למשל שני חוגי
+ * שחייה), ההנחה חלה רק על הילד השני ומעלה — הילד הראשון משלם מחיר מלא.
+ * חוגים בקטגוריות שונות לא נספרים יחד. בלי קטגוריה — רק אותו חוג.
  * המדרגות נשמרות כמערך JSON על החוג, ואם לא הוגדרו — נלקחת ברירת המחדל הגלובלית
  * (הפונקציה class_sibling_discount_tiers במסד הנתונים מבצעת את הבחירה).
  */
@@ -14,7 +15,7 @@ export type SiblingDiscountTier = {
 };
 
 export type SiblingDiscountBreakdown = {
-  /** מספר הילדים שנספרו לצורך המדרגה (כולל אחים שכבר רשומים לחוג). */
+  /** מספר הילדים שנספרו לצורך המדרגה (כולל אחים שכבר רשומים לאותה קטגוריה). */
   childCount: number;
   percent: number;
   /** כמה ילדים בהזמנה הנוכחית משלמים מחיר מלא. */
@@ -81,14 +82,14 @@ export function resolveSiblingDiscountPercent(
 }
 
 /**
- * מחשב את סכום ההזמנה: ילד ראשון במשפחה (בחוג) במחיר מלא,
+ * מחשב את סכום ההזמנה: ילד ראשון במשפחה (באותה קטגוריה) במחיר מלא,
  * וכל ילד נוסף מקבל את אחוז ההנחה של המדרגה המתאימה.
  */
 export function calculateOrderTotal(
   unitPrice: number,
   chargedChildren: number,
   tiers: SiblingDiscountTier[],
-  /** מספר הילדים שנספר למדרגה — כולל אחים שכבר רשומים לחוג. */
+  /** מספר הילדים שנספר למדרגה — כולל אחים שכבר רשומים לאותה קטגוריה. */
   siblingCount = chargedChildren
 ): SiblingDiscountBreakdown {
   const safeCharged = Math.max(0, chargedChildren);

@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import {
+  CardcomRedirectHint,
   CouponField,
-  DemoCardFields,
   PaymentMethodPicker,
 } from "@/components/checkout/CheckoutFields";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
@@ -23,6 +23,11 @@ import {
   previewPlanCoupon,
   type PlanKind,
 } from "@/lib/enrollment/planActions";
+import {
+  ACTIVITY_MAX_PEOPLE,
+  isActivityProgram,
+  type ProgramKind,
+} from "@/lib/programs";
 import {
   EMPTY_RECEIPT_LABEL_CHOICE,
   type ReceiptLabelChoice,
@@ -47,6 +52,8 @@ interface PlanPurchaseButtonProps {
   entriesCount?: number | null;
   /** משך שיעור פרטי בדקות. */
   durationMinutes?: number | null;
+  /** מנוי או פעילות לפי נפשות — רלוונטי רק כש־planKind הוא program. */
+  programKind?: ProgramKind;
   featured?: boolean;
   viewer: PlanViewer;
 }
@@ -58,6 +65,7 @@ export function PlanPurchaseButton({
   price,
   entriesCount,
   durationMinutes,
+  programKind,
   featured = false,
   viewer,
 }: PlanPurchaseButtonProps) {
@@ -75,18 +83,23 @@ export function PlanPurchaseButton({
     featured ? "text-white" : "text-brand-600"
   );
 
+  const isActivity = isActivityProgram(programKind);
   const ctaLabel =
-    planKind === "program"
-      ? "רכישת המסלול"
-      : planKind === "private_lesson"
-        ? "רכישת שיעור פרטי"
-        : "רכישת כניסות";
+    planKind === "private_lesson"
+      ? "רכישת שיעור פרטי"
+      : isActivity
+        ? "רכישת הפעילות"
+        : planKind === "program"
+          ? "רכישת המסלול"
+          : "רכישת כניסות";
   const loginLabel =
-    planKind === "program"
-      ? "התחברות לרכישת מסלול"
-      : planKind === "private_lesson"
-        ? "התחברות לרכישת שיעור"
-        : "התחברות לרכישה";
+    planKind === "private_lesson"
+      ? "התחברות לרכישת שיעור"
+      : isActivity
+        ? "התחברות לרכישת פעילות"
+        : planKind === "program"
+          ? "התחברות לרכישת מסלול"
+          : "התחברות לרכישה";
 
   if (viewer.kind === "guest") {
     return (
@@ -137,6 +150,7 @@ export function PlanPurchaseButton({
         price={price}
         entriesCount={entriesCount}
         durationMinutes={durationMinutes}
+        programKind={programKind}
         parentName={viewer.parentName}
         kids={viewer.children}
       />
@@ -151,6 +165,7 @@ interface PlanPurchaseTriggerProps {
   price: number;
   entriesCount?: number | null;
   durationMinutes?: number | null;
+  programKind?: ProgramKind;
   viewer: PlanViewer;
   children: ReactNode;
   className?: string;
@@ -164,6 +179,7 @@ export function PlanPurchaseTrigger({
   price,
   entriesCount,
   durationMinutes,
+  programKind,
   viewer,
   children,
   className,
@@ -206,6 +222,7 @@ export function PlanPurchaseTrigger({
           price={price}
           entriesCount={entriesCount}
           durationMinutes={durationMinutes}
+          programKind={programKind}
           parentName={viewer.parentName}
           kids={viewer.children}
         />
@@ -223,6 +240,7 @@ interface PlanCheckoutDialogProps {
   price: number;
   entriesCount?: number | null;
   durationMinutes?: number | null;
+  programKind?: ProgramKind;
   parentName: string;
   kids: Child[];
 }
@@ -236,12 +254,15 @@ function PlanCheckoutDialog({
   price,
   entriesCount,
   durationMinutes,
+  programKind,
   parentName,
   kids,
 }: PlanCheckoutDialogProps) {
   const router = useRouter();
   const hasChildren = kids.length > 0;
   const isPrivateLesson = planKind === "private_lesson";
+  const isActivity = isActivityProgram(programKind);
+  const usesQuantity = isPrivateLesson || isActivity;
 
   const [step, setStep] = useState<"select" | "payment" | "success">("select");
   // בלי ילדים בחשבון הרכישה תמיד נרשמת על שם ההורה, ולכן היא מסומנת מראש.
@@ -269,15 +290,17 @@ function PlanCheckoutDialog({
     ...(includeSelf ? [{ id: "self", name: `${parentName} (אני)` }] : []),
   ];
   const count = participants.length;
-  const effectiveQuantity = isPrivateLesson ? quantity : 1;
-  const listTotal =
-    Math.round(price * effectiveQuantity * count * 100) / 100;
+  const effectiveQuantity = usesQuantity ? quantity : 1;
+  const listTotal = isActivity
+    ? Math.round(price * effectiveQuantity * 100) / 100
+    : Math.round(price * effectiveQuantity * count * 100) / 100;
   const couponDiscount = coupon?.discountAmount ?? 0;
   const total = Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
   const deferred = isDeferredPaymentMethod(method);
   const nothingToCharge = total <= 0;
-  const kindLabel =
-    planKind === "program"
+  const kindLabel = isActivity
+    ? "פעילות"
+    : planKind === "program"
       ? "מסלול"
       : planKind === "private_lesson"
         ? "שיעור פרטי"
@@ -355,11 +378,6 @@ function PlanCheckoutDialog({
 
     setLoading(true);
 
-    // השהיה קצרה כדי לדמות סליקה; בתשלום מול המשרד אין למה להמתין.
-    if (!deferred && !nothingToCharge) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-    }
-
     const result = await completePlanPurchase({
       kind: planKind,
       planId,
@@ -375,6 +393,11 @@ function PlanCheckoutDialog({
 
     if (!result.success) {
       setError(result.error);
+      return;
+    }
+
+    if (result.checkoutUrl) {
+      window.location.assign(result.checkoutUrl);
       return;
     }
 
@@ -426,17 +449,20 @@ function PlanCheckoutDialog({
               <p className="mt-0.5 text-sm text-ink-500">
                 {durationMinutes} דקות לשיעור · מחיר לשיעור למשתתף
               </p>
+            ) : isActivity ? (
+              <p className="mt-0.5 text-sm text-ink-500">מחיר לנפש</p>
             ) : (
               <p className="mt-0.5 text-sm text-ink-500">מחיר לכל משתתף</p>
             )}
           </div>
 
-          {isPrivateLesson && (
+          {(isPrivateLesson || isActivity) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">לפני הרכישה חשוב לדעת</p>
               <p className="mt-1">
-                אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים
-                מועד בעמוד זה.
+                {isActivity
+                  ? "בחרו כמה נפשות יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
+                  : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
               </p>
             </div>
           )}
@@ -470,10 +496,10 @@ function PlanCheckoutDialog({
             )}
           </fieldset>
 
-          {isPrivateLesson && (
+          {usesQuantity && (
             <fieldset>
               <legend className="mb-2 text-sm font-semibold text-ink-800">
-                כמה שיעורים?
+                {isActivity ? "כמה נפשות?" : "כמה שיעורים?"}
               </legend>
               <div className="flex items-center gap-3">
                 <button
@@ -494,16 +520,18 @@ function PlanCheckoutDialog({
                 <button
                   type="button"
                   className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-200 text-lg font-bold text-ink-700 hover:bg-ink-50 disabled:opacity-40"
-                  disabled={quantity >= 20}
+                  disabled={quantity >= ACTIVITY_MAX_PEOPLE}
                   onClick={() => {
                     resetCoupon();
-                    setQuantity((q) => Math.min(20, q + 1));
+                    setQuantity((q) => Math.min(ACTIVITY_MAX_PEOPLE, q + 1));
                   }}
                   aria-label="הוספת כמות"
                 >
                   +
                 </button>
-                <span className="text-sm text-ink-500">לכל משתתף</span>
+                <span className="text-sm text-ink-500">
+                  {isActivity ? "כולל ילדים, הורים ואורחים" : "לכל משתתף"}
+                </span>
               </div>
             </fieldset>
           )}
@@ -535,11 +563,13 @@ function PlanCheckoutDialog({
             <div className="flex justify-between gap-3 text-ink-600">
               <span>
                 מחיר ל
-                {planKind === "program"
-                  ? "מסלול"
-                  : planKind === "private_lesson"
-                    ? "שיעור"
-                    : "כרטיסייה"}
+                {isActivity
+                  ? "נפש"
+                  : planKind === "program"
+                    ? "מסלול"
+                    : planKind === "private_lesson"
+                      ? "שיעור"
+                      : "כרטיסייה"}
               </span>
               <span className="shrink-0">{formatCurrency(price)}</span>
             </div>
@@ -549,10 +579,18 @@ function PlanCheckoutDialog({
                 <span className="shrink-0">{quantity}</span>
               </div>
             )}
-            <div className="flex justify-between gap-3 text-ink-600">
-              <span>משתתפים</span>
-              <span className="shrink-0">{count}</span>
-            </div>
+            {isActivity && (
+              <div className="flex justify-between gap-3 text-ink-600">
+                <span>נפשות</span>
+                <span className="shrink-0">{quantity}</span>
+              </div>
+            )}
+            {!isActivity && (
+              <div className="flex justify-between gap-3 text-ink-600">
+                <span>משתתפים</span>
+                <span className="shrink-0">{count}</span>
+              </div>
+            )}
             {couponDiscount > 0 && (
               <>
                 <div className="flex justify-between gap-3 text-ink-600">
@@ -607,17 +645,21 @@ function PlanCheckoutDialog({
               <span className="shrink-0">{formatCurrency(total)}</span>
             </div>
             <p className="mt-1 break-words text-brand-700">
-              {planTitle} · {count}{" "}
-              {count === 1 ? "משתתף/ת" : "משתתפים"}
+              {planTitle}
+              {isActivity
+                ? ` · ${quantity} ${quantity === 1 ? "נפש" : "נפשות"}`
+                : ` · ${count} ${count === 1 ? "משתתף/ת" : "משתתפים"}`}
               {isPrivateLesson &&
                 ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
             </p>
           </div>
 
-          {isPrivateLesson && (
+          {(isPrivateLesson || isActivity) && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              ניצור איתכם קשר לתיאום תאריך ושעה אחרי השלמת הרכישה.
+              {isActivity
+                ? "ניצור איתכם קשר לתיאום מועד אחרי השלמת הרכישה."
+                : "ניצור איתכם קשר לתיאום תאריך ושעה אחרי השלמת הרכישה."}
             </div>
           )}
 
@@ -640,7 +682,7 @@ function PlanCheckoutDialog({
               <p className="mt-1">הקופון מכסה את מלוא הסכום, ולכן לא יבוצע חיוב.</p>
             </div>
           ) : (
-            <DemoCardFields />
+            <CardcomRedirectHint />
           )}
 
           {error && (
@@ -668,7 +710,7 @@ function PlanCheckoutDialog({
               {loading
                 ? deferred || nothingToCharge
                   ? "שומר רכישה..."
-                  : "מעבד תשלום..."
+                  : "מעביר לקארדקום..."
                 : deferred || nothingToCharge
                   ? "אישור רכישה"
                   : `שלם ${formatCurrency(total)}`}
@@ -687,15 +729,19 @@ function PlanCheckoutDialog({
               {planTitle} נוסף לחשבון שלכם
             </p>
             <p className="mt-1 text-sm text-ink-500">
-              {count === 1
-                ? `על שם ${participants[0]?.name}`
-                : `עבור ${count} משתתפים`}
+              {isActivity
+                ? `${quantity} ${quantity === 1 ? "נפש" : "נפשות"}`
+                : count === 1
+                  ? `על שם ${participants[0]?.name}`
+                  : `עבור ${count} משתתפים`}
               {isPrivateLesson &&
                 ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
             </p>
-            {isPrivateLesson && (
+            {(isPrivateLesson || isActivity) && (
               <p className="mt-2 text-sm text-ink-500">
-                ניצור איתכם קשר בקרוב לתיאום תאריך ושעה.
+                {isActivity
+                  ? "ניצור איתכם קשר בקרוב לתיאום מועד."
+                  : "ניצור איתכם קשר בקרוב לתיאום תאריך ושעה."}
               </p>
             )}
             {settledLater ? (

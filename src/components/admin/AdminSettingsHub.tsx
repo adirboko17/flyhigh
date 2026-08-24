@@ -127,7 +127,7 @@ export function AdminSettingsHub({
         open={open === "siblingDiscount"}
         onClose={() => setOpen(null)}
         title="הנחת אחים — ברירת מחדל"
-        description="ההנחה חלה רק על הילד השני ומעלה — לא על הילד הראשון. חוג יכול להגדיר מדרגות משלו ולעקוף את ברירת המחדל."
+        description="ההנחה חלה על הילד השני ומעלה באותה קטגוריה — גם אם נרשמו לחוגים שונים. חוג יכול להגדיר מדרגות משלו ולעקוף את ברירת המחדל."
         className="max-w-lg"
       >
         <SiblingDiscountForm

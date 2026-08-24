@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
+import { isActivityProgram, type ProgramKind } from "@/lib/programs";
 import { formatCurrency } from "@/utils/format";
 
 export type AdminProgramRow = {
@@ -19,6 +20,7 @@ export type AdminProgramRow = {
   description: string | null;
   price: number;
   duration_months: number;
+  kind: ProgramKind;
   status: keyof typeof LISTING_STATUS;
 };
 
@@ -90,11 +92,18 @@ export function ProgramList({ programs, query = "" }: ProgramListProps) {
                   </TD>
                   <TD className="whitespace-nowrap font-medium">
                     {formatCurrency(p.price)}
+                    {isActivityProgram(p.kind) ? (
+                      <span className="block text-xs font-normal text-ink-400">
+                        לנפש
+                      </span>
+                    ) : null}
                   </TD>
                   <TD className="whitespace-nowrap text-ink-600">
-                    {p.duration_months === 1
-                      ? "חודש"
-                      : `${p.duration_months} חודשים`}
+                    {isActivityProgram(p.kind)
+                      ? "לפי נפשות · תיאום מועד"
+                      : p.duration_months === 1
+                        ? "חודש"
+                        : `${p.duration_months} חודשים`}
                   </TD>
                   <TD>
                     <Badge tone={LISTING_STATUS[p.status].tone}>

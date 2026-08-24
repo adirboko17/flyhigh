@@ -8,13 +8,23 @@ import {
 } from "@/lib/constants";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import {
+  declarationSchoolYear,
+  healthDeclarationErrorFor,
+  missingHealthDeclarationChildren,
+} from "@/lib/health-declaration";
 import { createClient } from "@/lib/supabase/server";
 
-/** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — חיוב מיידי (דמו). */
+/** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — דף סליקה של קארדקום. */
 export type AssignChargeMethod = DeferredPaymentMethod | "credit_card" | "none";
 
 export type AssignResult =
-  | { success: true; assigned: number; overCapacity: boolean }
+  | {
+      success: true;
+      assigned: number;
+      overCapacity: boolean;
+      checkoutUrl: string | null;
+    }
   | { success: false; error: string };
 
 type AssignCore = {
@@ -130,6 +140,25 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     return { success: false, error: "חלק מהילדים אינם משויכים ללקוח שנבחר." };
   }
 
+  const { data: declarations } = await supabase
+    .from("health_declarations")
+    .select("child_id")
+    .eq("parent_id", input.parentId)
+    .eq("school_year", declarationSchoolYear())
+    .in("child_id", childIds);
+  const missingHealth = missingHealthDeclarationChildren(
+    children,
+    (declarations ?? []).map((row) => row.child_id)
+  );
+  if (missingHealth.length > 0) {
+    return {
+      success: false,
+      error: healthDeclarationErrorFor(
+        missingHealth.map((child) => child.full_name)
+      ),
+    };
+  }
+
   if (existing && existing.length > 0) {
     const names = existing
       .map((row) => row.children?.full_name)
@@ -150,7 +179,8 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     .in("status", ["active", "pending"]);
 
   const isCreditCard = input.method === "credit_card";
-  const settledNow = input.markPaid || isCreditCard;
+  const awaitingCardcom = isCreditCard && total > 0;
+  const settledNow = input.markPaid && !awaitingCardcom;
 
   const { data: created, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -171,53 +201,27 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     return { success: false, error: "יצירת ההרשמות נכשלה. נסו שוב." };
   }
 
+  let checkoutUrl: string | null = null;
+
   if (input.method !== "none" && total > 0) {
     const parts = splitAmount(total, created.length);
-    let paymentReference: string | null = null;
-
-    if (isCreditCard) {
-      const charge = await getPaymentProvider().createCharge({
-        amount: total,
-        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "ילד/ה" : "ילדים"})`,
-        parentId: input.parentId,
-        method: "credit_card",
-        metadata: {
-          classId: input.classId,
-          childIds,
-          adminAssigned: true,
-        },
-      });
-
-      if (!charge.success) {
-        await supabase
-          .from("enrollments")
-          .delete()
-          .in(
-            "id",
-            created.map((enrollment) => enrollment.id)
-          );
-        return { success: false, error: "התשלום בכרטיס אשראי נכשל. נסו שוב." };
-      }
-
-      paymentReference = charge.reference;
-    }
-
     const paidAt = settledNow ? new Date().toISOString() : null;
 
-    const { error: paymentError } = await supabase.from("payments").insert(
-      created.map((enrollment, index) => ({
-        parent_id: input.parentId,
-        enrollment_id: enrollment.id,
-        amount: parts[index],
-        payment_method: input.method as Exclude<AssignChargeMethod, "none">,
-        status: settledNow ? ("paid" as const) : ("pending" as const),
-        paid_at: paidAt,
-        external_reference: paymentReference,
-      }))
-    );
+    const { data: createdPayments, error: paymentError } = await supabase
+      .from("payments")
+      .insert(
+        created.map((enrollment, index) => ({
+          parent_id: input.parentId,
+          enrollment_id: enrollment.id,
+          amount: parts[index],
+          payment_method: input.method as Exclude<AssignChargeMethod, "none">,
+          status: settledNow ? ("paid" as const) : ("pending" as const),
+          paid_at: paidAt,
+        }))
+      )
+      .select("id");
 
-    if (paymentError) {
-      // בלי החיוב ההרשמות היו נשארות בלי מעקב כספי, ולכן חוזרים אחורה.
+    if (paymentError || !createdPayments?.length) {
       await supabase
         .from("enrollments")
         .delete()
@@ -226,6 +230,44 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
           created.map((enrollment) => enrollment.id)
         );
       return { success: false, error: "יצירת החיוב נכשלה. נסו שוב." };
+    }
+
+    if (awaitingCardcom) {
+      const charge = await getPaymentProvider().createCharge({
+        amount: total,
+        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "ילד/ה" : "ילדים"})`,
+        parentId: input.parentId,
+        method: "credit_card",
+        paymentIds: createdPayments.map((payment) => payment.id),
+        metadata: {
+          classId: input.classId,
+          childIds,
+          adminAssigned: true,
+        },
+      });
+
+      if (!charge.success || !charge.redirectUrl) {
+        await supabase
+          .from("payments")
+          .delete()
+          .in(
+            "id",
+            createdPayments.map((payment) => payment.id)
+          );
+        await supabase
+          .from("enrollments")
+          .delete()
+          .in(
+            "id",
+            created.map((enrollment) => enrollment.id)
+          );
+        return {
+          success: false,
+          error: charge.error || "לא הצלחנו לפתוח את דף התשלום. נסו שוב.",
+        };
+      }
+
+      checkoutUrl = charge.redirectUrl;
     }
   }
 
@@ -248,5 +290,6 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     success: true,
     assigned: created.length,
     overCapacity: (takenBefore ?? 0) + created.length > cls.capacity,
+    checkoutUrl,
   };
 }

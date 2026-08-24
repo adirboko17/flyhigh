@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Icon } from "@/components/icons/Icon";
 import { SessionSubstituteDialog } from "@/components/admin/SessionSubstituteDialog";
 import { CLASS_SESSION_STATUS, DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { dayLabelLong, type CalendarDay } from "@/lib/scheduling/monthGrid";
@@ -11,8 +12,8 @@ import { cn } from "@/utils/cn";
 
 export type CalendarSession = {
   id: string;
-  /** חוג רגיל או שיעור פרטי מתוזמן. */
-  kind: "class" | "private_lesson";
+  /** חוג רגיל, שיעור פרטי מתוזמן או פעילות לפי נפשות. */
+  kind: "class" | "private_lesson" | "activity";
   classId: string;
   title: string;
   category: string | null;
@@ -36,6 +37,13 @@ export type CalendarSession = {
 };
 
 export const PRIVATE_LESSON_CALENDAR_GROUP = "private-lessons";
+export const ACTIVITY_CALENDAR_GROUP = "activities";
+
+function isBookedSession(kind: CalendarSession["kind"]) {
+  return kind === "private_lesson" || kind === "activity";
+}
+
+export type CalendarView = "month" | "week";
 
 type ClassColor = {
   chip: string;
@@ -78,11 +86,16 @@ function formatDuration(minutes: number) {
 }
 
 interface ClassCalendarProps {
-  month: string;
-  monthTitle: string;
-  previousMonth: string;
-  nextMonth: string;
-  currentMonth: string;
+  view: CalendarView;
+  periodTitle: string;
+  previousHref: string;
+  nextHref: string;
+  todayHref: string;
+  isCurrentPeriod: boolean;
+  previousLabel: string;
+  nextLabel: string;
+  monthViewHref: string;
+  weekViewHref: string;
   today: string;
   days: CalendarDay[];
   sessions: CalendarSession[];
@@ -90,11 +103,16 @@ interface ClassCalendarProps {
 }
 
 export function ClassCalendar({
-  month,
-  monthTitle,
-  previousMonth,
-  nextMonth,
-  currentMonth,
+  view,
+  periodTitle,
+  previousHref,
+  nextHref,
+  todayHref,
+  isCurrentPeriod,
+  previousLabel,
+  nextLabel,
+  monthViewHref,
+  weekViewHref,
   today,
   days,
   sessions,
@@ -104,11 +122,24 @@ export function ClassCalendar({
   const [hiddenClasses, setHiddenClasses] = useState<string[]>([]);
   const [substituteFor, setSubstituteFor] = useState<CalendarSession | null>(null);
 
+  const gridDates = useMemo(() => new Set(days.map((day) => day.date)), [days]);
+  const periodSessions = useMemo(
+    () =>
+      view === "week"
+        ? sessions.filter((session) => gridDates.has(session.date))
+        : sessions,
+    [view, sessions, gridDates]
+  );
+
   const classes = useMemo(() => {
     const map = new Map<string, { id: string; title: string; count: number }>();
-    for (const session of sessions) {
+    for (const session of periodSessions) {
       const title =
-        session.kind === "private_lesson" ? "שיעורים פרטיים" : session.title;
+        session.kind === "private_lesson"
+          ? "שיעורים פרטיים"
+          : session.kind === "activity"
+            ? "פעילויות"
+            : session.title;
       const existing = map.get(session.classId);
       if (existing) existing.count += 1;
       else map.set(session.classId, { id: session.classId, title, count: 1 });
@@ -119,7 +150,7 @@ export function ClassCalendar({
         ...cls,
         color: CLASS_PALETTE[index % CLASS_PALETTE.length],
       }));
-  }, [sessions]);
+  }, [periodSessions]);
 
   const colorByClass = useMemo(
     () => new Map(classes.map((cls) => [cls.id, cls.color])),
@@ -127,8 +158,9 @@ export function ClassCalendar({
   );
 
   const visibleSessions = useMemo(
-    () => sessions.filter((session) => !hiddenClasses.includes(session.classId)),
-    [sessions, hiddenClasses]
+    () =>
+      periodSessions.filter((session) => !hiddenClasses.includes(session.classId)),
+    [periodSessions, hiddenClasses]
   );
 
   /** המפגשים מגיעים מהשרת ממוינים לפי תאריך ושעה, כך שהקיבוץ שומר על הסדר. */
@@ -147,7 +179,10 @@ export function ClassCalendar({
     0
   );
   const activeClassCount = new Set(visibleSessions.map((s) => s.classId)).size;
-  const todaySessions = month === currentMonth ? sessionsByDate.get(today) ?? [] : null;
+  const periodContainsToday = days.some(
+    (day) => day.date === today && (view === "week" || day.inMonth)
+  );
+  const todaySessions = periodContainsToday ? sessionsByDate.get(today) ?? [] : null;
 
   useEffect(() => {
     if (!selectedDate) return;
@@ -175,47 +210,59 @@ export function ClassCalendar({
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 bg-brand-gradient px-4 py-4 text-white sm:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-white/70">לוח החוגים החודשי</p>
+            <p className="text-xs font-medium text-white/70">
+              {view === "week" ? "לוח החוגים השבועי" : "לוח החוגים החודשי"}
+            </p>
             <h1 className="font-display text-xl font-bold leading-tight sm:text-3xl">
-              {monthTitle}
+              {periodTitle}
             </h1>
           </div>
-          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
-            <MonthNavLink
-              href={`/admin/calendar?month=${previousMonth}`}
-              label="החודש הקודם"
-            >
-              <ChevronIcon className="h-5 w-5 rotate-180" />
-            </MonthNavLink>
-            <Link
-              href="/admin/calendar"
-              aria-current={month === currentMonth ? "page" : undefined}
-              className={cn(
-                "rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
-                month === currentMonth
-                  ? "bg-white text-brand-700"
-                  : "bg-white/15 text-white hover:bg-white/25"
-              )}
-            >
-              היום
-            </Link>
-            <MonthNavLink
-              href={`/admin/calendar?month=${nextMonth}`}
-              label="החודש הבא"
-            >
-              <ChevronIcon className="h-5 w-5" />
-            </MonthNavLink>
+          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:items-end">
+            <ViewToggle
+              view={view}
+              monthHref={monthViewHref}
+              weekHref={weekViewHref}
+            />
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
+              <PeriodNavLink href={previousHref} label={previousLabel}>
+                <ChevronIcon className="h-5 w-5 rotate-180" />
+              </PeriodNavLink>
+              <Link
+                href={todayHref}
+                aria-current={isCurrentPeriod ? "page" : undefined}
+                className={cn(
+                  "rounded-xl px-4 py-2 text-sm font-semibold transition-colors",
+                  isCurrentPeriod
+                    ? "bg-white text-brand-700"
+                    : "bg-white/15 text-white hover:bg-white/25"
+                )}
+              >
+                היום
+              </Link>
+              <PeriodNavLink href={nextHref} label={nextLabel}>
+                <ChevronIcon className="h-5 w-5" />
+              </PeriodNavLink>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-px bg-ink-100 lg:grid-cols-4">
-          <StatTile label="מפגשים החודש" value={visibleSessions.length} />
+          <StatTile
+            label={view === "week" ? "מפגשים השבוע" : "מפגשים החודש"}
+            value={visibleSessions.length}
+          />
           <StatTile label="חוגים פעילים" value={activeClassCount} />
           <StatTile label="שעות פעילות" value={formatDuration(totalMinutes)} />
           <StatTile
             label="היום"
             value={todaySessions === null ? "—" : todaySessions.length}
-            hint={todaySessions === null ? "בחודש אחר" : "מפגשים מתוזמנים"}
+            hint={
+              todaySessions === null
+                ? view === "week"
+                  ? "בשבוע אחר"
+                  : "בחודש אחר"
+                : "מפגשים מתוזמנים"
+            }
           />
         </div>
       </Card>
@@ -253,11 +300,13 @@ export function ClassCalendar({
         </div>
       )}
 
-      {sessions.length === 0 && (
+      {periodSessions.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center">
             <p className="font-semibold text-ink-700">
-              אין מפגשים מתוזמנים ב{monthTitle}
+              {view === "week"
+                ? `אין מפגשים מתוזמנים בשבוע ${periodTitle}`
+                : `אין מפגשים מתוזמנים ב${periodTitle}`}
             </p>
             <p className="mt-1 text-sm text-ink-500">
               המפגשים נוצרים אוטומטית מלוח הזמנים שמוגדר בכל חוג.
@@ -266,31 +315,40 @@ export function ClassCalendar({
         </Card>
       )}
 
-      <Card className="overflow-hidden p-0">
-        <div className="grid grid-cols-7 border-b border-ink-100 bg-ink-50/70">
-          {DAYS_OF_WEEK.map((name, index) => (
-            <div
-              key={name}
-              className="px-1 py-2.5 text-center text-xs font-bold text-ink-500"
-            >
-              <span className="hidden lg:inline">{name}</span>
-              <span className="lg:hidden">{DAY_ABBR[index]}</span>
-            </div>
-          ))}
-        </div>
+      {view === "week" ? (
+        <WeekGrid
+          days={days}
+          sessionsByDate={sessionsByDate}
+          colorByClass={colorByClass}
+          onSelect={setSelectedDate}
+        />
+      ) : (
+        <Card className="overflow-hidden p-0">
+          <div className="grid grid-cols-7 border-b border-ink-100 bg-ink-50/70">
+            {DAYS_OF_WEEK.map((name, index) => (
+              <div
+                key={name}
+                className="px-1 py-2.5 text-center text-xs font-bold text-ink-500"
+              >
+                <span className="hidden lg:inline">{name}</span>
+                <span className="lg:hidden">{DAY_ABBR[index]}</span>
+              </div>
+            ))}
+          </div>
 
-        <div className="grid grid-cols-7 gap-px bg-ink-100">
-          {days.map((day) => (
-            <DayCell
-              key={day.date}
-              day={day}
-              sessions={sessionsByDate.get(day.date) ?? []}
-              colorByClass={colorByClass}
-              onSelect={() => setSelectedDate(day.date)}
-            />
-          ))}
-        </div>
-      </Card>
+          <div className="grid grid-cols-7 gap-px bg-ink-100">
+            {days.map((day) => (
+              <DayCell
+                key={day.date}
+                day={day}
+                sessions={sessionsByDate.get(day.date) ?? []}
+                colorByClass={colorByClass}
+                onSelect={() => setSelectedDate(day.date)}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {selectedDate && (
         <DayPanel
@@ -332,6 +390,284 @@ function upcomingSessionsOfClass(
     )
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     .slice(0, 6);
+}
+
+function ViewToggle({
+  view,
+  monthHref,
+  weekHref,
+}: {
+  view: CalendarView;
+  monthHref: string;
+  weekHref: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="תצוגת לוח שנה"
+      className="relative flex rounded-2xl bg-white/15 p-1 ring-1 ring-white/25 backdrop-blur-sm"
+    >
+      <ViewToggleLink href={monthHref} active={view === "month"} icon="calendar">
+        חודש
+      </ViewToggleLink>
+      <ViewToggleLink href={weekHref} active={view === "week"} icon="week">
+        שבוע
+      </ViewToggleLink>
+    </div>
+  );
+}
+
+function ViewToggleLink({
+  href,
+  active,
+  icon,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  icon: "calendar" | "week";
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-bold transition-all sm:flex-none sm:px-4",
+        active
+          ? "bg-white text-brand-700 shadow-glow"
+          : "text-white/85 hover:bg-white/10 hover:text-white"
+      )}
+    >
+      <Icon name={icon} size={16} stroke={2} />
+      {children}
+    </Link>
+  );
+}
+
+function WeekGrid({
+  days,
+  sessionsByDate,
+  colorByClass,
+  onSelect,
+}: {
+  days: CalendarDay[];
+  sessionsByDate: Map<string, CalendarSession[]>;
+  colorByClass: Map<string, ClassColor>;
+  onSelect: (date: string) => void;
+}) {
+  return (
+    <>
+      <div className="space-y-3 lg:hidden">
+        {days.map((day) => (
+          <WeekDayCard
+            key={day.date}
+            day={day}
+            sessions={sessionsByDate.get(day.date) ?? []}
+            colorByClass={colorByClass}
+            onSelect={() => onSelect(day.date)}
+          />
+        ))}
+      </div>
+
+      <Card className="hidden overflow-hidden p-0 lg:block">
+        <div className="grid grid-cols-7 border-b border-ink-100 bg-ink-50/70">
+          {DAYS_OF_WEEK.map((name) => (
+            <div
+              key={name}
+              className="px-2 py-2.5 text-center text-xs font-bold text-ink-500"
+            >
+              {name}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 items-stretch gap-px bg-ink-100">
+          {days.map((day) => (
+            <WeekDayColumn
+              key={day.date}
+              day={day}
+              sessions={sessionsByDate.get(day.date) ?? []}
+              colorByClass={colorByClass}
+              onSelect={() => onSelect(day.date)}
+            />
+          ))}
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function WeekDayCard({
+  day,
+  sessions,
+  colorByClass,
+  onSelect,
+}: {
+  day: CalendarDay;
+  sessions: CalendarSession[];
+  colorByClass: Map<string, ClassColor>;
+  onSelect: () => void;
+}) {
+  const hasSessions = sessions.length > 0;
+
+  return (
+    <Card className={cn("overflow-hidden", day.isToday && "ring-2 ring-brand-400")}>
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={!hasSessions}
+        aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+        className={cn(
+          "flex w-full flex-col gap-3 p-3 text-start",
+          hasSessions && "hover:bg-brand-50/60",
+          day.isWeekend && !day.isToday && "bg-brand-50/40"
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-base font-bold tabular-nums",
+                day.isToday
+                  ? "bg-brand-600 text-white shadow-glow"
+                  : "bg-ink-100 text-ink-800"
+              )}
+            >
+              {day.dayOfMonth}
+            </span>
+            <p className="font-display text-base font-bold leading-tight text-ink-900">
+              {dayLabelLong(day.date)}
+            </p>
+          </div>
+          <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-bold text-ink-600">
+            {sessions.length} מפגשים
+          </span>
+        </div>
+
+        {hasSessions ? (
+          <div className="flex flex-col gap-1.5">
+            {sessions.map((session) => (
+              <WeekSessionChip
+                key={session.id}
+                session={session}
+                color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
+                expanded
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-400">אין מפגשים ביום זה</p>
+        )}
+      </button>
+    </Card>
+  );
+}
+
+function WeekDayColumn({
+  day,
+  sessions,
+  colorByClass,
+  onSelect,
+}: {
+  day: CalendarDay;
+  sessions: CalendarSession[];
+  colorByClass: Map<string, ClassColor>;
+  onSelect: () => void;
+}) {
+  const hasSessions = sessions.length > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={!hasSessions}
+      aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+      className={cn(
+        "flex min-h-[28rem] flex-col gap-2 bg-white p-2 text-start transition-colors",
+        day.isWeekend && "bg-brand-50/50",
+        day.isToday && "bg-brand-50",
+        hasSessions && "hover:bg-brand-50"
+      )}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <span
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums",
+            day.isToday ? "bg-brand-600 text-white shadow-glow" : "text-ink-800"
+          )}
+        >
+          {day.dayOfMonth}
+        </span>
+        {hasSessions && (
+          <span className="text-[11px] font-semibold text-ink-400">
+            {sessions.length}
+          </span>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {sessions.map((session) => (
+          <WeekSessionChip
+            key={session.id}
+            session={session}
+            color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
+          />
+        ))}
+        {!hasSessions && (
+          <p className="px-1 text-[11px] text-ink-300">אין מפגשים</p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function WeekSessionChip({
+  session,
+  color,
+  expanded = false,
+}: {
+  session: CalendarSession;
+  color: ClassColor;
+  expanded?: boolean;
+}) {
+  const cancelled = session.status === "cancelled";
+  const subtitle =
+    isBookedSession(session.kind)
+      ? session.clientLabel
+      : session.substituteInstructor ?? session.instructor;
+
+  return (
+    <span
+      className={cn(
+        "flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-start text-[11px] font-medium leading-tight",
+        cancelled ? "bg-ink-100 text-ink-400 line-through" : color.chip,
+        expanded && "px-2.5 py-2 text-xs"
+      )}
+    >
+      <span className="flex items-center gap-1">
+        <span dir="ltr" className="shrink-0 font-bold tabular-nums">
+          {session.startTime}
+          {expanded ? `–${session.endTime}` : ""}
+        </span>
+        <span className={cn("min-w-0", expanded ? "" : "truncate")}>
+          {session.title}
+        </span>
+        {session.substituteInstructor && (
+          <span
+            title={`מחליפה: ${session.substituteInstructor}`}
+            className="shrink-0 font-bold text-amber-600"
+          >
+            ↺
+          </span>
+        )}
+      </span>
+      {subtitle && (
+        <span className={cn("text-current/70", expanded ? "" : "truncate")}>
+          {subtitle}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function DayCell({
@@ -513,7 +849,7 @@ function SessionCard({
 }) {
   const status = CLASS_SESSION_STATUS[session.status];
   const cancelled = session.status === "cancelled";
-  const isPrivate = session.kind === "private_lesson";
+  const isPrivate = isBookedSession(session.kind);
 
   return (
     <Card className="overflow-hidden">
@@ -560,7 +896,12 @@ function SessionCard({
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone={status.tone}>{status.label}</Badge>
-            {isPrivate && <Badge tone="brand">שיעור פרטי</Badge>}
+            {session.kind === "private_lesson" && (
+              <Badge tone="brand">שיעור פרטי</Badge>
+            )}
+            {session.kind === "activity" && (
+              <Badge tone="warning">פעילות</Badge>
+            )}
             {!isPrivate && session.substituteInstructor && (
               <Badge tone="warning">החלפה</Badge>
             )}
@@ -598,7 +939,7 @@ function SessionCard({
               }
               className="text-sm font-semibold text-brand-600 transition-colors hover:text-brand-700"
             >
-              {isPrivate ? "לשיעורים פרטיים ←" : "לעמוד החוג ←"}
+              {isPrivate ? "לתיאום מועדים ←" : "לעמוד החוג ←"}
             </Link>
           </div>
         </div>
@@ -625,7 +966,7 @@ function StatTile({
   );
 }
 
-function MonthNavLink({
+function PeriodNavLink({
   href,
   label,
   children,

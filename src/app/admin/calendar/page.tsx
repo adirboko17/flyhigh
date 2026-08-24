@@ -1,38 +1,58 @@
 import {
+  ACTIVITY_CALENDAR_GROUP,
   ClassCalendar,
   PRIVATE_LESSON_CALENDAR_GROUP,
   type CalendarSession,
+  type CalendarView,
 } from "@/components/admin/ClassCalendar";
 import {
+  addDays,
   buildMonthGrid,
+  buildWeekGrid,
   monthLabel,
   monthOf,
   monthRange,
   parseMonthParam,
+  parseWeekParam,
   shiftMonth,
+  shiftWeek,
   todayInIsrael,
+  weekLabel,
+  weekRange,
+  weekStartOf,
 } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "לוח שנה" };
 
 export default async function AdminCalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; view?: string; week?: string }>;
 }) {
-  const { month: monthParam } = await searchParams;
+  const { month: monthParam, view: viewParam, week: weekParam } = await searchParams;
   const today = todayInIsrael();
-  const month = parseMonthParam(monthParam, monthOf(today));
-  const { start, end } = monthRange(month);
+  const currentMonth = monthOf(today);
+  const currentWeek = weekStartOf(today);
+  const view: CalendarView = viewParam === "week" ? "week" : "month";
 
-  const supabase = await createClient();
+  const month = parseMonthParam(monthParam, currentMonth);
+  const weekStart = parseWeekParam(weekParam, today);
+  const { start, end } = periodQueryRange(view, month, weekStart);
+
+  const weekForMonthToggle = weekStartOf(
+    month === currentMonth ? today : `${month}-01`
+  );
+  const monthForWeekToggle = monthOf(addDays(weekStart, 3));
+
+  const supabase = await createAdminDataClient();
 
   const [
     { data: sessions },
     { data: enrollments },
     { data: instructors },
     { data: privateSlots },
+    { data: activityBookings },
   ] = await Promise.all([
     supabase
       .from("class_sessions")
@@ -58,6 +78,16 @@ export default async function AdminCalendarPage({
       .from("private_lesson_slots")
       .select(
         "id, session_date, start_time, end_time, status, notes, profiles(full_name), children(full_name), private_lessons(title)"
+      )
+      .eq("status", "scheduled")
+      .gte("session_date", start)
+      .lte("session_date", end)
+      .order("session_date")
+      .order("start_time"),
+    supabase
+      .from("activity_bookings")
+      .select(
+        "id, session_date, start_time, end_time, status, notes, people_count, profiles(full_name), children(full_name), programs(title)"
       )
       .eq("status", "scheduled")
       .gte("session_date", start)
@@ -135,22 +165,105 @@ export default async function AdminCalendarPage({
     }
   );
 
-  const calendarSessions = [...classSessions, ...privateSessions].sort(
+  const activitySessions: CalendarSession[] = (activityBookings ?? []).flatMap(
+    (booking) => {
+      if (!booking.session_date || !booking.start_time || !booking.end_time) {
+        return [];
+      }
+      const parent = booking.profiles?.full_name ?? "לקוח";
+      const child = booking.children?.full_name;
+      const people = booking.people_count;
+      return [
+        {
+          id: booking.id,
+          kind: "activity" as const,
+          classId: ACTIVITY_CALENDAR_GROUP,
+          title: booking.programs?.title ?? "פעילות",
+          category: "פעילות",
+          instructorId: null,
+          instructor: null,
+          substituteInstructorId: null,
+          substituteInstructor: null,
+          date: booking.session_date,
+          startTime: booking.start_time.slice(0, 5),
+          endTime: booking.end_time.slice(0, 5),
+          status: "scheduled" as const,
+          notes: booking.notes,
+          capacity: people,
+          registered: people,
+          clientLabel: `${child ? `${parent} · ${child}` : parent} · ${people} ${people === 1 ? "נפש" : "נפשות"}`,
+        },
+      ];
+    }
+  );
+
+  const calendarSessions = [
+    ...classSessions,
+    ...privateSessions,
+    ...activitySessions,
+  ].sort(
     (a, b) =>
       a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
   );
 
   return (
     <ClassCalendar
-      month={month}
-      monthTitle={monthLabel(month)}
-      previousMonth={shiftMonth(month, -1)}
-      nextMonth={shiftMonth(month, 1)}
-      currentMonth={monthOf(today)}
+      view={view}
+      periodTitle={view === "week" ? weekLabel(weekStart) : monthLabel(month)}
+      previousHref={
+        view === "week"
+          ? weekHref(shiftWeek(weekStart, -1), currentWeek)
+          : monthHref(shiftMonth(month, -1), currentMonth)
+      }
+      nextHref={
+        view === "week"
+          ? weekHref(shiftWeek(weekStart, 1), currentWeek)
+          : monthHref(shiftMonth(month, 1), currentMonth)
+      }
+      todayHref={view === "week" ? "/admin/calendar?view=week" : "/admin/calendar"}
+      isCurrentPeriod={view === "week" ? weekStart === currentWeek : month === currentMonth}
+      previousLabel={view === "week" ? "השבוע הקודם" : "החודש הקודם"}
+      nextLabel={view === "week" ? "השבוע הבא" : "החודש הבא"}
+      monthViewHref={monthHref(
+        view === "week" ? monthForWeekToggle : month,
+        currentMonth
+      )}
+      weekViewHref={weekHref(
+        view === "month" ? weekForMonthToggle : weekStart,
+        currentWeek
+      )}
       today={today}
-      days={buildMonthGrid(month, today)}
+      days={
+        view === "week" ? buildWeekGrid(weekStart, today) : buildMonthGrid(month, today)
+      }
       sessions={calendarSessions}
       instructors={instructors ?? []}
     />
   );
+}
+
+/** בתצוגת שבוע מושכים גם את שאר החודש, כדי שאפשר יהיה לשבץ החלפה לכמה מפגשים. */
+function periodQueryRange(
+  view: CalendarView,
+  month: string,
+  weekStart: string
+): { start: string; end: string } {
+  if (view !== "week") return monthRange(month);
+
+  const week = weekRange(weekStart);
+  const monthEnd = monthRange(monthOf(addDays(weekStart, 3))).end;
+  return {
+    start: week.start,
+    end: monthEnd > week.end ? monthEnd : week.end,
+  };
+}
+
+function monthHref(month: string, currentMonth: string) {
+  return month === currentMonth ? "/admin/calendar" : `/admin/calendar?month=${month}`;
+}
+
+function weekHref(weekStart: string, currentWeek: string) {
+  return weekStart === currentWeek
+    ? "/admin/calendar?view=week"
+    : `/admin/calendar?view=week&week=${weekStart}`;
 }

@@ -12,6 +12,7 @@ import { saveClassSchedule } from "@/lib/scheduling/saveClassSchedule";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { ClassCategoryField } from "@/components/admin/ClassCategoryField";
 import { ClassImageUpload } from "@/components/admin/ClassImageUpload";
 import { ClassPreviewPanel } from "@/components/admin/ClassPreview";
 import { ClassScheduleEditor } from "@/components/admin/ClassScheduleEditor";
@@ -32,6 +33,11 @@ import {
 import { SCHOOL_GRADES, parseSchoolGradeInput } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
 import type { Json } from "@/types/database.types";
+import {
+  defaultClassCategory,
+  matchCategoryName,
+  sortCategoryNames,
+} from "@/lib/admin/classCategories";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 
 export type ClassFormData = {
@@ -61,12 +67,13 @@ interface Props {
   initialSchedule?: ClassScheduleState;
   /** מדרגות ברירת המחדל של המערכת, מוצגות כשהחוג לא מגדיר מדרגות משלו. */
   defaultSiblingTiers: SiblingDiscountTier[];
+  categories: string[];
 }
 
 const emptyForm = {
   title: "",
   description: "",
-  category: "שחייה",
+  category: "",
   level: "",
   gender_policy: "mixed" as ClassGenderPolicy,
   audience_type: "age" as ClassAudienceType,
@@ -80,12 +87,17 @@ const emptyForm = {
   image_url: "",
 };
 
-function toFormState(existing?: ClassFormData) {
-  if (!existing) return emptyForm;
+function toFormState(existing?: ClassFormData, categories: string[] = []) {
+  if (!existing) {
+    return {
+      ...emptyForm,
+      category: defaultClassCategory(null, categories),
+    };
+  }
   return {
     title: existing.title,
     description: existing.description ?? "",
-    category: existing.category ?? "שחייה",
+    category: defaultClassCategory(existing.category, categories),
     level: existing.level ?? "",
     gender_policy: existing.gender_policy ?? "mixed",
     audience_type: existing.audience_type ?? "age",
@@ -186,10 +198,12 @@ export function ClassForm({
   existing,
   initialSchedule,
   defaultSiblingTiers,
+  categories,
 }: Props) {
   const router = useRouter();
   const isEdit = Boolean(existing);
-  const [form, setForm] = useState(() => toFormState(existing));
+  const [categoryNames, setCategoryNames] = useState(categories);
+  const [form, setForm] = useState(() => toFormState(existing, categories));
   const [schedule, setSchedule] = useState(
     () => initialSchedule ?? emptyScheduleState()
   );
@@ -348,13 +362,19 @@ export function ClassForm({
               />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="קטגוריה">
-                <Input
-                  value={form.category}
-                  onChange={set("category")}
-                  placeholder="למשל: שחייה"
-                />
-              </Field>
+              <ClassCategoryField
+                value={form.category}
+                categories={categoryNames}
+                onChange={(name) => setForm((f) => ({ ...f, category: name }))}
+                onCategoryAdded={(name) =>
+                  setCategoryNames((prev) =>
+                    matchCategoryName(prev, name)
+                      ? prev
+                      : sortCategoryNames([...prev, name])
+                  )
+                }
+                disabled={loading}
+              />
               <Field label="רמה">
                 <Input
                   value={form.level}
@@ -507,8 +527,9 @@ export function ClassForm({
                 הנחת אחים
               </h3>
               <p className="mt-0.5 text-sm text-ink-500">
-                כשמשפחה רושמת כמה ילדים לחוג הזה, ההנחה חלה רק על הילד השני
-                ומעלה — לא על הילד הראשון.
+                כשמשפחה רושמת כמה ילדים לאותה קטגוריה — גם בחוגים שונים, למשל
+                שני חוגי שחייה — ההנחה חלה רק על הילד השני ומעלה. בקטגוריה
+                אחרת אין הנחת אחים.
               </p>
             </div>
 

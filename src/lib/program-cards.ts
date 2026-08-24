@@ -22,17 +22,18 @@ export const PROGRAM_CARD_TEMPLATES: PlanCardTemplate[] = [
       "בלי התחייבות ארוכה מעבר לתקופה",
     ],
   },
-  {
-    icon: "family",
-    accent: "var(--logo-magenta)",
-    period: "/ הפוגה",
-    features: [
-      "פעילות בבריכה בתקופת ההפוגה",
-      "מתאים לילדים ולמשפחות",
-      "תיאום מול המשרד לפי התקופה",
-    ],
-  },
 ];
+
+export const ACTIVITY_CARD_TEMPLATE: PlanCardTemplate = {
+  icon: "family",
+  accent: "var(--logo-magenta)",
+  period: "/ לנפש",
+  features: [
+    "פעילות בבריכה לפי מספר הנפשות",
+    "מתאים לילדים ולמשפחות",
+    "משלמים, ואז מתאמים מועד מול המשרד",
+  ],
+};
 
 export function programDurationLabel(months: number): string {
   return months === 1 ? "/ חודש" : `/ ${months} חודשים`;

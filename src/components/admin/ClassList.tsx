@@ -15,6 +15,11 @@ import {
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
+import {
+  SessionNotesList,
+  SessionNotesWorkspace,
+  useClassSessionNotesByDate,
+} from "@/components/classes/SessionNotesPanel";
 import { ClassAttendanceForm } from "@/components/instructor/ClassAttendanceForm";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -104,7 +109,7 @@ export type AdminClassRow = {
 };
 
 type PanelTab = "enrollments" | "waitlist" | "attendance";
-type AttendanceMode = "mark" | "history";
+type AttendanceMode = "mark" | "history" | "notes";
 
 interface ClassListProps {
   classes: AdminClassRow[];
@@ -317,6 +322,11 @@ function ClassCard({
                   label: "סימון נוכחות",
                   icon: <AttendanceMenuIcon className="text-brand-600" />,
                   onClick: () => onOpenPanel("attendance", "mark"),
+                },
+                {
+                  label: "הערות מפגש",
+                  icon: <NotesMenuIcon className="text-brand-600" />,
+                  onClick: () => onOpenPanel("attendance", "notes"),
                 },
                 ...(cls.status === "inactive"
                   ? [
@@ -957,6 +967,7 @@ function AttendanceTab({
   query: string;
 }) {
   const records = cls.attendance;
+  const notesByDate = useClassSessionNotesByDate(cls.id);
   const q = normalizeSearch(query);
 
   const byDate = useMemo(() => {
@@ -992,6 +1003,7 @@ function AttendanceTab({
         {(
           [
             { id: "mark", label: "סימון" },
+            { id: "notes", label: "הערות" },
             { id: "history", label: "היסטוריה" },
           ] as const
         ).map((item) => {
@@ -1030,6 +1042,18 @@ function AttendanceTab({
             students={students}
             emptySessionsHint="לא נמצאו מפגשים מתוכננים. עדכנו את לוח המפגשים בעריכת החוג."
           />
+        </div>
+      ) : mode === "notes" ? (
+        <div className="space-y-3 p-4">
+          <div>
+            <h3 className="font-display text-base font-bold text-ink-900">
+              הערות מפגש
+            </h3>
+            <p className="mt-0.5 text-sm text-ink-500">
+              דיווח פציעה או הערה כללית לכל מפגש. גלוי למדריכה ולמנהל בלבד.
+            </p>
+          </div>
+          <SessionNotesWorkspace classId={cls.id} />
         </div>
       ) : records.length === 0 ? (
         <div className="p-5">
@@ -1086,6 +1110,14 @@ function AttendanceTab({
                     </li>
                   ))}
                 </ul>
+                {(notesByDate[date]?.length ?? 0) > 0 && (
+                  <div className="border-t border-ink-100 px-3 py-2.5">
+                    <p className="mb-2 text-[11px] font-semibold text-ink-500">
+                      הערות מפגש
+                    </p>
+                    <SessionNotesList notes={notesByDate[date] ?? []} />
+                  </div>
+                )}
               </section>
             );
           })}
@@ -1198,6 +1230,27 @@ function AttendanceMenuIcon({ className }: { className?: string }) {
     >
       <path d="M9 11l3 3L22 4" />
       <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </svg>
+  );
+}
+
+function NotesMenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <path d="M14 3v6h6" />
+      <path d="M8 13h8M8 17h5" />
     </svg>
   );
 }

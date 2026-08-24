@@ -1,40 +1,41 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AccountSettings } from "@/components/auth/AccountSettings";
 import { AdminSettingsHub } from "@/components/admin/AdminSettingsHub";
+import { BusinessDocumentsPanel } from "@/components/admin/BusinessDocumentsPanel";
 import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "הגדרות" };
 
 export default async function AdminSettingsPage() {
   const profile = await requireRole("admin");
-  const supabase = await createClient();
-  const [
-    {
-      data: { user },
-    },
-    defaultSiblingTiers,
-    { data: admins },
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    getDefaultSiblingTiers(),
-    supabase
-      .from("profiles")
-      .select("id, full_name, email, created_at, is_primary_admin")
-      .eq("role", "admin")
-      .order("created_at"),
-  ]);
+  const supabase = await createAdminDataClient();
+  const [defaultSiblingTiers, { data: admins }, { data: businessDocuments }] =
+    await Promise.all([
+      getDefaultSiblingTiers(),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, created_at, is_primary_admin")
+        .eq("role", "admin")
+        .order("created_at"),
+      supabase
+        .from("business_documents")
+        .select(
+          "id, title, category, file_name, file_path, file_size, mime_type, notes, created_at"
+        )
+        .order("created_at", { ascending: false }),
+    ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="הגדרות"
-        description="פרטי החשבון, משתמשי ניהול והגדרות תמחור כלליות"
+        description="פרטי החשבון, מסמכי העסק, משתמשי ניהול והגדרות תמחור כלליות"
       />
       <AccountSettings
         id={profile.id}
-        email={user?.email ?? profile.email ?? ""}
+        email={profile.email ?? ""}
         fullName={profile.full_name}
         phone={profile.phone}
         role={profile.role}
@@ -43,7 +44,7 @@ export default async function AdminSettingsPage() {
       />
       <AdminSettingsHub
         profileId={profile.id}
-        email={user?.email ?? profile.email ?? ""}
+        email={profile.email ?? ""}
         fullName={profile.full_name}
         phone={profile.phone}
         admins={admins ?? []}
@@ -51,6 +52,7 @@ export default async function AdminSettingsPage() {
         canRemoveAdmins={profile.is_primary_admin}
         siblingTiers={defaultSiblingTiers}
       />
+      <BusinessDocumentsPanel documents={businessDocuments ?? []} />
     </div>
   );
 }

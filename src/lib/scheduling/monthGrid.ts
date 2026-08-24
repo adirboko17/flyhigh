@@ -15,6 +15,7 @@ export type CalendarDay = {
 };
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -116,6 +117,74 @@ export function dayLabelLong(date: string): string {
     month: "long",
     timeZone: "UTC",
   }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function isValidIsoDate(value: string): boolean {
+  if (!DATE_PATTERN.test(value)) return false;
+  return toIsoDate(new Date(`${value}T00:00:00Z`)) === value;
+}
+
+/** יום ראשון של השבוע שמכיל את התאריך, בהתאם ללוח שמתחיל בראשון. */
+export function weekStartOf(date: string): string {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return addDays(date, -weekday);
+}
+
+export function weekRange(weekStart: string): { start: string; end: string } {
+  return { start: weekStart, end: addDays(weekStart, 6) };
+}
+
+export function shiftWeek(weekStart: string, delta: number): string {
+  return addDays(weekStart, delta * 7);
+}
+
+/** מאמת פרמטר שבוע מה־URL ומנרמל ליום ראשון של אותו שבוע. */
+export function parseWeekParam(value: string | undefined, fallback: string): string {
+  const source = value && isValidIsoDate(value) ? value : fallback;
+  return weekStartOf(source);
+}
+
+export function weekLabel(weekStart: string): string {
+  const end = addDays(weekStart, 6);
+  const startDate = new Date(`${weekStart}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  const sameMonth =
+    startDate.getUTCMonth() === endDate.getUTCMonth() &&
+    startDate.getUTCFullYear() === endDate.getUTCFullYear();
+
+  if (sameMonth) {
+    const monthYear = new Intl.DateTimeFormat("he-IL", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(startDate);
+    return `${startDate.getUTCDate()}–${endDate.getUTCDate()} ב${monthYear}`;
+  }
+
+  const full = new Intl.DateTimeFormat("he-IL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return `${full.format(startDate)} – ${full.format(endDate)}`;
+}
+
+/** שבעת ימי השבוע שמתחיל ב־weekStart (יום ראשון). */
+export function buildWeekGrid(weekStart: string, today: string): CalendarDay[] {
+  return Array.from({ length: 7 }, (_, index) => {
+    const iso = addDays(weekStart, index);
+    const date = new Date(`${iso}T00:00:00Z`);
+    const weekday = date.getUTCDay();
+
+    return {
+      date: iso,
+      dayOfMonth: date.getUTCDate(),
+      inMonth: true,
+      isToday: iso === today,
+      isWeekend: weekday === 5 || weekday === 6,
+    };
+  });
 }
 
 /**

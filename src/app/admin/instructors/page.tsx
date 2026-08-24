@@ -1,10 +1,10 @@
 ﻿import { InstructorList } from "@/components/admin/InstructorList";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "מדריכות" };
 
 export default async function AdminInstructorsPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [{ data: instructors }, { data: classes }] = await Promise.all([
     supabase

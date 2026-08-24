@@ -5,7 +5,7 @@
   type AdminClassRow,
   type AdminClassWaitlistEntry,
 } from "@/components/admin/ClassList";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "ניהול חוגים" };
 
@@ -22,7 +22,7 @@ function groupByClass<T extends { class_id: string | null }>(rows: T[] | null) {
 }
 
 export default async function AdminClassesPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   // רשימת החוגים + נרשמים/המתנה בלבד. נוכחות נטענת בפאנל (חוסך אלפי שורות בכל כניסה).
   const [{ data: classes }, { data: enrollments }, { data: waitlist }] =

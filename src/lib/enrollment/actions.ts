@@ -16,6 +16,10 @@ import {
   normalizeCouponCode,
   type AppliedCoupon,
 } from "@/lib/finance/coupon";
+import {
+  countFamilyChildrenInCategory,
+  listFamilyChildrenInCategory,
+} from "@/lib/enrollment/categorySiblings";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
@@ -23,6 +27,11 @@ import {
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import {
+  declarationSchoolYear,
+  healthDeclarationErrorFor,
+  missingHealthDeclarationChildren,
+} from "@/lib/health-declaration";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import {
   chargeDescriptionForCheckout,
@@ -41,8 +50,10 @@ export type CompleteEnrollmentResult =
   | {
       success: true;
       enrollmentIds: string[];
-      /** אסמכתת סליקה — קיימת רק בתשלום מיידי בכרטיס אשראי. */
+      /** אסמכתת סליקה — קיימת אחרי פתיחת דף קארדקום או בתשלום שכבר הושלם. */
       paymentReference: string | null;
+      /** דף הסליקה של קארדקום — כשיש סכום לתשלום בכרטיס. */
+      checkoutUrl: string | null;
       /** תשלום שנגבה מול המשרד ונרשם כחוב פתוח בעמוד הגבייה. */
       deferred: boolean;
       /** הסכום שחויב בפועל ואחוז הנחת האחים שניתן. */
@@ -84,7 +95,7 @@ export async function previewClassCoupon(input: {
     supabase,
     profile.id,
     input.classId,
-    uniqueChildIds.length
+    uniqueChildIds
   );
 
   if (subtotal === null) {
@@ -136,35 +147,36 @@ async function classSubtotal(
   supabase: Awaited<ReturnType<typeof createClient>>,
   parentId: string,
   classId: string,
-  childCount: number
+  childIds: string[]
 ): Promise<number | null> {
-  const [{ data: cls }, { data: existingEnrollments }, { data: tiersJson }] =
-    await Promise.all([
-      supabase
-        .from("classes")
-        .select("price")
-        .eq("id", classId)
-        .in("status", ["active", "full"])
-        .maybeSingle(),
-      supabase
-        .from("enrollments")
-        .select("child_id")
-        .eq("class_id", classId)
-        .eq("parent_id", parentId)
-        .neq("status", "cancelled"),
-      supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
-    ]);
+  const [{ data: cls }, { data: tiersJson }] = await Promise.all([
+    supabase
+      .from("classes")
+      .select("price, category")
+      .eq("id", classId)
+      .in("status", ["active", "full"])
+      .maybeSingle(),
+    supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
+  ]);
 
   if (!cls) return null;
 
-  const proration = await loadClassUnitPrice(supabase, classId, Number(cls.price));
+  const [proration, categorySiblingIds] = await Promise.all([
+    loadClassUnitPrice(supabase, classId, Number(cls.price)),
+    listFamilyChildrenInCategory(supabase, parentId, classId, cls.category),
+  ]);
   if (proration.hasEnded) return null;
+
+  const alreadyInCategory = countFamilyChildrenInCategory(
+    categorySiblingIds,
+    childIds
+  );
 
   return calculateOrderTotal(
     proration.unitPrice,
-    childCount,
+    childIds.length,
     parseSiblingTiers(tiersJson),
-    (existingEnrollments?.length ?? 0) + childCount
+    alreadyInCategory + childIds.length
   ).total;
 }
 
@@ -197,7 +209,7 @@ export async function completeClassEnrollmentPayment(input: {
       supabase
         .from("classes")
         .select(
-          "id, title, price, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, title, price, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -224,6 +236,13 @@ export async function completeClassEnrollmentPayment(input: {
   if (!children || children.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
+
+  const healthError = await requireHealthDeclarations(
+    supabase,
+    profile.id,
+    children
+  );
+  if (healthError) return { success: false, error: healthError };
 
   const audience: ClassAudienceFields = {
     gender_policy: cls.gender_policy,
@@ -267,11 +286,17 @@ export async function completeClassEnrollmentPayment(input: {
     };
   }
 
-  // הנחת אחים נקבעת לפי כל האחים הרשומים לחוג — גם כאלה שנרשמו בהרשמה קודמת —
+  // הנחת אחים נקבעת לפי אחים רשומים לאותה קטגוריה — גם בחוג אחר —
   // וחלה רק על הילד השני ומעלה (לא על הילד הראשון במשפחה).
-  const { data: tiersJson } = await supabase.rpc("class_sibling_discount_tiers", {
-    p_class_id: classId,
-  });
+  const [{ data: tiersJson }, categorySiblingIds] = await Promise.all([
+    supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
+    listFamilyChildrenInCategory(
+      supabase,
+      profile.id,
+      classId,
+      cls.category
+    ),
+  ]);
 
   const proration = await loadClassUnitPrice(supabase, classId, Number(cls.price));
   if (proration.hasEnded) {
@@ -279,7 +304,10 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   const unitPrice = proration.unitPrice;
-  const alreadyEnrolledCount = alreadyEnrolled.size;
+  const alreadyEnrolledCount = countFamilyChildrenInCategory(
+    categorySiblingIds,
+    uniqueChildIds
+  );
   const order = calculateOrderTotal(
     unitPrice,
     uniqueChildIds.length,
@@ -351,26 +379,9 @@ export async function completeClassEnrollmentPayment(input: {
     customLabel: receiptLabel.description,
   });
 
-  // תשלום נדחה (מזומן, העברה, מכבי, עמית) נגבה מול המשרד ולכן לא עובר סליקה.
-  // גם הזמנה שהקופון מאפס אותה לא עוברת סליקה.
-  let paymentReference: string | null = null;
-
-  if (!deferred && totalAmount > 0) {
-    const charge = await getPaymentProvider().createCharge({
-      amount: totalAmount,
-      description: chargeDescription,
-      parentId: profile.id,
-      method: paymentMethod,
-      metadata: { classId, childIds: uniqueChildIds },
-    });
-
-    if (!charge.success) {
-      await releaseCoupon();
-      return { success: false, error: "התשלום נכשל. נסו שוב." };
-    }
-
-    paymentReference = charge.reference;
-  }
+  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד שאישור קארדקום.
+  // הזמנה שהקופון מאפס אותה לא עוברת סליקה.
+  const awaitingCardcom = !deferred && totalAmount > 0;
 
   const paidAt = new Date().toISOString();
   const enrollmentRows = uniqueChildIds.map((childId, index) => {
@@ -382,7 +393,8 @@ export async function completeClassEnrollmentPayment(input: {
       class_id: classId,
       type: "class" as const,
       status: "active" as const,
-      payment_status: deferred ? ("unpaid" as const) : ("paid" as const),
+      payment_status:
+        deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
       discount_percent: paysFull ? 0 : order.percent,
     };
   });
@@ -405,33 +417,84 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   // חיוב נפרד לכל ילד/ה, כדי שברשימת הגבייה יהיה ברור על מה בדיוק החוב.
-  const { error: paymentError } = await supabase.from("payments").insert(
-    createdEnrollments.map((enrollment) => ({
-      parent_id: profile.id,
-      enrollment_id: enrollment.id,
-      amount:
-        (enrollment.child_id ? amountPerChild.get(enrollment.child_id) : null) ??
-        unitPrice,
-      payment_method: paymentMethod,
-      status: deferred ? ("pending" as const) : ("paid" as const),
-      paid_at: deferred ? null : paidAt,
-      external_reference: paymentReference,
-      receipt_label_id: receiptLabel.labelId,
-      receipt_description: receiptLabel.description ?? chargeDescription,
-    }))
-  );
+  const { data: createdPayments, error: paymentError } = await supabase
+    .from("payments")
+    .insert(
+      createdEnrollments.map((enrollment) => ({
+        parent_id: profile.id,
+        enrollment_id: enrollment.id,
+        amount:
+          (enrollment.child_id ? amountPerChild.get(enrollment.child_id) : null) ??
+          unitPrice,
+        payment_method: paymentMethod,
+        status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
+        paid_at: deferred || awaitingCardcom ? null : paidAt,
+        receipt_label_id: receiptLabel.labelId,
+        receipt_description: receiptLabel.description ?? chargeDescription,
+      }))
+    )
+    .select("id");
 
-  if (paymentError) {
+  if (paymentError || !createdPayments?.length) {
+    await supabase
+      .from("enrollments")
+      .delete()
+      .in(
+        "id",
+        createdEnrollments.map((enrollment) => enrollment.id)
+      );
+    await releaseCoupon();
     return {
       success: false,
       error: "ההרשמות נוצרו אך שמירת התשלום נכשלה. פנו לצוות.",
     };
   }
 
+  let paymentReference: string | null = null;
+  let checkoutUrl: string | null = null;
+
+  if (awaitingCardcom) {
+    const charge = await getPaymentProvider().createCharge({
+      amount: totalAmount,
+      description: chargeDescription,
+      parentId: profile.id,
+      method: paymentMethod,
+      paymentIds: createdPayments.map((payment) => payment.id),
+      couponRedemptionId: redemptionId,
+      metadata: { classId, childIds: uniqueChildIds },
+    });
+
+    if (!charge.success || !charge.redirectUrl) {
+      await supabase
+        .from("payments")
+        .delete()
+        .in(
+          "id",
+          createdPayments.map((payment) => payment.id)
+        );
+      await supabase
+        .from("enrollments")
+        .delete()
+        .in(
+          "id",
+          createdEnrollments.map((enrollment) => enrollment.id)
+        );
+      await releaseCoupon();
+      return {
+        success: false,
+        error: charge.error || "לא הצלחנו לפתוח את דף התשלום. נסו שוב.",
+      };
+    }
+
+    paymentReference = charge.reference;
+    checkoutUrl = charge.redirectUrl;
+  }
+
   return {
     success: true,
     enrollmentIds: createdEnrollments.map((e) => e.id),
     paymentReference,
+    checkoutUrl,
     deferred,
     total: totalAmount,
     discountPercent: order.percent,
@@ -498,6 +561,13 @@ export async function joinClassWaitlist(input: {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
 
+  const healthError = await requireHealthDeclarations(
+    supabase,
+    profile.id,
+    children
+  );
+  if (healthError) return { success: false, error: healthError };
+
   const audience: ClassAudienceFields = {
     gender_policy: cls.gender_policy,
     audience_type: cls.audience_type,
@@ -538,4 +608,29 @@ export async function joinClassWaitlist(input: {
   }
 
   return { success: true };
+}
+
+async function requireHealthDeclarations(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parentId: string,
+  children: { id: string; full_name: string }[]
+): Promise<string | null> {
+  if (children.length === 0) return null;
+
+  const { data } = await supabase
+    .from("health_declarations")
+    .select("child_id")
+    .eq("parent_id", parentId)
+    .eq("school_year", declarationSchoolYear())
+    .in(
+      "child_id",
+      children.map((child) => child.id)
+    );
+
+  const missing = missingHealthDeclarationChildren(
+    children,
+    (data ?? []).map((row) => row.child_id)
+  );
+  if (missing.length === 0) return null;
+  return healthDeclarationErrorFor(missing.map((child) => child.full_name));
 }

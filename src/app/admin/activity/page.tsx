@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ActivityFeed, type ActivityEntry } from "@/components/admin/ActivityFeed";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { ENROLLMENT_TYPE } from "@/lib/constants";
 import { formatDate } from "@/utils/format";
 
@@ -22,7 +22,7 @@ function dayLabelOf(date: Date, today: string, yesterday: string) {
 }
 
 export default async function AdminActivityPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
   const { data: enrollments } = await supabase
     .from("enrollments")
     .select(

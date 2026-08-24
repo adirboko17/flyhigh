@@ -1,9 +1,11 @@
 import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { declarationSchoolYear } from "@/lib/health-declaration";
 import {
   formatClassAudience,
   formatClassGenderPolicy,
 } from "@/lib/class-audience";
 import { createClient } from "@/lib/supabase/server";
+import { listFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
 import {
   parseSiblingTiers,
   type SiblingDiscountTier,
@@ -56,7 +58,8 @@ export async function ClassEnrollmentPanel({
         <NonParentEnrollmentNotice homeHref={homeForRole(profile.role)} />
       );
     } else {
-      const [{ data: children }, { data: enrollments }, { data: waitlist }] =
+      const healthYear = declarationSchoolYear();
+      const [{ data: children }, { data: enrollments }, { data: waitlist }, categorySiblingIds, { data: declarations }] =
         await Promise.all([
           supabase
             .from("children")
@@ -77,7 +80,22 @@ export async function ClassEnrollmentPanel({
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)
             .neq("status", "cancelled"),
+          listFamilyChildrenInCategory(
+            supabase,
+            profile.id,
+            cls.id,
+            cls.category
+          ),
+          supabase
+            .from("health_declarations")
+            .select("child_id")
+            .eq("parent_id", profile.id)
+            .eq("school_year", healthYear),
         ]);
+
+      const declaredIds = new Set(
+        (declarations ?? []).map((row) => row.child_id)
+      );
 
       enrollmentContent = (
         <ClassEnrollmentActions
@@ -90,10 +108,14 @@ export async function ClassEnrollmentPanel({
           soldOut={soldOut}
           ended={proration.hasEnded}
           availableSpots={cls.available}
-          kids={children ?? []}
+          kids={(children ?? []).map((child) => ({
+            ...child,
+            hasHealthDeclaration: declaredIds.has(child.id),
+          }))}
           enrollments={enrollments ?? []}
           waitlist={waitlist ?? []}
           siblingTiers={siblingTiers}
+          categorySiblingIds={categorySiblingIds}
         />
       );
     }
@@ -116,7 +138,7 @@ export async function ClassEnrollmentPanel({
           </div>
         )}
 
-        <SiblingDiscountNote tiers={siblingTiers} />
+        <SiblingDiscountNote tiers={siblingTiers} category={cls.category} />
 
         <div className="mt-5 rounded-2xl bg-ink-50 p-4">
           <div className="flex items-center justify-between text-sm">
@@ -164,22 +186,32 @@ function siblingOrdinal(n: number): string {
   return `ה־${n}`;
 }
 
-function SiblingDiscountNote({ tiers }: { tiers: SiblingDiscountTier[] }) {
+function SiblingDiscountNote({
+  tiers,
+  category,
+}: {
+  tiers: SiblingDiscountTier[];
+  category: string | null;
+}) {
   if (tiers.length === 0) return null;
 
   const sorted = [...tiers].sort((a, b) => a.minChildren - b.minChildren);
+  const scope = category
+    ? `באותה קטגוריה (${category})`
+    : "באותו חוג";
 
   return (
     <div className="mt-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
       {sorted.length === 1 ? (
         <p>
-          הנחת אחים · {sorted[0].percent}% מהילד {siblingOrdinal(sorted[0].minChildren)}
+          הנחת אחים {scope} · {sorted[0].percent}% מהילד{" "}
+          {siblingOrdinal(sorted[0].minChildren)}
         </p>
       ) : (
         <ul className="space-y-0.5">
           {sorted.map((tier) => (
             <li key={tier.minChildren}>
-              {tier.percent}% מהילד {siblingOrdinal(tier.minChildren)}
+              {tier.percent}% מהילד {siblingOrdinal(tier.minChildren)} {scope}
             </li>
           ))}
         </ul>

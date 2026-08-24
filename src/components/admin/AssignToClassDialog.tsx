@@ -11,13 +11,17 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { DemoCardFields } from "@/components/checkout/CheckoutFields";
+import { CardcomRedirectHint } from "@/components/checkout/CheckoutFields";
 import {
   assignChildrenToClass,
   assignWaitlistEntry,
   type AssignChargeMethod,
 } from "@/lib/admin/assignment";
 import { DEFERRED_PAYMENT_METHODS, PAYMENT_METHOD } from "@/lib/constants";
+import {
+  countFamilyChildrenInCategory,
+  listFamilyChildrenInCategory,
+} from "@/lib/enrollment/categorySiblings";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
@@ -63,6 +67,7 @@ export function AssignToClassDialog({
     isWaitlist ? [] : null
   );
   const [tiers, setTiers] = useState<SiblingDiscountTier[]>([]);
+  const [categorySiblingIds, setCategorySiblingIds] = useState<string[]>([]);
   const [unitPrice, setUnitPrice] = useState(Number(cls.price));
   const [prorationNote, setProrationNote] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -126,6 +131,27 @@ export function AssignToClassDialog({
     };
   }, [cls.id, isWaitlist]);
 
+  useEffect(() => {
+    if (!parentId) {
+      setCategorySiblingIds([]);
+      return;
+    }
+
+    let active = true;
+    listFamilyChildrenInCategory(
+      createClient(),
+      parentId,
+      cls.id,
+      cls.category
+    ).then((ids) => {
+      if (active) setCategorySiblingIds(ids);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [parentId, cls.id, cls.category]);
+
   const activeEnrollments = cls.enrollments.filter(
     (enrollment) => enrollment.status !== "cancelled"
   );
@@ -139,17 +165,15 @@ export function AssignToClassDialog({
     (customer) => customer.id === parentId
   );
 
-  const siblingsInClass = parentId
-    ? activeEnrollments.filter(
-        (enrollment) => enrollment.parent_id === parentId
-      ).length
+  const siblingsInCategory = parentId
+    ? countFamilyChildrenInCategory(categorySiblingIds, childIds)
     : 0;
 
   const orderPreview = calculateOrderTotal(
     unitPrice,
     childIds.length,
     tiers,
-    siblingsInClass + childIds.length,
+    siblingsInCategory + childIds.length,
   );
   const discountPercent = orderPreview.percent;
   const listTotal = orderPreview.listTotal;
@@ -220,6 +244,10 @@ export function AssignToClassDialog({
     if (!result.success) {
       setError(result.error);
       return;
+    }
+
+    if (result.checkoutUrl) {
+      window.open(result.checkoutUrl, "_blank", "noopener,noreferrer");
     }
 
     router.refresh();
@@ -308,8 +336,8 @@ export function AssignToClassDialog({
             {orderPreview.fullPriceChildren > 0
               ? ` (${orderPreview.fullPriceChildren} במחיר מלא, ${orderPreview.discountedChildren} בהנחה)`
               : ` (כל ${orderPreview.discountedChildren} הילדים בהזמנה בהנחה)`}
-            {siblingsInClass > 0
-              ? ` · למשפחה כבר ${siblingsInClass} ילדים בחוג`
+            {siblingsInCategory > 0
+              ? ` · למשפחה כבר ${siblingsInCategory} ילדים באותה קטגוריה`
               : ""}
             . מחיר מלא: {formatCurrency(listTotal)}.
           </p>
@@ -320,7 +348,7 @@ export function AssignToClassDialog({
           htmlFor="assign-method"
           hint={
             method === "credit_card"
-              ? "זהו מסך דמו — לא מתבצע חיוב אמיתי. התשלום יסומן כשולם מיד."
+              ? "ייפתח דף סליקה של קארדקום. אפשר לגבות עכשיו או לשלוח את ההורה לשלם מאזור האישי."
               : method === "none"
                 ? "השיבוץ ייווצר בלי רשומת חיוב."
                 : "החיוב ייפתח כחוב בעמוד הגבייה, עד לסימון כשולם."
@@ -345,7 +373,7 @@ export function AssignToClassDialog({
 
         {method !== "none" && (
           <>
-            {isCreditCard && <DemoCardFields />}
+            {isCreditCard && <CardcomRedirectHint />}
 
             <Field
               label="סכום לחיוב"

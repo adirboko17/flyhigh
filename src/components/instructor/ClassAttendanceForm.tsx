@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
+import { SessionNotesPanel } from "@/components/classes/SessionNotesPanel";
 import {
   SessionNavigator,
   defaultSessionIndex,
@@ -146,14 +147,6 @@ export function ClassAttendanceForm({
     router.refresh();
   }
 
-  if (students.length === 0) {
-    return (
-      <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
-        אין תלמידים רשומים בחוג זה.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {sessionsLoading ? (
@@ -172,68 +165,80 @@ export function ClassAttendanceForm({
         <p className="rounded-xl border border-dashed border-ink-200 bg-ink-50/50 p-4 text-center text-sm text-ink-500">
           {emptySessionsHint}
         </p>
-      ) : loading ? (
-        <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
       ) : (
-        <div className="space-y-2">
-          {students.map((child) => {
-            const current = marks[child.id];
-            return (
-              <div
-                key={child.id}
-                className={cn(
-                  "flex flex-col gap-2 rounded-xl border bg-white p-3 md:flex-row md:items-center md:justify-between",
-                  current === undefined
-                    ? "border-amber-200 bg-amber-50/30"
-                    : "border-ink-100"
-                )}
-              >
-                <span className="min-w-0 truncate font-medium text-ink-800">
-                  {child.full_name}
-                </span>
-                <div className="flex gap-1.5">
-                  {STATUS_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() =>
-                        setMarks((m) => ({ ...m, [child.id]: opt.value }))
-                      }
-                      className={cn(
-                        "min-h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors md:flex-none md:px-3.5",
-                        current === opt.value
-                          ? opt.active
-                          : "bg-ink-100 text-ink-600 hover:bg-ink-200"
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        <>
+          {selectedSession && <SessionNotesPanel sessionId={selectedSession.id} />}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          onClick={save}
-          disabled={saving || loading || sessionsLoading || !date || !allMarked}
-        >
-          {saving ? "שומר..." : "שמירת נוכחות"}
-        </Button>
-        {!allMarked && !loading && !sessionsLoading && sessions.length > 0 && (
-          <span className="text-sm text-amber-600">
-            נותרו {unmarkedCount} תלמידים לסימון
-          </span>
-        )}
-        {saved && (
-          <span className="text-sm font-medium text-aqua-600">
-            ✓ הנוכחות נשמרה
-          </span>
-        )}
-      </div>
+          {students.length === 0 ? (
+            <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
+              אין תלמידים רשומים בחוג זה.
+            </p>
+          ) : loading ? (
+            <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
+          ) : (
+            <div className="space-y-2">
+              {students.map((child) => {
+                const current = marks[child.id];
+                return (
+                  <div
+                    key={child.id}
+                    className={cn(
+                      "flex flex-col gap-2 rounded-xl border bg-white p-3 md:flex-row md:items-center md:justify-between",
+                      current === undefined
+                        ? "border-amber-200 bg-amber-50/30"
+                        : "border-ink-100"
+                    )}
+                  >
+                    <span className="min-w-0 truncate font-medium text-ink-800">
+                      {child.full_name}
+                    </span>
+                    <div className="flex gap-1.5">
+                      {STATUS_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setMarks((m) => ({ ...m, [child.id]: opt.value }))
+                          }
+                          className={cn(
+                            "min-h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors md:flex-none md:px-3.5",
+                            current === opt.value
+                              ? opt.active
+                              : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {students.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={save}
+                disabled={saving || loading || sessionsLoading || !date || !allMarked}
+              >
+                {saving ? "שומר..." : "שמירת נוכחות"}
+              </Button>
+              {!allMarked && !loading && !sessionsLoading && sessions.length > 0 && (
+                <span className="text-sm text-amber-600">
+                  נותרו {unmarkedCount} תלמידים לסימון
+                </span>
+              )}
+              {saved && (
+                <span className="text-sm font-medium text-aqua-600">
+                  ✓ הנוכחות נשמרה
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { cn } from "@/utils/cn";
 export type PlanTicketStub =
   | { kind: "entries"; count: number }
   | { kind: "months"; count: number }
-  | { kind: "minutes"; count: number };
+  | { kind: "minutes"; count: number }
+  | { kind: "people" };
 
 interface PlanTicketCardProps {
   name: string;
@@ -54,11 +55,17 @@ export function PlanTicketCard({
             value: String(stub.count),
             unit: "דק׳",
           }
-        : {
-            eyebrow: "מנוי",
-            value: String(stub.count),
-            unit: stub.count === 1 ? "חודש" : "חודשים",
-          };
+        : stub.kind === "people"
+          ? {
+              eyebrow: "מחיר",
+              value: "לנפש",
+              unit: null as string | null,
+            }
+          : {
+              eyebrow: "מנוי",
+              value: String(stub.count),
+              unit: stub.count === 1 ? "חודש" : "חודשים",
+            };
 
   return (
     <article

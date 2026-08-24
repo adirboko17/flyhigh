@@ -9,11 +9,13 @@ import {
 } from "@/components/programs/PlanPurchase";
 import { PlanTicketCard } from "@/components/programs/PlanTicketCard";
 import {
+  ACTIVITY_CARD_TEMPLATE,
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   programDurationLabel,
 } from "@/lib/program-cards";
+import { isActivityProgram, type ProgramKind } from "@/lib/programs";
 import { formatCurrency } from "@/utils/format";
 
 const HOME_PREVIEW_LIMIT = 2;
@@ -24,6 +26,7 @@ type Program = {
   description: string | null;
   price: number;
   duration_months: number;
+  kind: ProgramKind;
 };
 
 type PoolPass = {
@@ -53,13 +56,16 @@ export function HomePlansGrid({
   privateLessons: PrivateLesson[];
   viewer: PlanViewer;
 }) {
-  const previewPrograms = programs.slice(0, HOME_PREVIEW_LIMIT);
+  const memberships = programs.filter((p) => !isActivityProgram(p.kind));
+  const activities = programs.filter((p) => isActivityProgram(p.kind));
+  const previewPrograms = memberships.slice(0, HOME_PREVIEW_LIMIT);
+  const previewActivities = activities.slice(0, HOME_PREVIEW_LIMIT);
   const previewPasses = poolPasses.slice(0, HOME_PREVIEW_LIMIT);
   const previewLessons = privateLessons.slice(0, HOME_PREVIEW_LIMIT);
 
   return (
     <div className="space-y-14">
-      {programs.length > 0 && (
+      {memberships.length > 0 && (
         <div>
           <ScrollReveal>
             <SectionHead
@@ -85,6 +91,7 @@ export function HomePlansGrid({
                     planId={p.id}
                     planTitle={p.title}
                     price={p.price}
+                    programKind={p.kind}
                     viewer={viewer}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
@@ -109,8 +116,55 @@ export function HomePlansGrid({
               );
             })}
           </div>
-          {programs.length > HOME_PREVIEW_LIMIT && (
+          {memberships.length > HOME_PREVIEW_LIMIT && (
             <SeeAllLink href="/programs#memberships" />
+          )}
+        </div>
+      )}
+
+      {activities.length > 0 && (
+        <div>
+          <ScrollReveal>
+            <SectionHead
+              eyebrow="הפוגה"
+              title="פעילויות לפי נפשות"
+              sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
+              accent="var(--logo-magenta)"
+            />
+          </ScrollReveal>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {previewActivities.map((p, index) => (
+              <ScrollReveal
+                key={p.id}
+                delay={Math.min((index % 2) * 80, 80)}
+                className="h-full"
+              >
+                <PlanPurchaseTrigger
+                  planKind="program"
+                  planId={p.id}
+                  planTitle={p.title}
+                  price={p.price}
+                  programKind={p.kind}
+                  viewer={viewer}
+                  className="h-full hover:translate-y-0 hover:shadow-none"
+                >
+                  <PlanTicketCard
+                    compact
+                    name={p.title}
+                    desc={p.description}
+                    price={formatCurrency(p.price)}
+                    period={ACTIVITY_CARD_TEMPLATE.period}
+                    stub={{ kind: "people" }}
+                    features={ACTIVITY_CARD_TEMPLATE.features}
+                    icon={ACTIVITY_CARD_TEMPLATE.icon}
+                    accent={ACTIVITY_CARD_TEMPLATE.accent}
+                  />
+                </PlanPurchaseTrigger>
+              </ScrollReveal>
+            ))}
+          </div>
+          {activities.length > HOME_PREVIEW_LIMIT && (
+            <SeeAllLink href="/programs#activities" />
           )}
         </div>
       )}

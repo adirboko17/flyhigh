@@ -1,8 +1,8 @@
 ﻿/**
- * שכבת הפשטה לסליקה.
- * כרגע יש מימוש דמה בלבד. בעתיד ניתן לחבר PayPlus / Tranzila / Stripe
- * על ידי הוספת Provider שמממש את הממשק הזה והחלפת getPaymentProvider().
+ * שכבת הפשטה לסליקה. החיוב בכרטיס אשראי עובר לדף Low Profile של קארדקום.
  */
+
+import { startCardcomCheckout } from "@/lib/payments/cardcomCheckout";
 
 export interface CreateChargeInput {
   amount: number;
@@ -10,14 +10,17 @@ export interface CreateChargeInput {
   parentId: string;
   enrollmentId?: string;
   method?: string;
+  paymentIds?: string[];
+  couponRedemptionId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
 export interface ChargeResult {
   success: boolean;
   reference: string;
-  /** כתובת לתשלום מאובטח (hosted page) אם רלוונטי. */
+  /** כתובת לדף התשלום המאובטח של קארדקום. */
   redirectUrl?: string;
+  error?: string;
   raw?: unknown;
 }
 
@@ -27,20 +30,43 @@ export interface PaymentProvider {
   refund(reference: string, amount?: number): Promise<ChargeResult>;
 }
 
-/** מימוש דמה - לא מבצע חיוב אמיתי. */
-class MockPaymentProvider implements PaymentProvider {
-  readonly name = "mock";
+class CardcomPaymentProvider implements PaymentProvider {
+  readonly name = "cardcom";
 
   async createCharge(input: CreateChargeInput): Promise<ChargeResult> {
+    if (!input.paymentIds?.length) {
+      return {
+        success: false,
+        reference: "",
+        error: "חסרים חיובים לפתיחת דף הסליקה.",
+      };
+    }
+
+    const checkout = await startCardcomCheckout({
+      parentId: input.parentId,
+      paymentIds: input.paymentIds,
+      amount: input.amount,
+      description: input.description,
+      couponRedemptionId: input.couponRedemptionId,
+    });
+
+    if (!checkout.success) {
+      return { success: false, reference: "", error: checkout.error };
+    }
+
     return {
       success: true,
-      reference: `MOCK-${Date.now()}`,
-      raw: input,
+      reference: checkout.reference,
+      redirectUrl: checkout.checkoutUrl,
     };
   }
 
   async refund(reference: string): Promise<ChargeResult> {
-    return { success: true, reference };
+    return {
+      success: false,
+      reference,
+      error: "החזרים מתבצעים כרגע מממשק קארדקום.",
+    };
   }
 }
 
@@ -48,8 +74,7 @@ let provider: PaymentProvider | null = null;
 
 export function getPaymentProvider(): PaymentProvider {
   if (!provider) {
-    // TODO: בעתיד - לבחור Provider לפי משתנה סביבה (PAYMENT_PROVIDER)
-    provider = new MockPaymentProvider();
+    provider = new CardcomPaymentProvider();
   }
   return provider;
 }

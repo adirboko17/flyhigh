@@ -8,11 +8,13 @@ import {
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
+  ACTIVITY_CARD_TEMPLATE,
   POOL_PASS_CARD_TEMPLATES,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   programDurationLabel,
 } from "@/lib/program-cards";
+import { isActivityProgram } from "@/lib/programs";
 import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/utils/format";
@@ -30,6 +32,13 @@ export default async function ProgramsPage() {
 
   // הורה מחובר רוכש ישירות מהעמוד; אורח מופנה להתחברות, ומנהל/מדריכה לאזור שלהם.
   let viewer: PlanViewer = { kind: "guest" };
+
+  const memberships = programs.filter(
+    (program) => !isActivityProgram(program.kind)
+  );
+  const activities = programs.filter((program) =>
+    isActivityProgram(program.kind)
+  );
 
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
@@ -54,7 +63,7 @@ export default async function ProgramsPage() {
         badgeIcon="ticket"
         badgeText="מחירון · הבריכה"
         title="שנקפוץ למים?"
-        description="מנויים חודשיים לשחייה חופשית וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
+        description="מנויים חודשיים לשחייה חופשית, פעילויות לפי מספר נפשות וכניסות גמישות לבריכה - בלי התחייבות, בלי בירוקרטיה. בחרו, שלמו והתחילו לשחות."
       />
 
       <section
@@ -70,13 +79,71 @@ export default async function ProgramsPage() {
           />
         </ScrollReveal>
 
-        {programs.length > 0 ? (
+        {memberships.length > 0 ? (
           <div className="grid gap-5 sm:grid-cols-2">
-            {programs.map((program, index) => {
-              const template =
-                PROGRAM_CARD_TEMPLATES[index % PROGRAM_CARD_TEMPLATES.length];
+            {memberships.map((program, index) => {
+                const template =
+                  PROGRAM_CARD_TEMPLATES[index % PROGRAM_CARD_TEMPLATES.length];
 
-              return (
+                return (
+                  <ScrollReveal
+                    key={program.id}
+                    delay={Math.min((index % 2) * 90, 90)}
+                    className="h-full"
+                  >
+                    <PlanPurchaseTrigger
+                      planKind="program"
+                      planId={program.id}
+                      planTitle={program.title}
+                      price={program.price}
+                      programKind={program.kind}
+                      viewer={viewer}
+                      className="h-full hover:translate-y-0 hover:shadow-none"
+                    >
+                      <PlanTicketCard
+                        compact
+                        name={program.title}
+                        desc={program.description}
+                        price={formatCurrency(program.price)}
+                        period={programDurationLabel(program.duration_months)}
+                        stub={{
+                          kind: "months",
+                          count: program.duration_months,
+                        }}
+                        features={template.features}
+                        icon={template.icon}
+                        accent={template.accent}
+                        featured={template.featured}
+                        badge={template.badge}
+                      />
+                    </PlanPurchaseTrigger>
+                  </ScrollReveal>
+                );
+              })}
+          </div>
+        ) : (
+          <p className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-ink-500">
+            אין מסלולים פעילים כרגע. צרו קשר ונשמח לעזור.
+          </p>
+        )}
+      </section>
+
+      {activities.length > 0 && (
+        <section
+          id="activities"
+          className="container-page relative z-[3] scroll-mt-28 pb-0 pt-14"
+        >
+          <ScrollReveal>
+            <SectionHead
+              eyebrow="הפוגה"
+              title="פעילויות לפי נפשות"
+              sub="בוחרים כמה אנשים, משלמים, ומתאמים מועד"
+              accent="var(--logo-magenta)"
+            />
+          </ScrollReveal>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {activities.map((program, index) => (
                 <ScrollReveal
                   key={program.id}
                   delay={Math.min((index % 2) * 90, 90)}
@@ -87,6 +154,7 @@ export default async function ProgramsPage() {
                     planId={program.id}
                     planTitle={program.title}
                     price={program.price}
+                    programKind={program.kind}
                     viewer={viewer}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
@@ -95,28 +163,18 @@ export default async function ProgramsPage() {
                       name={program.title}
                       desc={program.description}
                       price={formatCurrency(program.price)}
-                      period={programDurationLabel(program.duration_months)}
-                      stub={{
-                        kind: "months",
-                        count: program.duration_months,
-                      }}
-                      features={template.features}
-                      icon={template.icon}
-                      accent={template.accent}
-                      featured={template.featured}
-                      badge={template.badge}
+                      period={ACTIVITY_CARD_TEMPLATE.period}
+                      stub={{ kind: "people" }}
+                      features={ACTIVITY_CARD_TEMPLATE.features}
+                      icon={ACTIVITY_CARD_TEMPLATE.icon}
+                      accent={ACTIVITY_CARD_TEMPLATE.accent}
                     />
                   </PlanPurchaseTrigger>
                 </ScrollReveal>
-              );
-            })}
+              ))}
           </div>
-        ) : (
-          <p className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-ink-500">
-            אין מסלולים פעילים כרגע. צרו קשר ונשמח לעזור.
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
       <section
         id="pool-passes"

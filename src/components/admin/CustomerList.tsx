@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
+import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
+import { declarationSchoolYear } from "@/lib/health-declaration";
 import { formatSchoolGrade } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
 import { calcAge, formatDate } from "@/utils/format";
@@ -25,6 +27,12 @@ export type CustomerChild = {
   grade_school_year: number | null;
   notes: string | null;
   created_at: string;
+  healthDeclaration: {
+    id_number: string;
+    signed_at: string;
+    accepted: boolean;
+    child_name: string;
+  } | null;
 };
 
 export type CustomerWithChildren = {
@@ -394,6 +402,7 @@ function DetailRow({
 }
 
 function ChildCard({ child }: { child: CustomerChild }) {
+  const [healthOpen, setHealthOpen] = useState(false);
   const age = calcAge(child.birth_date);
   const grade = formatSchoolGrade(child.school_grade, child.grade_school_year);
 
@@ -414,12 +423,39 @@ function ChildCard({ child }: { child: CustomerChild }) {
             {child.birth_date && (
               <Badge tone="neutral">{formatDate(child.birth_date)}</Badge>
             )}
+            <Badge tone={child.healthDeclaration ? "success" : "warning"}>
+              {child.healthDeclaration ? "הצהרת בריאות" : "חסרה הצהרה"}
+            </Badge>
           </div>
+          {child.healthDeclaration && (
+            <button
+              type="button"
+              onClick={() => setHealthOpen(true)}
+              className="mt-2 text-sm font-semibold text-brand-600 hover:underline"
+            >
+              צפייה בהצהרת הבריאות
+            </button>
+          )}
           {child.notes && (
             <p className="mt-2 text-sm text-ink-500">{child.notes}</p>
           )}
         </div>
       </CardContent>
+      {child.healthDeclaration && (
+        <HealthDeclarationModal
+          open={healthOpen}
+          onClose={() => setHealthOpen(false)}
+          childName={child.healthDeclaration.child_name || child.full_name}
+          today={child.healthDeclaration.signed_at}
+          schoolYear={declarationSchoolYear()}
+          initial={{
+            idNumber: child.healthDeclaration.id_number,
+            accepted: child.healthDeclaration.accepted,
+            signedAt: child.healthDeclaration.signed_at,
+          }}
+          readOnly
+        />
+      )}
     </Card>
   );
 }

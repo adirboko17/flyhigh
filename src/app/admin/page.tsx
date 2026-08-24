@@ -25,7 +25,7 @@ import {
   shiftMonth,
   todayInIsrael,
 } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
 
@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
   const previousMonthRange = monthRange(previousMonth);
   const weekEnd = addDays(today, 6);
 
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [
     { data: payments },
@@ -56,6 +56,7 @@ export default async function AdminDashboard() {
     { data: instructors },
     { count: waitlistCount },
     { count: awaitingPrivateLessons },
+    { count: awaitingActivities },
     { data: recentEnrollments },
     { data: memberships },
   ] = await Promise.all([
@@ -103,6 +104,10 @@ export default async function AdminDashboard() {
       .eq("status", "waiting"),
     supabase
       .from("private_lesson_slots")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "awaiting_schedule"),
+    supabase
+      .from("activity_bookings")
       .select("id", { count: "exact", head: true })
       .eq("status", "awaiting_schedule"),
     supabase
@@ -224,6 +229,13 @@ export default async function AdminDashboard() {
       tone: "brand" as const,
       title: `${awaitingPrivateLessons} ${awaitingPrivateLessons === 1 ? "שיעור פרטי" : "שיעורים פרטיים"} לתיאום`,
       detail: "לקוחות שרכשו וממתינים לתיאום מועד",
+      href: "/admin/private-lessons",
+    },
+    (awaitingActivities ?? 0) > 0 && {
+      icon: "👨‍👩‍👧",
+      tone: "amber" as const,
+      title: `${awaitingActivities} ${awaitingActivities === 1 ? "פעילות" : "פעילויות"} לתיאום`,
+      detail: "לקוחות שרכשו לפי מספר נפשות וממתינים למועד",
       href: "/admin/private-lessons",
     },
     pendingEnrollmentsCount > 0 && {

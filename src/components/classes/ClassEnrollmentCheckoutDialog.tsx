@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import {
+  CardcomRedirectHint,
   CouponField,
-  DemoCardFields,
   PaymentMethodPicker,
 } from "@/components/checkout/CheckoutFields";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
@@ -44,7 +44,7 @@ interface ClassEnrollmentCheckoutDialogProps {
   proration: ProratedClassPrice;
   selectedChildren: Child[];
   siblingTiers: SiblingDiscountTier[];
-  /** אחים שכבר רשומים לחוג — נספרים למדרגת ההנחה. */
+  /** אחים שכבר רשומים לאותה קטגוריה — נספרים למדרגת ההנחה. */
   enrolledSiblings: number;
 }
 
@@ -138,11 +138,6 @@ export function ClassEnrollmentCheckoutDialog({
 
     setLoading(true);
 
-    // השהיה קצרה כדי לדמות סליקה; בתשלום מול המשרד אין למה להמתין.
-    if (!deferred && !nothingToCharge) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-    }
-
     const result = await completeClassEnrollmentPayment({
       classId,
       childIds: selectedChildren.map((c) => c.id),
@@ -155,6 +150,11 @@ export function ClassEnrollmentCheckoutDialog({
 
     if (!result.success) {
       setError(result.error);
+      return;
+    }
+
+    if (result.checkoutUrl) {
+      window.location.assign(result.checkoutUrl);
       return;
     }
 
@@ -272,7 +272,7 @@ export function ClassEnrollmentCheckoutDialog({
                     <span className="ms-1 text-xs font-normal text-ink-400">
                       ({order.discountedChildren} ילדים בהנחה
                       {enrolledSiblings > 0
-                        ? ` · ${order.childCount} רשומים לחוג`
+                        ? ` · ${order.childCount} רשומים לקטגוריה`
                         : ""}
                       )
                     </span>
@@ -359,7 +359,7 @@ export function ClassEnrollmentCheckoutDialog({
               </p>
             </div>
           ) : (
-            <DemoCardFields />
+            <CardcomRedirectHint />
           )}
 
           {error && (
@@ -387,7 +387,7 @@ export function ClassEnrollmentCheckoutDialog({
               {loading
                 ? deferred || nothingToCharge
                   ? "שומר הרשמה..."
-                  : "מעבד תשלום..."
+                  : "מעביר לקארדקום..."
                 : deferred || nothingToCharge
                   ? "אישור הרשמה"
                   : `שלם ${formatCurrency(total)}`}

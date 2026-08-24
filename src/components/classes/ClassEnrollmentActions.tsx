@@ -14,13 +14,20 @@ import {
   formatAgeRange,
   getAgeEligibility,
   hasAgeRestriction,
+  type AgeEligibility,
 } from "@/lib/enrollment/ageValidation";
+import { countFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import type { Enums } from "@/types/database.types";
 
-type Child = { id: string; full_name: string; birth_date: string | null };
+type Child = {
+  id: string;
+  full_name: string;
+  birth_date: string | null;
+  hasHealthDeclaration: boolean;
+};
 
 type ExistingEnrollment = {
   id: string;
@@ -52,6 +59,8 @@ interface ClassEnrollmentActionsProps {
   enrollments: ExistingEnrollment[];
   waitlist: WaitlistEntry[];
   siblingTiers: SiblingDiscountTier[];
+  /** אחים שכבר רשומים לאותה קטגוריה — גם בחוג אחר. */
+  categorySiblingIds: string[];
 }
 
 export function ClassEnrollmentActions({
@@ -68,16 +77,28 @@ export function ClassEnrollmentActions({
   enrollments,
   waitlist,
   siblingTiers,
+  categorySiblingIds,
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
   const ageRestricted = hasAgeRestriction(ageMin, ageMax);
   const eligibilityByChildId = useMemo(
     () =>
       new Map(
-        kids.map((child) => [
-          child.id,
-          getAgeEligibility(child.birth_date, ageMin, ageMax, child.full_name),
-        ])
+        kids.map((child) => {
+          const eligibility: AgeEligibility = child.hasHealthDeclaration
+            ? getAgeEligibility(
+                child.birth_date,
+                ageMin,
+                ageMax,
+                child.full_name
+              )
+            : {
+                eligible: false,
+                age: null,
+                reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
+              };
+          return [child.id, eligibility] as const;
+        })
       ),
     [kids, ageMin, ageMax]
   );
@@ -139,6 +160,10 @@ export function ClassEnrollmentActions({
 
   const selectedChildren = availableChildren.filter((c) =>
     selectedIds.includes(c.id)
+  );
+  const enrolledSiblings = countFamilyChildrenInCategory(
+    categorySiblingIds,
+    selectedIds
   );
 
   const atSelectionLimit = !soldOut && selectedIds.length >= maxSelectable;

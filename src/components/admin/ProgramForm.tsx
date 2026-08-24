@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { isActivityProgram, type ProgramKind } from "@/lib/programs";
 import { cn } from "@/utils/cn";
 
 export type ProgramFormData = {
@@ -14,6 +15,7 @@ export type ProgramFormData = {
   description: string | null;
   price: number;
   duration_months: number;
+  kind: ProgramKind;
   status: "draft" | "active" | "inactive";
 };
 
@@ -22,6 +24,7 @@ const emptyForm = {
   description: "",
   price: "",
   duration_months: "1",
+  kind: "membership" as ProgramKind,
   status: "active",
 };
 
@@ -32,6 +35,7 @@ function toFormState(existing?: ProgramFormData) {
     description: existing.description ?? "",
     price: existing.price.toString(),
     duration_months: String(existing.duration_months || 1),
+    kind: existing.kind ?? "membership",
     status: existing.status,
   };
 }
@@ -65,8 +69,14 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
     setLoading(true);
     const supabase = createClient();
 
-    const durationMonths = Math.floor(Number(form.duration_months));
-    if (!Number.isFinite(durationMonths) || durationMonths < 1 || durationMonths > 36) {
+    const kind: ProgramKind = form.kind === "activity" ? "activity" : "membership";
+    const durationMonths = kind === "activity"
+      ? 1
+      : Math.floor(Number(form.duration_months));
+    if (
+      kind === "membership" &&
+      (!Number.isFinite(durationMonths) || durationMonths < 1 || durationMonths > 36)
+    ) {
       setError("נא לבחור משך מנוי בין חודש אחד ל־36 חודשים.");
       setLoading(false);
       return;
@@ -77,6 +87,7 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
       description: form.description || null,
       price: Number(form.price) || 0,
       duration_months: durationMonths,
+      kind,
       // מסלול חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
@@ -111,20 +122,37 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
         <Input
           value={form.title}
           onChange={set("title")}
-          placeholder="לדוגמה: מנוי חודשי — שחייה חופשית"
+          placeholder={
+            isActivityProgram(form.kind)
+              ? "לדוגמה: פעילות הפוגה"
+              : "לדוגמה: מנוי חודשי — שחייה חופשית"
+          }
           required
           autoFocus={inModal}
         />
+      </Field>
+      <Field label="סוג" required>
+        <Select value={form.kind} onChange={set("kind")}>
+          <option value="membership">מנוי לפי תוקף</option>
+          <option value="activity">פעילות לפי מספר נפשות</option>
+        </Select>
       </Field>
       <Field label="תיאור">
         <Textarea
           value={form.description}
           onChange={set("description")}
-          placeholder="תיאור קצר של המסלול..."
+          placeholder={
+            isActivityProgram(form.kind)
+              ? "פעילות חד־פעמית. הלקוח בוחר כמה נפשות, משלם, ואז מתאמים מועד."
+              : "תיאור קצר של המסלול..."
+          }
         />
       </Field>
       <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
-        <Field label="מחיר (₪)" required>
+        <Field
+          label={isActivityProgram(form.kind) ? "מחיר לנפש (₪)" : "מחיר (₪)"}
+          required
+        >
           <Input
             type="number"
             min={0}
@@ -134,18 +162,24 @@ export function ProgramForm({ existing, onClose }: ProgramFormProps) {
             required
           />
         </Field>
-        <Field label="משך המנוי" required hint="לפי זה תחושב התראת הסיום למנהל">
-          <Select value={form.duration_months} onChange={set("duration_months")}>
-            {Array.from({ length: 12 }, (_, index) => index + 1).map((months) => (
-              <option key={months} value={months}>
-                {months === 1 ? "חודש אחד" : `${months} חודשים`}
-              </option>
-            ))}
-            <option value="18">18 חודשים</option>
-            <option value="24">24 חודשים</option>
-            <option value="36">36 חודשים</option>
-          </Select>
-        </Field>
+        {isActivityProgram(form.kind) ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:col-span-1">
+            הלקוח בוחר כמה נפשות ומשלם לפי זה. אחרי התשלום ניצור קשר לתיאום מועד.
+          </div>
+        ) : (
+          <Field label="משך המנוי" required hint="לפי זה תחושב התראת הסיום למנהל">
+            <Select value={form.duration_months} onChange={set("duration_months")}>
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((months) => (
+                <option key={months} value={months}>
+                  {months === 1 ? "חודש אחד" : `${months} חודשים`}
+                </option>
+              ))}
+              <option value="18">18 חודשים</option>
+              <option value="24">24 חודשים</option>
+              <option value="36">36 חודשים</option>
+            </Select>
+          </Field>
+        )}
         {isEdit && (
           <Field label="סטטוס">
             <Select value={form.status} onChange={set("status")}>

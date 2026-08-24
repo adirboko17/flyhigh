@@ -1,12 +1,12 @@
 import { CouponList } from "@/components/admin/CouponList";
 import type { CouponOptions } from "@/components/admin/CouponForm";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "קודי קופון" };
 
 export default async function AdminCouponsPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [
     { data: coupons },

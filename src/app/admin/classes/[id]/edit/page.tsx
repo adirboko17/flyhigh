@@ -1,9 +1,10 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassForm } from "@/components/admin/ClassForm";
+import { getClassCategories } from "@/lib/admin/getClassCategories";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
 import { buildInitialSchedule } from "@/lib/scheduling/classSchedule";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { notFound } from "next/navigation";
 
 export const metadata = { title: "עריכת חוג" };
@@ -14,7 +15,7 @@ export default async function EditClassPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [
     { data: classItem },
@@ -22,6 +23,7 @@ export default async function EditClassPage({
     { data: slots },
     { data: sessions },
     defaultSiblingTiers,
+    categories,
   ] = await Promise.all([
     supabase.from("classes").select("*").eq("id", id).single(),
     getClassInstructorOptions(),
@@ -32,6 +34,7 @@ export default async function EditClassPage({
       .eq("class_id", id)
       .order("session_date"),
     getDefaultSiblingTiers(),
+    getClassCategories(),
   ]);
 
   if (!classItem) notFound();
@@ -50,6 +53,7 @@ export default async function EditClassPage({
         existing={classItem}
         initialSchedule={initialSchedule}
         defaultSiblingTiers={defaultSiblingTiers}
+        categories={categories}
       />
     </div>
   );

@@ -1,15 +1,22 @@
+import { ActivityBookingsBoard } from "@/components/admin/ActivityBookingsBoard";
 import { PrivateLessonsBoard } from "@/components/admin/PrivateLessonsBoard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
-export const metadata = { title: "שיעורים פרטיים" };
+export const metadata = { title: "שיעורים פרטיים ופעילויות" };
 
 export default async function AdminPrivateLessonsPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
   const today = todayInIsrael();
 
-  const [{ data: awaitingRows }, { data: upcomingRows }, { data: payments }] =
+  const [
+    { data: awaitingRows },
+    { data: upcomingRows },
+    { data: awaitingActivities },
+    { data: upcomingActivities },
+    { data: payments },
+  ] =
     await Promise.all([
       supabase
         .from("private_lesson_slots")
@@ -22,6 +29,23 @@ export default async function AdminPrivateLessonsPage() {
         .from("private_lesson_slots")
         .select(
           "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
+        )
+        .eq("status", "scheduled")
+        .gte("session_date", today)
+        .order("session_date")
+        .order("start_time")
+        .limit(50),
+      supabase
+        .from("activity_bookings")
+        .select(
+          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
+        )
+        .eq("status", "awaiting_schedule")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("activity_bookings")
+        .select(
+          "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
         )
         .eq("status", "scheduled")
         .gte("session_date", today)
@@ -64,11 +88,35 @@ export default async function AdminPrivateLessonsPage() {
     };
   }
 
+  function mapActivity(
+    row: NonNullable<typeof awaitingActivities>[number]
+  ) {
+    return {
+      id: row.id,
+      status: row.status,
+      sessionDate: row.session_date,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      createdAt: row.created_at,
+      parentName: row.profiles?.full_name ?? "לקוח",
+      parentPhone: row.profiles?.phone ?? null,
+      childName: row.children?.full_name ?? null,
+      title: row.programs?.title ?? "פעילות",
+      peopleCount: row.people_count,
+      enrollmentId: row.enrollment_id,
+      amount: amountByEnrollment.get(row.enrollment_id) ?? null,
+    };
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
-        title="שיעורים פרטיים"
-        description="תיאום מועדים ללקוחות שרכשו שיעור פרטי, ותצוגה מרוכזת של מה שמתוזמן."
+        title="שיעורים פרטיים ופעילויות"
+        description="תיאום מועדים ללקוחות שרכשו שיעור פרטי או פעילות לפי מספר נפשות."
+      />
+      <ActivityBookingsBoard
+        awaiting={(awaitingActivities ?? []).map(mapActivity)}
+        upcoming={(upcomingActivities ?? []).map(mapActivity)}
       />
       <PrivateLessonsBoard
         awaiting={(awaitingRows ?? []).map(mapRow)}

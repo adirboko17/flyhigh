@@ -19,7 +19,7 @@ export const ADMIN_NAV: NavItem[] = [
   },
   {
     href: "/admin/private-lessons",
-    label: "שיעורים פרטיים",
+    label: "תיאום מועדים",
     icon: "🎯",
   },
   { href: "/admin/calendar", label: "לוח שנה", icon: "📅" },

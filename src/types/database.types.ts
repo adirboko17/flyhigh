@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_bookings: {
+        Row: {
+          child_id: string | null
+          created_at: string
+          end_time: string | null
+          enrollment_id: string
+          id: string
+          notes: string | null
+          parent_id: string
+          people_count: number
+          program_id: string
+          session_date: string | null
+          start_time: string | null
+          status: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Insert: {
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id: string
+          id?: string
+          notes?: string | null
+          parent_id: string
+          people_count: number
+          program_id: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Update: {
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id?: string
+          id?: string
+          notes?: string | null
+          parent_id?: string
+          people_count?: number
+          program_id?: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_bookings_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_bookings_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_bookings_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_bookings_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           child_id: string
@@ -69,6 +143,53 @@ export type Database = {
           },
         ]
       }
+      business_documents: {
+        Row: {
+          category: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          title: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          title: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          title?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       children: {
         Row: {
           birth_date: string | null
@@ -109,6 +230,73 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      class_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      class_session_notes: {
+        Row: {
+          body: string
+          class_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          session_id: string
+        }
+        Insert: {
+          body: string
+          class_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          session_id: string
+        }
+        Update: {
+          body?: string
+          class_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_session_notes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_session_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_session_notes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "class_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -444,6 +632,7 @@ export type Database = {
           id: string
           parent_id: string
           payment_status: Database["public"]["Enums"]["enrollment_payment_status"]
+          people_count: number | null
           pool_pass_id: string | null
           private_lesson_id: string | null
           program_id: string | null
@@ -460,6 +649,7 @@ export type Database = {
           ends_on?: string | null
           id?: string
           parent_id: string
+          people_count?: number | null
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
           pool_pass_id?: string | null
           private_lesson_id?: string | null
@@ -478,6 +668,7 @@ export type Database = {
           id?: string
           parent_id?: string
           payment_status?: Database["public"]["Enums"]["enrollment_payment_status"]
+          people_count?: number | null
           pool_pass_id?: string | null
           private_lesson_id?: string | null
           program_id?: string | null
@@ -526,6 +717,57 @@ export type Database = {
             columns: ["program_id"]
             isOneToOne: false
             referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_declarations: {
+        Row: {
+          accepted: boolean
+          child_id: string
+          child_name: string
+          created_at: string
+          id: string
+          id_number: string
+          parent_id: string
+          school_year: number
+          signed_at: string
+        }
+        Insert: {
+          accepted?: boolean
+          child_id: string
+          child_name: string
+          created_at?: string
+          id?: string
+          id_number: string
+          parent_id: string
+          school_year: number
+          signed_at?: string
+        }
+        Update: {
+          accepted?: boolean
+          child_id?: string
+          child_name?: string
+          created_at?: string
+          id?: string
+          id_number?: string
+          parent_id?: string
+          school_year?: number
+          signed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_declarations_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_declarations_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -625,6 +867,62 @@ export type Database = {
           },
         ]
       }
+      payment_checkouts: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          coupon_redemption_id: string | null
+          created_at: string
+          description: string
+          document_number: string | null
+          id: string
+          low_profile_id: string | null
+          parent_id: string
+          payment_url: string | null
+          raw_result: Json | null
+          status: string
+          transaction_id: string | null
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          coupon_redemption_id?: string | null
+          created_at?: string
+          description: string
+          document_number?: string | null
+          id?: string
+          low_profile_id?: string | null
+          parent_id: string
+          payment_url?: string | null
+          raw_result?: Json | null
+          status?: string
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          coupon_redemption_id?: string | null
+          created_at?: string
+          description?: string
+          document_number?: string | null
+          id?: string
+          low_profile_id?: string | null
+          parent_id?: string
+          payment_url?: string | null
+          raw_result?: Json | null
+          status?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_checkouts_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_receipts: {
         Row: {
           amount: number
@@ -673,6 +971,7 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          checkout_id: string | null
           created_at: string
           enrollment_id: string | null
           external_reference: string | null
@@ -686,6 +985,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          checkout_id?: string | null
           created_at?: string
           enrollment_id?: string | null
           external_reference?: string | null
@@ -699,6 +999,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          checkout_id?: string | null
           created_at?: string
           enrollment_id?: string | null
           external_reference?: string | null
@@ -711,6 +1012,13 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"]
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_checkout_id_fkey"
+            columns: ["checkout_id"]
+            isOneToOne: false
+            referencedRelation: "payment_checkouts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_enrollment_id_fkey"
             columns: ["enrollment_id"]
@@ -917,6 +1225,7 @@ export type Database = {
           description: string | null
           duration_months: number
           id: string
+          kind: Database["public"]["Enums"]["program_kind"]
           price: number
           status: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -927,6 +1236,7 @@ export type Database = {
           description?: string | null
           duration_months?: number
           id?: string
+          kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -937,6 +1247,7 @@ export type Database = {
           description?: string | null
           duration_months?: number
           id?: string
+          kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
@@ -1008,6 +1319,44 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_incomes: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: string
+          source: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: string
+          source?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_incomes_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1139,6 +1488,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      declaration_school_year: { Args: { on_date?: string }; Returns: number }
       effective_school_grade: {
         Args: { as_of_school_year: number; grade: number; on_date?: string }
         Returns: number
@@ -1202,41 +1552,41 @@ export type Database = {
         Returns: {
           end_time: string
           id: string
-          notes: string | null
+          notes: string
           session_date: string
           start_time: string
           status: Database["public"]["Enums"]["class_session_status"]
-          substitute_instructor_name: string | null
+          substitute_instructor_name: string
         }[]
       }
       list_public_classes: {
         Args: never
         Returns: {
-          age_max: number | null
-          age_min: number | null
+          age_max: number
+          age_min: number
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           available: number
+          billable_session_count: number
           capacity: number
-          category: string | null
-          day_of_week: number | null
-          description: string | null
-          end_date: string | null
-          end_time: string | null
+          category: string
+          day_of_week: number
+          description: string
+          end_date: string
+          end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
-          grade_max: number | null
-          grade_min: number | null
+          grade_max: number
+          grade_min: number
           id: string
-          image_url: string | null
-          instructor_name: string | null
-          level: string | null
+          image_url: string
+          instructor_name: string
+          level: string
           price: number
-          schedule_days: string | null
+          remaining_session_count: number
+          schedule_days: string
           schedule_type: Database["public"]["Enums"]["schedule_type"]
           session_count: number
-          billable_session_count: number
-          remaining_session_count: number
-          start_date: string | null
-          start_time: string | null
+          start_date: string
+          start_time: string
           status: Database["public"]["Enums"]["class_status"]
           taken_count: number
           title: string
@@ -1309,6 +1659,7 @@ export type Database = {
         | "scheduled"
         | "cancelled"
         | "completed"
+      program_kind: "membership" | "activity"
       schedule_type: "weekly" | "custom"
       user_role: "admin" | "instructor" | "parent"
       waitlist_status:
@@ -1474,6 +1825,7 @@ export const Constants = {
         "cancelled",
         "completed",
       ],
+      program_kind: ["membership", "activity"],
       schedule_type: ["weekly", "custom"],
       user_role: ["admin", "instructor", "parent"],
       waitlist_status: ["waiting", "offered", "expired", "joined", "cancelled"],

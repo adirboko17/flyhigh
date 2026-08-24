@@ -3,11 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 
 /**
- * מרענן את ה־session בכל בקשה וחוסם גישה לאזורים מוגנים ללא התחברות.
+ * מרענן את ה־session בעת הצורך וחוסם גישה לאזורים מוגנים ללא התחברות.
  *
- * חשוב לקרוא ל־getUser (לא רק getClaims): כך ה־access token מתרענן פעם אחת
- * ב־middleware, והעמוד לא מנסה לרענן במקביל בכל שאילתת DB — מרוץ שגורם
- * ל־"Invalid Refresh Token" ומאט כל ניווט בעשרות שניות.
+ * getClaims מאמת את ה־JWT מקומית מול ה־JWKS (עם cache), ומרענן את הטוקן
+ * רק כשהוא עומד לפוג — בלי קריאת רשת ל־Auth בכל מעבר עמוד. אם האימות
+ * המקומי נכשל, נופלים ל־getUser כדי לנקות session פגום.
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -33,12 +33,16 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const { data, error } = await supabase.auth.getUser();
-  const signedIn = Boolean(data.user);
+  const { data, error } = await supabase.auth.getClaims();
+  let signedIn = Boolean(data?.claims?.sub);
 
-  // טוקן רענון פגום/משומש — מנקים כדי לא לנסות לרענן שוב בכל בקשה.
-  if (error) {
-    clearSupabaseAuthCookies(request, supabaseResponse);
+  // אימות מקומי נכשל (JWKS/טוקן פג) — בדיקה מול Auth ורק אז מנקים session פגום.
+  if (!signedIn && error) {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    signedIn = Boolean(userData.user);
+    if (userError) {
+      clearSupabaseAuthCookies(request, supabaseResponse);
+    }
   }
 
   const path = request.nextUrl.pathname;

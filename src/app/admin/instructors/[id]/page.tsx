@@ -5,8 +5,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/utils/format";
 
 export const metadata = { title: "פרופיל מדריכה" };
@@ -18,7 +18,7 @@ export default async function AdminInstructorProfilePage({
 }) {
   await requireRole("admin");
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [{ data: instructor }, { data: documents }, { count: classCount }] =
     await Promise.all([

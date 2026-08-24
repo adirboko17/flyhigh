@@ -1,5 +1,5 @@
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 
 export type ClassInstructorOption = {
   id: string;
@@ -16,7 +16,7 @@ export async function getClassInstructorOptions(): Promise<
   ClassInstructorOption[]
 > {
   const profile = await requireRole("admin");
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const { data: instructors } = await supabase
     .from("instructors")

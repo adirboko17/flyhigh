@@ -7,7 +7,7 @@ import {
 import { DEFERRED_PAYMENT_METHODS, isDeferredPaymentMethod } from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
 import { addDays, todayInIsrael } from "@/lib/scheduling/monthGrid";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "גבייה" };
 
@@ -19,7 +19,7 @@ function round2(value: number) {
 }
 
 export default async function AdminCollectionsPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
   const paidSince = `${addDays(todayInIsrael(), -PAID_LOOKBACK_DAYS)}T00:00:00`;
 
   // חובות פתוחים/חלקיים תמיד + שולמו לאחרונה בלבד (בלי לגרור את כל ההיסטוריה).

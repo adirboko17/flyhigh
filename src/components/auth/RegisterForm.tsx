@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -8,11 +8,23 @@ import {
   currentSchoolYear,
   parseSchoolGradeInput,
   SCHOOL_GRADES,
+  schoolGradeLabel,
 } from "@/lib/school-grade";
+import { GENDER } from "@/lib/constants";
 import { BirthDateInput } from "@/components/ui/BirthDateInput";
+import { Badge } from "@/components/ui/Badge";
+import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
 import { Field, Input, Select } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { OtpInput, OTP_CODE_LENGTH } from "@/components/auth/OtpInput";
 import { Icon } from "@/components/icons/Icon";
+import {
+  declarationSchoolYear,
+  isSignedHealthDraft,
+  MISSING_HEALTH_DECLARATION_ERROR,
+  type HealthDeclarationDraft,
+} from "@/lib/health-declaration";
+import { calcAge, initials } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -32,6 +44,7 @@ type ChildDraft = {
   birth: string;
   gender: string;
   grade: string;
+  health: HealthDeclarationDraft | null;
 };
 
 let childKey = 0;
@@ -41,6 +54,7 @@ const newChild = (): ChildDraft => ({
   birth: "",
   gender: "",
   grade: "",
+  health: null,
 });
 
 export function RegisterForm() {
@@ -70,6 +84,10 @@ export function RegisterForm() {
     password: "",
     confirm: "",
   });
+
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [healthChildKey, setHealthChildKey] = useState<number | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -127,6 +145,21 @@ export function RegisterForm() {
   const namedChildren = wantsChildren
     ? children.filter((c) => c.name.trim())
     : [];
+  const showChildrenDock = step === 2 && wantsChildren === true;
+  const childrenDockRef = useRef<HTMLDivElement>(null);
+  const [childrenDockHeight, setChildrenDockHeight] = useState(220);
+
+  useEffect(() => {
+    if (!showChildrenDock) return;
+    const el = childrenDockRef.current;
+    if (!el) return;
+
+    const update = () => setChildrenDockHeight(el.getBoundingClientRect().height);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showChildrenDock, children]);
 
   function goNext() {
     setError(null);
@@ -145,6 +178,7 @@ export function RegisterForm() {
         if (!details.receiptIdNumber.trim())
           return setError("נא למלא מספר ח.פ / ת.ז.");
       }
+      if (!acceptedTerms) return setError("יש לאשר את התקנון כדי להמשיך.");
       setStep(2);
       return;
     }
@@ -159,6 +193,10 @@ export function RegisterForm() {
           (child) => parseSchoolGradeInput(child.grade) === null,
         );
         if (missingGrade) return setError("נא לבחור כיתה לכל ילד/ה.");
+        const missingHealth = namedChildren.some(
+          (child) => !isSignedHealthDraft(child.health),
+        );
+        if (missingHealth) return setError(MISSING_HEALTH_DECLARATION_ERROR);
       }
       setStep(3);
       return;
@@ -228,6 +266,7 @@ export function RegisterForm() {
       return setError(`הסיסמה חייבת להכיל לפחות ${MIN_PASSWORD_LENGTH} תווים.`);
     if (credentials.password !== credentials.confirm)
       return setError("אימות הסיסמה אינו תואם לסיסמה.");
+    if (!acceptedTerms) return setError("יש לאשר את התקנון כדי ליצור חשבון.");
 
     setLoading(true);
     const supabase = createClient();
@@ -255,6 +294,8 @@ export function RegisterForm() {
             gender: c.gender || null,
             school_grade: parseSchoolGradeInput(c.grade),
             grade_school_year: currentSchoolYear(),
+            health_id_number: c.health?.idNumber ?? null,
+            health_accepted: Boolean(c.health?.accepted),
           })),
         },
       },
@@ -515,6 +556,12 @@ export function RegisterForm() {
               </Field>
             </div>
           )}
+
+          <TermsCheckbox
+            checked={acceptedTerms}
+            onChange={setAcceptedTerms}
+            onOpenTerms={() => setTermsOpen(true)}
+          />
         </div>
       )}
 
@@ -623,6 +670,38 @@ export function RegisterForm() {
                         ))}
                       </Select>
                     </Field>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        if (!child.name.trim()) {
+                          setError("נא למלא קודם את שם הילד/ה לפני הצהרת הבריאות.");
+                          return;
+                        }
+                        setHealthChildKey(child.key);
+                      }}
+                      className={cn(
+                        "sm:col-span-2 flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-right transition-colors",
+                        isSignedHealthDraft(child.health)
+                          ? "border-aqua-200 bg-aqua-50 text-aqua-800"
+                          : "border-brand-200 bg-brand-50/60 text-brand-800 hover:border-brand-400 hover:bg-brand-50"
+                      )}
+                    >
+                      <span>
+                        <span className="block text-sm font-bold">
+                          הצהרת בריאות
+                        </span>
+                        <span className="block text-xs font-medium opacity-80">
+                          {isSignedHealthDraft(child.health)
+                            ? "נחתמה — לחצו לצפייה או עדכון"
+                            : "חובה לפני הרשמה לחוג"}
+                        </span>
+                      </span>
+                      <Icon
+                        name={isSignedHealthDraft(child.health) ? "check" : "shield"}
+                        size={18}
+                      />
+                    </button>
                     <Field
                       label="מין"
                       htmlFor={`childGender-${child.key}`}
@@ -666,6 +745,12 @@ export function RegisterForm() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {showChildrenDock && (
+        <div className="hidden lg:block">
+          <ChildrenLiveSummary children={children} />
         </div>
       )}
 
@@ -727,54 +812,241 @@ export function RegisterForm() {
         </div>
       )}
 
-      {error && error !== "duplicate_email" && (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
-        </p>
+      <TermsModal open={termsOpen} onClose={() => setTermsOpen(false)} />
+      <HealthDeclarationModal
+        open={healthChildKey !== null}
+        onClose={() => setHealthChildKey(null)}
+        childName={
+          children.find((child) => child.key === healthChildKey)?.name ?? ""
+        }
+        today={maxBirthDate || todayIso()}
+        schoolYear={declarationSchoolYear()}
+        initial={
+          children.find((child) => child.key === healthChildKey)?.health ?? null
+        }
+        onSave={(health) => {
+          if (healthChildKey === null) return;
+          setChildren((list) =>
+            list.map((child) =>
+              child.key === healthChildKey ? { ...child, health } : child
+            )
+          );
+        }}
+      />
+
+      {showChildrenDock ? (
+        <>
+          <div
+            className="lg:hidden"
+            style={{ height: childrenDockHeight }}
+            aria-hidden
+          />
+          <div
+            ref={childrenDockRef}
+            className="fixed inset-x-0 bottom-0 z-30 border-t border-ink-100 bg-white/95 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-16px_rgba(15,23,42,0.28)] backdrop-blur-md lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none"
+          >
+            <div className="mx-auto flex w-full max-w-[440px] flex-col gap-3 lg:max-w-none">
+              <div className="lg:hidden">
+                <ChildrenLiveSummary children={children} />
+              </div>
+              <FormError error={error} />
+              <FormActions
+                step={step}
+                loading={loading}
+                onNext={goNext}
+                onBack={goBack}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          <FormError error={error} />
+          <FormActions
+            step={step}
+            loading={loading}
+            onNext={goNext}
+            onBack={goBack}
+          />
+        </>
       )}
-      {error === "duplicate_email" && (
-        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-semibold">המייל הזה כבר רשום במערכת.</p>
-          <p className="mt-1">
-            לא נשלח קוד אימות חדש למייל שכבר מאומת.{" "}
-            <Link href="/login" className="font-bold text-brand-600 hover:underline">
-              התחברו לחשבון
-            </Link>{" "}
-            או השתמשו במייל אחר.
+    </form>
+  );
+}
+
+function FormError({ error }: { error: string | null }) {
+  if (!error) return null;
+
+  if (error === "duplicate_email") {
+    return (
+      <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="font-semibold">המייל הזה כבר רשום במערכת.</p>
+        <p className="mt-1">
+          לא נשלח קוד אימות חדש למייל שכבר מאומת.{" "}
+          <Link href="/login" className="font-bold text-brand-600 hover:underline">
+            התחברו לחשבון
+          </Link>{" "}
+          או השתמשו במייל אחר.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+      {error}
+    </p>
+  );
+}
+
+function FormActions({
+  step,
+  loading,
+  onNext,
+  onBack,
+}: {
+  step: Step;
+  loading: boolean;
+  onNext: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row-reverse">
+      {step === 3 ? (
+        <button
+          type="submit"
+          className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block sm:flex-[1.4]"
+          disabled={loading}
+        >
+          {loading ? "יוצר חשבון..." : "יצירת חשבון"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onNext}
+          className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block sm:flex-[1.4]"
+        >
+          {step === 1 ? "המשך" : "המשך לפרטי התחברות"}
+        </button>
+      )}
+      {step > 1 && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="ah-btn ah-btn--lg ah-btn--outline ah-btn--block sm:flex-1"
+          disabled={loading}
+        >
+          חזרה
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ChildrenLiveSummary({ children }: { children: ChildDraft[] }) {
+  const namedCount = children.filter((child) => child.name.trim()).length;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-brand-200/90 bg-gradient-to-bl from-brand-50 via-white to-brand-50/40 shadow-sm">
+      <div className="flex items-center gap-3 px-3.5 py-3">
+        <span className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 px-2 text-xs font-bold tabular-nums text-white shadow-sm">
+          {children.length}
+        </span>
+        <div className="min-w-0 text-right">
+          <p className="text-sm font-semibold leading-tight text-brand-900">
+            ילדים בחשבון
+          </p>
+          <p className="text-xs leading-tight text-brand-700/75">
+            {namedCount === 0
+              ? "הפרטים יופיעו כאן תוך כדי ההקלדה"
+              : namedCount === 1
+                ? "ילד/ה אחד/ת עם שם"
+                : `${namedCount} ילדים עם שם`}
           </p>
         </div>
-      )}
-
-      <div className="flex flex-col gap-2 sm:flex-row-reverse">
-        {step === 3 ? (
-          <button
-            type="submit"
-            className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block sm:flex-[1.4]"
-            disabled={loading}
-          >
-            {loading ? "יוצר חשבון..." : "יצירת חשבון"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={goNext}
-            className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block sm:flex-[1.4]"
-          >
-            {step === 1 ? "המשך" : "המשך לפרטי התחברות"}
-          </button>
-        )}
-        {step > 1 && (
-          <button
-            type="button"
-            onClick={goBack}
-            className="ah-btn ah-btn--lg ah-btn--outline ah-btn--block sm:flex-1"
-            disabled={loading}
-          >
-            חזרה
-          </button>
-        )}
       </div>
-    </form>
+      <ul className="max-h-36 divide-y divide-brand-100 overflow-y-auto border-t border-brand-200/60">
+        {children.map((child, index) => (
+          <ChildSummaryRow key={child.key} child={child} index={index} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ChildSummaryRow({
+  child,
+  index,
+}: {
+  child: ChildDraft;
+  index: number;
+}) {
+  const name = child.name.trim();
+  const gradeValue = parseSchoolGradeInput(child.grade);
+  const grade = schoolGradeLabel(gradeValue);
+  const gradeText =
+    gradeValue === 0 || gradeValue === 13
+      ? grade
+      : grade
+        ? `כיתה ${grade}`
+        : null;
+  const gender =
+    child.gender === "male" ||
+    child.gender === "female" ||
+    child.gender === "other"
+      ? GENDER[child.gender]
+      : null;
+  const age = calcAge(child.birth || null);
+  const ageLabel =
+    age === null
+      ? null
+      : child.gender === "female"
+        ? `בת ${age}`
+        : child.gender === "male"
+          ? `בן ${age}`
+          : `גיל ${age}`;
+  const complete = Boolean(name && grade);
+
+  return (
+    <li className="flex items-center gap-3 px-3.5 py-2.5">
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-xs font-bold",
+          name
+            ? "bg-brand-gradient text-white"
+            : "bg-ink-100 text-ink-400"
+        )}
+      >
+        {initials(name || null)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "truncate text-sm font-semibold",
+            name ? "text-ink-900" : "text-ink-400"
+          )}
+        >
+          {name || `ילד/ה ${index + 1}`}
+        </p>
+        <p className="truncate text-xs text-ink-500">
+          {[gradeText, ageLabel, gender]
+            .filter(Boolean)
+            .join(" · ") || "ממתינים לפרטים"}
+        </p>
+      </div>
+      <Badge
+        tone={
+          isSignedHealthDraft(child.health)
+            ? "success"
+            : complete
+              ? "warning"
+              : "warning"
+        }
+        className="shrink-0"
+      >
+        {isSignedHealthDraft(child.health) ? "הצהרה" : complete ? "חסרה הצהרה" : "חסר"}
+      </Badge>
+    </li>
   );
 }
 
@@ -863,6 +1135,103 @@ function ChoiceCard({
       </span>
       <span className="text-xs text-ink-500">{subtitle}</span>
     </button>
+  );
+}
+
+function TermsCheckbox({
+  checked,
+  onChange,
+  onOpenTerms,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  onOpenTerms: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3 transition-colors hover:border-ink-200">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-300 text-brand-600 focus:ring-brand-400"
+      />
+      <span className="text-sm font-medium text-ink-800">
+        קראתי ואני מאשר/ת את{" "}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenTerms();
+          }}
+          className="font-bold text-brand-600 underline decoration-brand-300 underline-offset-2 transition-colors hover:text-brand-700"
+        >
+          התקנון
+        </button>
+      </span>
+    </label>
+  );
+}
+
+const PAYMENT_RULES = [
+  "ניתן לפרוס לתשלומים באשראי לפי מה שמפורט תחת כל חוג",
+  "המחיר עבור חודש במלואו (גם במידה ויש חגים). לפחות 30 מפגשים שנתיים",
+  "הנחה לבן משפחה שני והלאה 5%.",
+  "פתיחת החוג וקיומו מותנה במספר משתתפים: 8 בכל קבוצה לפחות. (במקרה של סגירת הקבוצה תוחזר יתרת התשלום הנותרת).",
+  "חוג שלא תושלם בו מלוא מכסת המפגשים, יחושב ויוחזר החלק היחסי שלא הושלם.",
+  "פרישה עד לתום המפגש הרביעי, לאחריו לא יוחזר תשלום. במקרה של פרישה ישולמו השיעורים שהיו עד להודעת הפרישה+50₪ עמלה.",
+  "פרישה לאחר השיעור הראשון – ללא חיוב (שיעור ניסיון חינם).",
+  "פרישה מהשיעור הראשון עד השיעור הרביעי - תהיה כרוכה בחיוב של חודש אחד.",
+  "פרישה מהשיעור החמישי ועד סוף דצמבר- תהיה כרוכה בחיוב של החודשים בהם הגיע המשתתף לחוג.",
+] as const;
+
+const PAYMENT_RULE_LETTERS = ["א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט"] as const;
+
+function TermsModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title="תקנון">
+      <div className="space-y-5 text-sm leading-relaxed text-ink-700">
+        <section>
+          <p className="font-display text-base font-extrabold text-ink-900">
+            מחירי החוגים כוללים ביטוח!
+          </p>
+          <p className="mt-3 font-semibold text-ink-800">המחיר לא כולל:</p>
+          <p className="mt-1">
+            תחרויות ופעילויות העשרה וכיף מעבר למפגשים המתוכננים.
+          </p>
+        </section>
+
+        <section>
+          <h3 className="font-display text-base font-extrabold text-ink-900">
+            נהלי תשלום
+          </h3>
+          <ol className="mt-3 flex list-none flex-col gap-2.5 p-0">
+            {PAYMENT_RULES.map((rule, index) => (
+              <li key={rule} className="flex gap-2.5">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                  {PAYMENT_RULE_LETTERS[index]}
+                </span>
+                <span>{rule}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="hero-cta-primary ah-btn ah-btn--lg ah-btn--block"
+        >
+          הבנתי
+        </button>
+      </div>
+    </Modal>
   );
 }
 

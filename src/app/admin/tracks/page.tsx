@@ -1,16 +1,16 @@
 import { TracksManager } from "@/components/admin/TracksManager";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 
 export const metadata = { title: "מסלולים וכניסות" };
 
 export default async function AdminTracksPage() {
-  const supabase = await createClient();
+  const supabase = await createAdminDataClient();
 
   const [{ data: programs }, { data: passes }, { data: privateLessons }] =
     await Promise.all([
       supabase
         .from("programs")
-        .select("id, title, description, price, duration_months, status")
+        .select("id, title, description, price, duration_months, kind, status")
         .order("created_at", { ascending: false }),
       supabase
         .from("pool_passes")
