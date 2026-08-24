@@ -398,7 +398,9 @@ export type Database = {
       }
       classes: {
         Row: {
+          /** גיל מקסימום בחודשים. */
           age_max: number | null
+          /** גיל מינימום בחודשים. */
           age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           billing_months: number | null
