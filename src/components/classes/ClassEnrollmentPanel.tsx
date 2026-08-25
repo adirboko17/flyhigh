@@ -122,6 +122,7 @@ export async function ClassEnrollmentPanel({
           categorySiblingIds={categorySiblingIds}
           pickOneSlot={cls.pick_one_slot}
           slots={slots}
+          classGenderPolicy={cls.gender_policy}
         />
       );
     }

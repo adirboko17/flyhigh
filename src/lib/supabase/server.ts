@@ -15,6 +15,11 @@ export const createClient = cache(async () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      auth: {
+        // רק ה־middleware מרענן טוקנים. ב־RSC רענון כושל זורק AuthApiError לכל עמוד.
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll();

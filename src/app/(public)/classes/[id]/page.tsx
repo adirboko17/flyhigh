@@ -5,9 +5,11 @@ import { ClassSessionGroups } from "@/components/classes/ClassSessionGroups";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
 import {
+  displayGenderPolicy,
   formatAudienceFieldLabel,
   formatClassAudience,
   formatClassGenderPolicy,
+  pickOneSlotTraineeHint,
 } from "@/lib/class-audience";
 import { dayLabel } from "@/lib/constants";
 import {
@@ -175,7 +177,12 @@ export default async function ClassDetailPage({
                   מועדים לבחירה
                 </h2>
                 <p className="mt-1 text-sm text-ink-500">
-                  הילד נרשם למועד אחד וחוזר אליו כל שבוע עד סוף התקופה.
+                  {pickOneSlotTraineeHint(
+                    displayGenderPolicy(
+                      cls.gender_policy,
+                      slots.map((slot) => slot.gender_policy)
+                    )
+                  )}
                 </p>
                 <ul className="mt-4 divide-y divide-ink-100">
                   {slots.map((slot) => (

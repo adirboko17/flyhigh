@@ -1,6 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
+import {
+  hasIncompleteAuthSession,
+  isInvalidRefreshTokenError,
+  isSupabaseAuthCookieName,
+} from "@/lib/supabase/authSession";
 
 /**
  * מרענן את ה־session בעת הצורך וחוסם גישה לאזורים מוגנים ללא התחברות.
@@ -33,15 +38,23 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const { data, error } = await supabase.auth.getClaims();
-  let signedIn = Boolean(data?.claims?.sub);
+  let signedIn = false;
 
-  // אימות מקומי נכשל (JWKS/טוקן פג) — בדיקה מול Auth ורק אז מנקים session פגום.
-  if (!signedIn && error) {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    signedIn = Boolean(userData.user);
-    if (userError) {
+  if (hasIncompleteAuthSession(request.cookies.getAll())) {
+    clearSupabaseAuthCookies(request, supabaseResponse);
+  } else {
+    const { data, error } = await supabase.auth.getClaims();
+    signedIn = Boolean(data?.claims?.sub);
+
+    // טוקן רענון חסר/לא תקף — אין טעם לקרוא ל־Auth. מנקים עוגיות וממשיכים כאורח.
+    if (!signedIn && isInvalidRefreshTokenError(error)) {
       clearSupabaseAuthCookies(request, supabaseResponse);
+    } else if (!signedIn && error) {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      signedIn = Boolean(userData.user);
+      if (userError) {
+        clearSupabaseAuthCookies(request, supabaseResponse);
+      }
     }
   }
 
@@ -70,10 +83,7 @@ function clearSupabaseAuthCookies(
   response: NextResponse
 ) {
   for (const cookie of request.cookies.getAll()) {
-    if (
-      cookie.name.startsWith("sb-") &&
-      (cookie.name.includes("auth-token") || cookie.name.includes("auth."))
-    ) {
+    if (isSupabaseAuthCookieName(cookie.name)) {
       response.cookies.set(cookie.name, "", { maxAge: 0, path: "/" });
       request.cookies.set(cookie.name, "");
     }

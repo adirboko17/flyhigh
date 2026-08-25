@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
@@ -6,6 +7,7 @@ import {
   isAdminClientConfigured,
 } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { hasIncompleteAuthSession } from "@/lib/supabase/authSession";
 import type { Tables } from "@/types/database.types";
 
 export type Profile = Tables<"profiles">;
@@ -53,6 +55,11 @@ function getCachedProfileById(userId: string) {
  * cache מונע קריאה כפולה באותה בקשה כאשר גם ה-layout וגם העמוד צריכים פרופיל.
  */
 export const getSessionProfile = cache(async (): Promise<Profile | null> => {
+  const cookieStore = await cookies();
+  if (hasIncompleteAuthSession(cookieStore.getAll())) {
+    return null;
+  }
+
   const supabase = await createClient();
   const userId = await currentUserId(supabase);
 
@@ -72,8 +79,9 @@ export const getSessionProfile = cache(async (): Promise<Profile | null> => {
 async function currentUserId(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<string | null> {
-  const { data } = await supabase.auth.getClaims();
-  return data?.claims?.sub ?? null;
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims?.sub) return null;
+  return data.claims.sub as string;
 }
 
 /**

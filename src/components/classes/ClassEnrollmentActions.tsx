@@ -11,7 +11,12 @@ import {
   parentEnrollmentDisplayBadge,
   WAITLIST_STATUS,
 } from "@/lib/constants";
-import { formatClassGenderPolicy } from "@/lib/class-audience";
+import {
+  displayGenderPolicy,
+  formatClassGenderPolicy,
+  pickOneSlotTraineeHint,
+  pickOneSlotTraineeShort,
+} from "@/lib/class-audience";
 import { formatTime } from "@/utils/format";
 import { joinClassWaitlist } from "@/lib/enrollment/actions";
 import {
@@ -71,6 +76,7 @@ interface ClassEnrollmentActionsProps {
   categorySiblingIds: string[];
   pickOneSlot?: boolean;
   slots?: PublicClassSlot[];
+  classGenderPolicy?: Enums<"class_gender_policy">;
 }
 
 export function ClassEnrollmentActions({
@@ -91,8 +97,13 @@ export function ClassEnrollmentActions({
   categorySiblingIds,
   pickOneSlot = false,
   slots = [],
+  classGenderPolicy = "mixed",
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
+  const traineeGender = displayGenderPolicy(
+    classGenderPolicy,
+    slots.map((slot) => slot.gender_policy)
+  );
   const ageRestricted = hasAgeRestriction(ageMin, ageMax);
   const eligibilityByChildId = useMemo(
     () =>
@@ -367,6 +378,7 @@ export function ClassEnrollmentActions({
               <SlotPickerTrigger
                 slotsCount={slots.length}
                 selectedSlot={selectedSlot}
+                traineeGender={traineeGender}
                 onOpen={() => setSlotPickerOpen(true)}
               />
             )}
@@ -448,7 +460,7 @@ export function ClassEnrollmentActions({
           open={slotPickerOpen}
           onClose={() => setSlotPickerOpen(false)}
           title="בחירת יום ושעה"
-          description="בחרו מועד אחד. הילד יגיע אליו כל שבוע עד סוף התקופה."
+          description={pickOneSlotTraineeHint(traineeGender)}
         >
           <div className="space-y-2">
             {slots.map((slot) => {
@@ -645,10 +657,12 @@ export function ClassEnrollmentActions({
 function SlotPickerTrigger({
   slotsCount,
   selectedSlot,
+  traineeGender,
   onOpen,
 }: {
   slotsCount: number;
   selectedSlot: PublicClassSlot | null;
+  traineeGender: Enums<"class_gender_policy">;
   onOpen: () => void;
 }) {
   return (
@@ -695,7 +709,7 @@ function SlotPickerTrigger({
               בחירת יום ושעה
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
-              יש {slotsCount} מועדים בשבוע · הילד מגיע לאחד מהם כל שבוע
+              יש {slotsCount} מועדים בשבוע · {pickOneSlotTraineeShort(traineeGender)}
             </span>
           </>
         )}

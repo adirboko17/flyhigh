@@ -124,3 +124,33 @@ export function childEligibilityError(
   }
   return null;
 }
+
+/** מגדר להצגה: אם כל המועדים אותו מגדר — לפי המועד, אחרת לפי החוג. */
+export function displayGenderPolicy(
+  classGender: ClassGenderPolicy,
+  slotGenders: Array<ClassGenderPolicy | null | undefined> = []
+): ClassGenderPolicy {
+  const unique = [
+    ...new Set(
+      slotGenders.filter((gender): gender is ClassGenderPolicy => Boolean(gender))
+    ),
+  ];
+  if (unique.length === 1) return unique[0];
+  return classGender;
+}
+
+export function pickOneSlotTraineeHint(gender: ClassGenderPolicy): string {
+  if (gender === "female") {
+    return "המתאמנת נרשמת למועד אחד וחוזרת אליו כל שבוע עד סוף התקופה.";
+  }
+  if (gender === "male") {
+    return "המתאמן נרשם למועד אחד וחוזר אליו כל שבוע עד סוף התקופה.";
+  }
+  return "מתאמן או מתאמנת נרשמים למועד אחד וחוזרים אליו כל שבוע עד סוף התקופה.";
+}
+
+export function pickOneSlotTraineeShort(gender: ClassGenderPolicy): string {
+  if (gender === "female") return "המתאמנת מגיעה לאחד מהם כל שבוע";
+  if (gender === "male") return "המתאמן מגיע לאחד מהם כל שבוע";
+  return "מתאמן או מתאמנת מגיעים לאחד מהם כל שבוע";
+}
