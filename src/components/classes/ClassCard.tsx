@@ -42,7 +42,6 @@ export function ClassCard({
   );
   const ended = proration.hasEnded;
   const soldOut = !ended && (cls.available <= 0 || cls.status === "full");
-  const lastSpot = !ended && !soldOut && cls.available === 1;
   const closed = ended || soldOut;
   const isBlob = cls.image_url?.startsWith("blob:") ?? false;
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
@@ -72,10 +71,8 @@ export function ClassCard({
   const availability = ended
     ? { text: "החוג הסתיים", tone: "danger" as const }
     : soldOut
-      ? { text: "אין מקומות פנויים", tone: "danger" as const }
-      : lastSpot
-        ? { text: "מקום אחרון פנוי", tone: "accent" as const }
-        : { text: `${cls.available} מקומות פנויים`, tone: "muted" as const };
+      ? { text: "החוג מלא", tone: "danger" as const }
+      : null;
 
   const card = (
     <article
@@ -119,14 +116,12 @@ export function ClassCard({
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(7,30,48,0.08)_0%,rgba(7,30,48,0.0)_42%,rgba(7,30,48,0.55)_100%)]"
         />
 
-        {(ended || soldOut || lastSpot) && (
+        {(ended || soldOut) && (
           <span
             className="absolute end-3 top-3 rounded-lg px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-white shadow-sm"
-            style={{
-              background: ended || soldOut ? "#c0364a" : "var(--logo-magenta)",
-            }}
+            style={{ background: "#c0364a" }}
           >
-            {ended ? "הסתיים" : soldOut ? "מלא" : "מקום אחרון"}
+            {ended ? "הסתיים" : "מלא"}
           </span>
         )}
 
@@ -176,20 +171,16 @@ export function ClassCard({
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {genderLabel && <InfoChip>{genderLabel}</InfoChip>}
           {audienceLabel && <InfoChip>{audienceLabel}</InfoChip>}
-          <span
-            className={cn(
-              "text-sm font-semibold",
-              availability.tone === "danger" && "text-red-600",
-              availability.tone === "muted" && "text-ink-500"
-            )}
-            style={
-              availability.tone === "accent"
-                ? { color: "var(--logo-magenta)" }
-                : undefined
-            }
-          >
-            {availability.text}
-          </span>
+          {availability && (
+            <span
+              className={cn(
+                "text-sm font-semibold",
+                availability.tone === "danger" && "text-red-600"
+              )}
+            >
+              {availability.text}
+            </span>
+          )}
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">

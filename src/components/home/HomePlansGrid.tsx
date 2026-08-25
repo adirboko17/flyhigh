@@ -137,13 +137,14 @@ export function HomePlansGrid({
               accent="var(--logo-magenta)"
             />
           </ScrollReveal>
-          <div className="grid items-start gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {previewActivities.map((p, index) => {
               const card = activityCardPresentation(p);
               return (
               <ScrollReveal
                 key={p.id}
                 delay={Math.min((index % 2) * 80, 80)}
+                className="h-full"
               >
                 <PlanPurchaseTrigger
                   planKind="program"
@@ -154,7 +155,7 @@ export function HomePlansGrid({
                   priceTiers={parseActivityPriceTiers(p.price_tiers)}
                   extraHalfHourPrice={p.extra_half_hour_price}
                   viewer={viewer}
-                  className="hover:translate-y-0 hover:shadow-none"
+                  className="h-full hover:translate-y-0 hover:shadow-none"
                 >
                   <PlanTicketCard
                     compact

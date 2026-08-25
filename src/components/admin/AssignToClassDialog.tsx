@@ -31,6 +31,7 @@ import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
   parseSiblingTiers,
+  siblingTiersForCheckout,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
@@ -109,7 +110,9 @@ export function AssignToClassDialog({
     supabase
       .rpc("class_sibling_discount_tiers", { p_class_id: cls.id })
       .then(({ data }) => {
-        if (active) setTiers(parseSiblingTiers(data));
+        if (active) {
+          setTiers(siblingTiersForCheckout(cls.category, parseSiblingTiers(data)));
+        }
       });
 
     supabase
@@ -159,7 +162,7 @@ export function AssignToClassDialog({
     return () => {
       active = false;
     };
-  }, [cls.id, cls.price, cls.billing_months, isWaitlist]);
+  }, [cls.id, cls.category, cls.price, cls.billing_months, isWaitlist]);
 
   useEffect(() => {
     if (!parentId) {

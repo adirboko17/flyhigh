@@ -1,12 +1,37 @@
 import type { Json } from "@/types/database.types";
 
 /**
- * הנחת אחים: כשמשפחה רושמת יותר מילד אחד לאותה קטגוריה (למשל שני חוגי
- * שחייה), ההנחה חלה רק על הילד השני ומעלה — הילד הראשון משלם מחיר מלא.
- * חוגים בקטגוריות שונות לא נספרים יחד. בלי קטגוריה — רק אותו חוג.
- * המדרגות נשמרות כמערך JSON על החוג, ואם לא הוגדרו — נלקחת ברירת המחדל הגלובלית
- * (הפונקציה class_sibling_discount_tiers במסד הנתונים מבצעת את הבחירה).
+ * הנחת אחים: בקופה חלה רק על חוגי שחייה ונינג'ה. כשמשפחה רושמת יותר מילד
+ * אחד לאותה קטגוריה, ההנחה חלה רק על הילד השני ומעלה — הילד הראשון משלם
+ * מחיר מלא. חוגים בקטגוריות אחרות (או חוגים בלי קטגוריה מתאימה) לא מקבלים
+ * הנחת אחים. המדרגות נשמרות כמערך JSON על החוג, ואם לא הוגדרו — נלקחת
+ * ברירת המחדל הגלובלית (הפונקציה class_sibling_discount_tiers במסד הנתונים).
  */
+
+/** קטגוריות שעליהן חלה הנחת אחים בקופה. גרשיים בשם נינג'ה מתעלמים בהשוואה. */
+const SIBLING_DISCOUNT_CATEGORY_KEYS = new Set(["שחייה", "נינגה"]);
+
+function categoryKey(category: string | null | undefined): string {
+  return (category ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/['ʼ׳`ʹʻʾ]/g, "")
+    .toLowerCase();
+}
+
+export function siblingDiscountAppliesToCategory(
+  category: string | null | undefined
+): boolean {
+  return SIBLING_DISCOUNT_CATEGORY_KEYS.has(categoryKey(category));
+}
+
+/** מחזיר את מדרגות ההנחה לקופה — ריק לכל קטגוריה שאינה שחייה או נינג'ה. */
+export function siblingTiersForCheckout(
+  category: string | null | undefined,
+  tiers: SiblingDiscountTier[]
+): SiblingDiscountTier[] {
+  return siblingDiscountAppliesToCategory(category) ? tiers : [];
+}
 
 export type SiblingDiscountTier = {
   /** ההנחה נפתחת כשמספר הילדים הרשומים גדול או שווה למספר הזה. */

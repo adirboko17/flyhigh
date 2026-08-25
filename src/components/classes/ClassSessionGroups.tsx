@@ -123,11 +123,7 @@ function SlotSessionCard({
         : `${formatDateShort(dates[0])} – ${formatDateShort(dates[dates.length - 1])}`
       : null;
   const availability =
-    group.slot == null
-      ? null
-      : group.slot.available > 0
-        ? `${group.slot.available} מקומות פנויים`
-        : "מלא";
+    group.slot != null && group.slot.available <= 0 ? "מלא" : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-50/40">

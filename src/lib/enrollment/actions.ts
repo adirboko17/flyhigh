@@ -29,6 +29,7 @@ import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
   parseSiblingTiers,
+  siblingTiersForCheckout,
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
@@ -223,7 +224,7 @@ async function classSubtotal(
   return calculateOrderTotal(
     proration.unitPrice,
     participants.length,
-    parseSiblingTiers(tiersJson),
+    siblingTiersForCheckout(cls.category, parseSiblingTiers(tiersJson)),
     alreadyInCategory + participants.length
   ).total;
 }
@@ -364,8 +365,8 @@ export async function completeClassEnrollmentPayment(input: {
       success: false,
       error:
         available <= 0
-          ? "אין מקומות פנויים במועד זה."
-          : `נותרו רק ${available} מקומות פנויים במועד זה.`,
+          ? "החוג מלא. אפשר להצטרף לרשימת המתנה."
+          : "אין מספיק מקומות במועד זה להרשמה של כל המתאמנים שנבחרו.",
     };
   }
 
@@ -399,7 +400,7 @@ export async function completeClassEnrollmentPayment(input: {
   const order = calculateOrderTotal(
     unitPrice,
     participants.length,
-    parseSiblingTiers(tiersJson),
+    siblingTiersForCheckout(cls.category, parseSiblingTiers(tiersJson)),
     alreadyEnrolledCount + participants.length
   );
 

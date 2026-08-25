@@ -6,7 +6,10 @@ import {
 } from "@/lib/class-audience";
 import { createClient } from "@/lib/supabase/server";
 import { listFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
-import { parseSiblingTiers } from "@/lib/finance/siblingDiscount";
+import {
+  parseSiblingTiers,
+  siblingTiersForCheckout,
+} from "@/lib/finance/siblingDiscount";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import type { PublicClass, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -42,7 +45,10 @@ export async function ClassEnrollmentPanel({
   const { data: tiersJson } = await supabase.rpc("class_sibling_discount_tiers", {
     p_class_id: cls.id,
   });
-  const siblingTiers = parseSiblingTiers(tiersJson);
+  const siblingTiers = siblingTiersForCheckout(
+    cls.category,
+    parseSiblingTiers(tiersJson)
+  );
 
   let enrollmentContent = (
     <GuestEnrollmentActions
@@ -155,30 +161,9 @@ export async function ClassEnrollmentPanel({
           </div>
         )}
 
-        {cls.pick_one_slot && slots.length > 0 ? (
-          <div className="mt-5 rounded-2xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
-            לכל מועד יש {cls.capacity} מקומות. המקומות הפנויים מופיעים אחרי
-            בחירת יום ושעה.
-          </div>
-        ) : (
-          <div className="mt-5 rounded-2xl bg-ink-50 p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-ink-500">מקומות פנויים</span>
-              <span className="font-bold text-ink-900">
-                {soldOut ? "מלא" : `${cls.available} מתוך ${cls.capacity}`}
-              </span>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-200">
-              <div
-                className="h-full rounded-full bg-brand-gradient"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (Number(cls.taken_count) / Math.max(cls.capacity, 1)) * 100
-                  )}%`,
-                }}
-              />
-            </div>
+        {soldOut && (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            החוג מלא. אפשר להצטרף לרשימת המתנה.
           </div>
         )}
 

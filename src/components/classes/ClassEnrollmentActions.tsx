@@ -267,8 +267,8 @@ export function ClassEnrollmentActions({
       if (!slotSoldOut && prev.length >= maxSelectable) {
         setError(
           maxSelectable <= 0
-            ? "אין מקומות פנויים בחוג."
-            : `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"} — מספר המקומות הפנויים בחוג.`
+            ? "החוג מלא."
+            : "אין מספיק מקומות בחוג להרשמה של כל המתאמנים שנבחרו."
         );
         return prev;
       }
@@ -328,8 +328,8 @@ export function ClassEnrollmentActions({
     if (!slotSoldOut && selectedIds.length > maxSelectable) {
       setError(
         maxSelectable <= 0
-          ? "אין מקומות פנויים במועד זה."
-          : `נותרו רק ${maxSelectable} מקומות פנויים במועד זה.`
+          ? "המועד מלא."
+          : "אין מספיק מקומות במועד זה להרשמה של כל המתאמנים שנבחרו."
       );
       return;
     }
@@ -436,11 +436,9 @@ export function ClassEnrollmentActions({
               </p>
             )}
 
-            {!slotSoldOut && maxSelectable < availableTrainees.length && (
+            {!slotSoldOut && maxSelectable < availableTrainees.length && maxSelectable <= 0 && (
               <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
-                {maxSelectable <= 0
-                  ? "אין מקומות פנויים בחוג."
-                  : `נותרו ${maxSelectable} מקומות פנויים — ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"}.`}
+                החוג מלא. אפשר להצטרף לרשימת המתנה.
               </p>
             )}
 
@@ -532,11 +530,11 @@ export function ClassEnrollmentActions({
                       {" · "}
                       {formatClassGenderPolicy(slot.gender_policy)}
                     </span>
+                    {full && (
                     <span className="mt-1 block text-xs text-ink-500">
-                      {full
-                        ? "המועד מלא — אפשר להצטרף לרשימת המתנה"
-                        : `${slot.available} מקומות פנויים`}
+                        המועד מלא — אפשר להצטרף לרשימת המתנה
                     </span>
+                    )}
                   </span>
                   <span
                     className={cn(
@@ -562,9 +560,7 @@ export function ClassEnrollmentActions({
         description={
           availableTrainees.length === 0
             ? "אין מתאמנים מתאימים להרשמה לחוג זה."
-            : maxSelectable < availableTrainees.length
-              ? `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"} לפי המקומות הפנויים.`
-              : "סמנו מי נרשם לחוג — אפשר לבחור גם את ההורה."
+            : "סמנו מי נרשם לחוג — אפשר לבחור גם את ההורה."
         }
       >
         <div className="space-y-3">
@@ -575,11 +571,9 @@ export function ClassEnrollmentActions({
                 onClick={toggleAll}
                 className="text-xs font-semibold text-brand-600 hover:underline"
               >
-                {selectedIds.length === maxSelectable
+                {selectedIds.length === maxSelectable && maxSelectable > 0
                   ? "ביטול הכל"
-                  : maxSelectable < availableTrainees.length
-                    ? `בחירת ${maxSelectable} הראשונים`
-                    : "בחירת כולם"}
+                  : "בחירת כולם"}
               </button>
             </div>
           )}
@@ -748,10 +742,7 @@ function SlotPickerTrigger({
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
               {formatClassGenderPolicy(selectedSlot.gender_policy)}
-              {" · "}
-              {selectedSlot.available > 0
-                ? `${selectedSlot.available} מקומות פנויים`
-                : "המועד מלא"}
+              {selectedSlot.available <= 0 ? " · המועד מלא" : ""}
             </span>
           </>
         ) : (

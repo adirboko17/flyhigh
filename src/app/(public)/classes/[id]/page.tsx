@@ -200,11 +200,9 @@ export default async function ClassDetailPage({
                           slot.gender_policy
                         )}
                       </span>
-                      <span className="text-ink-500">
-                        {slot.available > 0
-                          ? `${slot.available} מקומות פנויים`
-                          : "מלא"}
-                      </span>
+                      {slot.available <= 0 && (
+                        <span className="text-ink-500">מלא</span>
+                      )}
                     </li>
                   ))}
                 </ul>

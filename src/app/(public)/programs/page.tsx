@@ -144,13 +144,14 @@ export default async function ProgramsPage() {
             />
           </ScrollReveal>
 
-          <div className="grid items-start gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {activities.map((program, index) => {
                 const card = activityCardPresentation(program);
                 return (
                 <ScrollReveal
                   key={program.id}
                   delay={Math.min((index % 2) * 90, 90)}
+                  className="h-full"
                 >
                   <PlanPurchaseTrigger
                     planKind="program"
@@ -161,7 +162,7 @@ export default async function ProgramsPage() {
                     priceTiers={parseActivityPriceTiers(program.price_tiers)}
                     extraHalfHourPrice={program.extra_half_hour_price}
                     viewer={viewer}
-                    className="hover:translate-y-0 hover:shadow-none"
+                    className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard
                       compact
