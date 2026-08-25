@@ -443,7 +443,7 @@ export function RegisterForm() {
 
       {step === 1 && (
         <div className="animate-fade-in flex flex-col gap-4">
-          <Field label="שם מלא" htmlFor="fullName" required variant="ds">
+          <Field label="שם מלא — הורה / משתתף מבוגר" htmlFor="fullName" required variant="ds">
             <Input
               id="fullName"
               variant="ds"
