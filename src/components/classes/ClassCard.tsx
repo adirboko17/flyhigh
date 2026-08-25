@@ -59,15 +59,10 @@ export function ClassCard({
       : `יום ${dayLabel(cls.day_of_week)}`;
 
   const audienceLabel =
-    cls.audience_type === "open"
+    cls.audience_type === "grade" &&
+    (cls.grade_min != null || cls.grade_max != null)
       ? formatClassAudience(cls)
-      : cls.audience_type === "grade"
-        ? cls.grade_min != null || cls.grade_max != null
-          ? formatClassAudience(cls)
-          : null
-        : cls.age_min != null || cls.age_max != null
-          ? formatClassAudience(cls)
-          : null;
+      : null;
 
   const genderLabel =
     cls.gender_policy && cls.gender_policy !== "mixed"

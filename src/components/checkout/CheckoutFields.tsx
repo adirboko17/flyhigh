@@ -162,7 +162,7 @@ export function BankTransferDetails({ className }: { className?: string }) {
         className
       )}
     >
-      <p className="font-semibold">פרטי חשבון בנק</p>
+      <p className="font-semibold">{BANK_TRANSFER_ACCOUNT.title}</p>
       <ul className="mt-2 list-none space-y-1 p-0">
         <li>{BANK_TRANSFER_ACCOUNT.bank}</li>
         <li>סניף {BANK_TRANSFER_ACCOUNT.branch}</li>

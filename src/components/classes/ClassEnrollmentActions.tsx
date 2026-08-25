@@ -26,6 +26,7 @@ import {
   type AgeEligibility,
 } from "@/lib/enrollment/ageValidation";
 import { countFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
+import { PARENT_TRAINEE_ID } from "@/lib/enrollment/trainees";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
 import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
 import { Modal } from "@/components/ui/Modal";
@@ -40,6 +41,13 @@ type Child = {
   birth_date: string | null;
   hasHealthDeclaration: boolean;
 };
+
+type ParentTrainee = {
+  fullName: string;
+  birthDate: string | null;
+};
+
+type Trainee = Child & { kind: "parent" | "child" };
 
 type ExistingEnrollment = {
   id: string;
@@ -68,6 +76,7 @@ interface ClassEnrollmentActionsProps {
   soldOut: boolean;
   ended?: boolean;
   availableSpots: number;
+  parent: ParentTrainee;
   kids: Child[];
   enrollments: ExistingEnrollment[];
   waitlist: WaitlistEntry[];
@@ -90,6 +99,7 @@ export function ClassEnrollmentActions({
   soldOut,
   ended = false,
   availableSpots,
+  parent,
   kids,
   enrollments,
   waitlist,
@@ -105,28 +115,32 @@ export function ClassEnrollmentActions({
     slots.map((slot) => slot.gender_policy)
   );
   const ageRestricted = hasAgeRestriction(ageMin, ageMax);
-  const eligibilityByChildId = useMemo(
-    () =>
-      new Map(
-        kids.map((child) => {
-          const eligibility: AgeEligibility = child.hasHealthDeclaration
-            ? getAgeEligibility(
-                child.birth_date,
-                ageMin,
-                ageMax,
-                child.full_name
-              )
-            : {
-                eligible: false,
-                age: null,
-                ageLabel: null,
-                reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
-              };
-          return [child.id, eligibility] as const;
-        })
-      ),
-    [kids, ageMin, ageMax]
-  );
+  const eligibilityByChildId = useMemo(() => {
+    const map = new Map<string, AgeEligibility>();
+    map.set(
+      PARENT_TRAINEE_ID,
+      getAgeEligibility(parent.birthDate, ageMin, ageMax, parent.fullName)
+    );
+    for (const child of kids) {
+      map.set(
+        child.id,
+        child.hasHealthDeclaration
+          ? getAgeEligibility(
+              child.birth_date,
+              ageMin,
+              ageMax,
+              child.full_name
+            )
+          : {
+              eligible: false,
+              age: null,
+              ageLabel: null,
+              reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
+            }
+      );
+    }
+    return map;
+  }, [kids, parent.birthDate, parent.fullName, ageMin, ageMax]);
   const enrolledChildIds = useMemo(
     () =>
       new Set(
@@ -140,6 +154,19 @@ export function ClassEnrollmentActions({
         waitlist.map((w) => w.child_id).filter(Boolean) as string[]
       ),
     [waitlist]
+  );
+  const parentAlreadyTaken =
+    enrollments.some((enrollment) => enrollment.child_id == null) ||
+    waitlist.some((entry) => entry.child_id == null);
+  const parentTrainee = useMemo<Trainee>(
+    () => ({
+      id: PARENT_TRAINEE_ID,
+      full_name: parent.fullName,
+      birth_date: parent.birthDate,
+      hasHealthDeclaration: true,
+      kind: "parent",
+    }),
+    [parent.fullName, parent.birthDate]
   );
   const availableChildren = useMemo(
     () =>
@@ -162,6 +189,23 @@ export function ClassEnrollmentActions({
       ),
     [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
   );
+  const parentEligible =
+    !parentAlreadyTaken &&
+    (eligibilityByChildId.get(PARENT_TRAINEE_ID)?.eligible ?? true);
+  const availableTrainees = useMemo<Trainee[]>(
+    () => [
+      ...(parentEligible ? [parentTrainee] : []),
+      ...availableChildren.map((child) => ({ ...child, kind: "child" as const })),
+    ],
+    [parentEligible, parentTrainee, availableChildren]
+  );
+  const ineligibleTrainees = useMemo<Trainee[]>(
+    () => [
+      ...(!parentAlreadyTaken && !parentEligible ? [parentTrainee] : []),
+      ...ineligibleChildren.map((child) => ({ ...child, kind: "child" as const })),
+    ],
+    [parentAlreadyTaken, parentEligible, parentTrainee, ineligibleChildren]
+  );
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [weeklySlotId, setWeeklySlotId] = useState<string>(
@@ -176,9 +220,9 @@ export function ClassEnrollmentActions({
     : soldOut;
 
   const maxSelectable = useMemo(() => {
-    if (needsSlot || slotSoldOut) return availableChildren.length;
-    return Math.min(availableChildren.length, Math.max(0, slotSpots));
-  }, [availableChildren.length, needsSlot, slotSoldOut, slotSpots]);
+    if (needsSlot || slotSoldOut) return availableTrainees.length;
+    return Math.min(availableTrainees.length, Math.max(0, slotSpots));
+  }, [availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
@@ -187,16 +231,23 @@ export function ClassEnrollmentActions({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSelectedIds(availableChildren.slice(0, maxSelectable).map((c) => c.id));
-    setError(null);
-  }, [availableChildren, maxSelectable]);
+    const allowed = new Set(availableTrainees.map((trainee) => trainee.id));
+    setSelectedIds((prev) => {
+      const next = prev.filter((id) => allowed.has(id)).slice(0, maxSelectable);
+      return next.length === prev.length && next.every((id, i) => id === prev[i])
+        ? prev
+        : next;
+    });
+  }, [availableTrainees, maxSelectable]);
 
-  const selectedChildren = availableChildren.filter((c) =>
-    selectedIds.includes(c.id)
+  const selectedTrainees = availableTrainees.filter((trainee) =>
+    selectedIds.includes(trainee.id)
   );
+  const selectedChildIds = selectedIds.filter((id) => id !== PARENT_TRAINEE_ID);
+  const includeSelf = selectedIds.includes(PARENT_TRAINEE_ID);
   const enrolledSiblings = countFamilyChildrenInCategory(
     categorySiblingIds,
-    selectedIds
+    selectedChildIds
   );
 
   const atSelectionLimit = !slotSoldOut && selectedIds.length >= maxSelectable;
@@ -204,7 +255,7 @@ export function ClassEnrollmentActions({
   function toggleChild(childId: string) {
     const eligibility = eligibilityByChildId.get(childId);
     if (eligibility && !eligibility.eligible) {
-      setError(eligibility.reason ?? "הילד/ה אינו/אינה בטווח הגילאים של החוג.");
+      setError(eligibility.reason ?? "המתאמן/ת אינו/אינה בטווח הגילאים של החוג.");
       return;
     }
 
@@ -217,7 +268,7 @@ export function ClassEnrollmentActions({
         setError(
           maxSelectable <= 0
             ? "אין מקומות פנויים בחוג."
-            : `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "ילד/ה" : "ילדים"} — מספר המקומות הפנויים בחוג.`
+            : `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"} — מספר המקומות הפנויים בחוג.`
         );
         return prev;
       }
@@ -230,7 +281,7 @@ export function ClassEnrollmentActions({
     if (selectedIds.length === maxSelectable && maxSelectable > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(availableChildren.slice(0, maxSelectable).map((c) => c.id));
+      setSelectedIds(availableTrainees.slice(0, maxSelectable).map((c) => c.id));
     }
     setError(null);
   }
@@ -241,7 +292,7 @@ export function ClassEnrollmentActions({
       return;
     }
     if (selectedIds.length === 0) {
-      setError("נא לבחור לפחות ילד/ה אחד/ת.");
+      setError("נא לבחור מתאמן או מתאמנת.");
       return;
     }
 
@@ -250,7 +301,8 @@ export function ClassEnrollmentActions({
 
     const result = await joinClassWaitlist({
       classId,
-      childIds: selectedIds,
+      childIds: selectedChildIds,
+      includeSelf,
       weeklySlotId: pickOneSlot ? weeklySlotId || null : null,
     });
 
@@ -270,7 +322,7 @@ export function ClassEnrollmentActions({
       return;
     }
     if (selectedIds.length === 0) {
-      setError("נא לבחור לפחות ילד/ה אחד/ת.");
+      setError("נא לבחור מתאמן או מתאמנת.");
       return;
     }
     if (!slotSoldOut && selectedIds.length > maxSelectable) {
@@ -289,19 +341,6 @@ export function ClassEnrollmentActions({
     setCheckoutOpen(true);
   }
 
-  if (kids.length === 0 && !ended) {
-    return (
-      <div className="mt-5 space-y-3">
-        <p className="text-sm text-ink-600">
-          כדי להירשם לחוג, הוסיפו תחילה ילד/ה לפרופיל המשפחתי.
-        </p>
-        <ButtonLink href="/parent/dashboard#children" size="lg" className="w-full">
-          הוספת ילד/ה
-        </ButtonLink>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="mt-5 space-y-4">
@@ -313,8 +352,8 @@ export function ClassEnrollmentActions({
             title="כבר רשומים לחוג זה"
             subtitle={
               enrollments.length === 1
-                ? "ילד/ה אחד/ת"
-                : `${enrollments.length} ילדים`
+                ? "מתאמן/ת אחד/ת"
+                : `${enrollments.length} מתאמנים`
             }
             expanded={enrollmentsExpanded}
             onToggle={() => setEnrollmentsExpanded((open) => !open)}
@@ -337,7 +376,8 @@ export function ClassEnrollmentActions({
                     className="flex items-center justify-between gap-3 py-2.5 first:pt-2"
                   >
                     <span className="min-w-0 truncate text-sm font-medium text-ink-900">
-                      {e.children?.full_name ?? "ילד/ה"}
+                      {e.children?.full_name ??
+                        (e.child_id == null ? parent.fullName : "מתאמן/ת")}
                     </span>
                     <Badge tone={statusBadge.tone} className="shrink-0">
                       {statusBadge.label}
@@ -361,7 +401,8 @@ export function ClassEnrollmentActions({
                   className="flex flex-wrap items-center gap-2 text-sm"
                 >
                   <span className="font-medium text-ink-900">
-                    {w.children?.full_name ?? "ילד/ה"}
+                    {w.children?.full_name ??
+                      (w.child_id == null ? parent.fullName : "מתאמן/ת")}
                   </span>
                   <Badge tone={WAITLIST_STATUS[w.status].tone}>
                     {WAITLIST_STATUS[w.status].label}
@@ -372,7 +413,7 @@ export function ClassEnrollmentActions({
           </div>
         )}
 
-        {!ended && (availableChildren.length > 0 || ineligibleChildren.length > 0) ? (
+        {!ended && (availableTrainees.length > 0 || ineligibleTrainees.length > 0) ? (
           <div className="space-y-3">
             {pickOneSlot && slots.length > 0 && (
               <SlotPickerTrigger
@@ -383,9 +424,9 @@ export function ClassEnrollmentActions({
               />
             )}
 
-            {enrollments.length > 0 && availableChildren.length > 0 && (
+            {enrollments.length > 0 && availableTrainees.length > 0 && (
               <p className="text-sm text-ink-600">
-                ניתן להירשם גם עבור ילד/ה נוסף/ת:
+                ניתן להירשם גם עבור מתאמן או מתאמנת נוספים:
               </p>
             )}
 
@@ -395,17 +436,17 @@ export function ClassEnrollmentActions({
               </p>
             )}
 
-            {!slotSoldOut && maxSelectable < availableChildren.length && (
+            {!slotSoldOut && maxSelectable < availableTrainees.length && (
               <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 {maxSelectable <= 0
                   ? "אין מקומות פנויים בחוג."
-                  : `נותרו ${maxSelectable} מקומות פנויים — ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "ילד/ה" : "ילדים"}.`}
+                  : `נותרו ${maxSelectable} מקומות פנויים — ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"}.`}
               </p>
             )}
 
             <ChildPickerTrigger
-              selectedChildren={selectedChildren}
-              availableCount={availableChildren.length}
+              selectedTrainees={selectedTrainees}
+              availableCount={availableTrainees.length}
               eligibilityByChildId={eligibilityByChildId}
               onOpen={() => setChildPickerOpen(true)}
             />
@@ -437,7 +478,7 @@ export function ClassEnrollmentActions({
                   : slotSoldOut
                     ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
                     : selectedIds.length > 1
-                      ? `המשך לתשלום (${selectedIds.length} ילדים)`
+                      ? `המשך לתשלום (${selectedIds.length} מתאמנים)`
                       : "המשך לתשלום"}
             </Button>
           </div>
@@ -447,9 +488,9 @@ export function ClassEnrollmentActions({
             <p className="text-sm text-ink-500">
               {ended
                 ? "לא ניתן להירשם לחוג שהסתיים."
-                : ineligibleChildren.length > 0
-                  ? "אף אחד מהילדים אינו בטווח הגילאים של החוג."
-                  : "כל הילדים כבר רשומים לחוג זה."}
+                : ineligibleTrainees.length > 0
+                  ? "אין מתאמן או מתאמנת בטווח הגילאים של החוג."
+                  : "כל המתאמנים בחשבון כבר רשומים לחוג זה."}
             </p>
           )
         )}
@@ -517,17 +558,17 @@ export function ClassEnrollmentActions({
       <Modal
         open={childPickerOpen}
         onClose={() => setChildPickerOpen(false)}
-        title="בחירת ילדים"
+        title="בחירת מתאמן או מתאמנת"
         description={
-          availableChildren.length === 0
-            ? "אין ילדים מתאימים להרשמה לחוג זה."
-            : maxSelectable < availableChildren.length
-              ? `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "ילד/ה" : "ילדים"} לפי המקומות הפנויים.`
-              : "סמנו את הילדים שנרשמים לחוג."
+          availableTrainees.length === 0
+            ? "אין מתאמנים מתאימים להרשמה לחוג זה."
+            : maxSelectable < availableTrainees.length
+              ? `ניתן לבחור עד ${maxSelectable} ${maxSelectable === 1 ? "מתאמן/ת" : "מתאמנים"} לפי המקומות הפנויים.`
+              : "סמנו מי נרשם לחוג — אפשר לבחור גם את ההורה."
         }
       >
         <div className="space-y-3">
-          {availableChildren.length > 1 && maxSelectable > 0 && (
+          {availableTrainees.length > 1 && maxSelectable > 0 && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -536,14 +577,14 @@ export function ClassEnrollmentActions({
               >
                 {selectedIds.length === maxSelectable
                   ? "ביטול הכל"
-                  : maxSelectable < availableChildren.length
+                  : maxSelectable < availableTrainees.length
                     ? `בחירת ${maxSelectable} הראשונים`
                     : "בחירת כולם"}
               </button>
             </div>
           )}
           <ul className="space-y-2">
-            {availableChildren.map((child) => {
+            {availableTrainees.map((child) => {
               const checked = selectedIds.includes(child.id);
               const disabled = atSelectionLimit && !checked;
               const eligibility = eligibilityByChildId.get(child.id);
@@ -570,11 +611,15 @@ export function ClassEnrollmentActions({
                       <span className="block font-bold text-ink-900">
                         {child.full_name}
                       </span>
-                      {eligibility?.ageLabel && (
-                        <span className="mt-0.5 block text-xs text-ink-500">
-                          גיל {eligibility.ageLabel}
-                        </span>
-                      )}
+                      <span className="mt-0.5 block text-xs text-ink-500">
+                        {child.kind === "parent"
+                          ? eligibility?.ageLabel
+                            ? `הורה · גיל ${eligibility.ageLabel}`
+                            : "הורה"
+                          : eligibility?.ageLabel
+                            ? `גיל ${eligibility.ageLabel}`
+                            : null}
+                      </span>
                     </span>
                     <span
                       className={cn(
@@ -590,7 +635,7 @@ export function ClassEnrollmentActions({
                 </li>
               );
             })}
-            {ineligibleChildren.map((child) => {
+            {ineligibleTrainees.map((child) => {
               const eligibility = eligibilityByChildId.get(child.id);
               return (
                 <li key={child.id}>
@@ -598,6 +643,11 @@ export function ClassEnrollmentActions({
                     <div className="min-w-0 flex-1">
                       <span className="block font-medium text-ink-700">
                         {child.full_name}
+                        {child.kind === "parent" && (
+                          <span className="mr-1.5 text-xs font-normal text-ink-400">
+                            הורה
+                          </span>
+                        )}
                         {eligibility?.ageLabel && (
                             <span className="mr-1.5 text-xs font-normal text-ink-400">
                               גיל {eligibility.ageLabel}
@@ -634,9 +684,10 @@ export function ClassEnrollmentActions({
           unitPrice={classPrice}
           proration={proration}
           billingMonths={billingMonths}
-          selectedChildren={selectedChildren}
+          selectedChildren={selectedTrainees}
+          includeSelf={includeSelf}
           siblingTiers={siblingTiers}
-          enrolledSiblings={enrollments.length}
+          enrolledSiblings={enrollments.filter((enrollment) => enrollment.child_id).length}
           weeklySlotId={weeklySlotId || null}
           weeklySlotLabel={
             selectedSlot
@@ -722,26 +773,26 @@ function SlotPickerTrigger({
 }
 
 function ChildPickerTrigger({
-  selectedChildren,
+  selectedTrainees,
   availableCount,
   eligibilityByChildId,
   onOpen,
 }: {
-  selectedChildren: Child[];
+  selectedTrainees: Trainee[];
   availableCount: number;
   eligibilityByChildId: Map<string, AgeEligibility>;
   onOpen: () => void;
 }) {
-  const selected = selectedChildren.length > 0;
-  const first = selectedChildren[0];
+  const selected = selectedTrainees.length > 0;
+  const first = selectedTrainees[0];
   const firstAge = first
     ? eligibilityByChildId.get(first.id)?.ageLabel
     : null;
   const title = !selected
-    ? "בחירת ילדים"
-    : selectedChildren.length === 1
+    ? "בחרו מתאמן או מתאמנת"
+    : selectedTrainees.length === 1
       ? first.full_name
-      : selectedChildren.map((child) => child.full_name).join(", ");
+      : selectedTrainees.map((trainee) => trainee.full_name).join(", ");
 
   return (
     <button
@@ -760,36 +811,40 @@ function ChildPickerTrigger({
           selected ? "bg-brand-600" : "bg-brand-500"
         )}
       >
-        <Icon name={selected ? "check" : "child"} size={20} />
+        <Icon name={selected ? "check" : "user"} size={20} />
       </span>
       <span className="min-w-0 flex-1">
         {selected ? (
           <>
             <span className="block text-xs font-medium text-brand-700">
-              {selectedChildren.length === 1 ? "הילד/ה שנבחר/ה" : "הילדים שנבחרו"}
+              {selectedTrainees.length === 1
+                ? "המתאמן/ת שנבחר/ה"
+                : "המתאמנים שנבחרו"}
             </span>
             <span className="mt-0.5 block truncate text-sm font-bold text-ink-900">
               {title}
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
-              {selectedChildren.length === 1
-                ? firstAge != null
-                  ? `גיל ${firstAge}`
-                  : "נרשם לחוג"
-                : `${selectedChildren.length} ילדים נבחרו`}
+              {selectedTrainees.length === 1
+                ? first.kind === "parent"
+                  ? firstAge != null
+                    ? `הורה · גיל ${firstAge}`
+                    : "הורה"
+                  : firstAge != null
+                    ? `גיל ${firstAge}`
+                    : "נרשם לחוג"
+                : `${selectedTrainees.length} מתאמנים נבחרו`}
             </span>
           </>
         ) : (
           <>
             <span className="block text-sm font-bold text-ink-900">
-              בחירת ילדים
+              בחרו מתאמן או מתאמנת
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
               {availableCount === 0
-                ? "אין ילדים מתאימים לחוג זה"
-                : availableCount === 1
-                  ? "בחרו את הילד/ה שנרשם/ת לחוג"
-                  : `יש ${availableCount} ילדים בחשבון · בחרו מי נרשם`}
+                ? "אין מתאמנים מתאימים לחוג זה"
+                : "אפשר לבחור את ההורה או ילד/ה מהחשבון"}
             </span>
           </>
         )}

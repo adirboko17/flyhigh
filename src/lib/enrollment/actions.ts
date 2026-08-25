@@ -43,6 +43,7 @@ import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
 } from "@/lib/enrollment/receiptLabel";
+import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 
 /** אמצעי התשלום שאפשר לבחור במסך ההרשמה. */
 export type CheckoutPaymentMethod = "credit_card" | DeferredPaymentMethod;
@@ -103,6 +104,7 @@ export async function previewClassCoupon(input: {
   code: string;
   classId: string;
   childIds: string[];
+  includeSelf?: boolean;
   weeklySlotId?: string | null;
 }): Promise<CouponPreviewResult> {
   const profile = await requireRole("parent");
@@ -112,9 +114,12 @@ export async function previewClassCoupon(input: {
     return { success: false, error: "נא להזין קוד קופון תקין." };
   }
 
-  const uniqueChildIds = [...new Set(input.childIds.filter(Boolean))];
-  if (uniqueChildIds.length === 0) {
-    return { success: false, error: "נא לבחור לפחות ילד/ה אחד/ת." };
+  const { uniqueChildIds, participants } = resolveClassParticipants(
+    input.childIds,
+    Boolean(input.includeSelf)
+  );
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור מתאמן או מתאמנת." };
   }
 
   const supabase = await createClient();
@@ -123,6 +128,7 @@ export async function previewClassCoupon(input: {
     profile.id,
     input.classId,
     uniqueChildIds,
+    Boolean(input.includeSelf),
     input.weeklySlotId
   );
 
@@ -182,6 +188,7 @@ async function classSubtotal(
   parentId: string,
   classId: string,
   childIds: string[],
+  includeSelf: boolean,
   weeklySlotId?: string | null
 ): Promise<number | null> {
   const [{ data: cls }, { data: tiersJson }] = await Promise.all([
@@ -207,6 +214,7 @@ async function classSubtotal(
   ]);
   if (proration.hasEnded) return null;
 
+  const { participants } = resolveClassParticipants(childIds, includeSelf);
   const alreadyInCategory = countFamilyChildrenInCategory(
     categorySiblingIds,
     childIds
@@ -214,15 +222,16 @@ async function classSubtotal(
 
   return calculateOrderTotal(
     proration.unitPrice,
-    childIds.length,
+    participants.length,
     parseSiblingTiers(tiersJson),
-    alreadyInCategory + childIds.length
+    alreadyInCategory + participants.length
   ).total;
 }
 
 export async function completeClassEnrollmentPayment(input: {
   classId: string;
   childIds: string[];
+  includeSelf?: boolean;
   paymentMethod: CheckoutPaymentMethod;
   couponCode?: string | null;
   /** תווית לקבלה — אם נבחרה, מחליפה את שם החוג בתיאור החיוב/הקבלה. */
@@ -238,9 +247,12 @@ export async function completeClassEnrollmentPayment(input: {
 
   const deferred = isDeferredPaymentMethod(paymentMethod);
 
-  const uniqueChildIds = [...new Set(childIds.filter(Boolean))];
-  if (uniqueChildIds.length === 0) {
-    return { success: false, error: "נא לבחור לפחות ילד/ה אחד/ת." };
+  const { uniqueChildIds, participants, includeSelf } = resolveClassParticipants(
+    childIds,
+    Boolean(input.includeSelf)
+  );
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור מתאמן או מתאמנת." };
   }
 
   const supabase = await createClient();
@@ -255,13 +267,15 @@ export async function completeClassEnrollmentPayment(input: {
         .eq("id", classId)
         .in("status", ["active", "full"])
         .maybeSingle(),
-      supabase
-        .from("children")
-        .select(
-          "id, full_name, gender, birth_date, school_grade, grade_school_year"
-        )
-        .eq("parent_id", profile.id)
-        .in("id", uniqueChildIds),
+      uniqueChildIds.length > 0
+        ? supabase
+            .from("children")
+            .select(
+              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+            )
+            .eq("parent_id", profile.id)
+            .in("id", uniqueChildIds)
+        : Promise.resolve({ data: [] }),
       supabase
         .from("enrollments")
         .select("child_id")
@@ -301,18 +315,19 @@ export async function completeClassEnrollmentPayment(input: {
     }
   }
 
-  if (!children || children.length !== uniqueChildIds.length) {
+  const selectedChildren = children ?? [];
+  if (selectedChildren.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
 
   const healthError = await requireHealthDeclarations(
     supabase,
     profile.id,
-    children
+    selectedChildren
   );
   if (healthError) return { success: false, error: healthError };
 
-  const eligibilityError = childrenEligibilityError(cls, children, slotGenders);
+  const eligibilityError = childrenEligibilityError(cls, selectedChildren, slotGenders);
   if (eligibilityError) {
     return { success: false, error: eligibilityError };
   }
@@ -326,6 +341,12 @@ export async function completeClassEnrollmentPayment(input: {
   if (duplicate) {
     return { success: false, error: "אחד או יותר מהילדים כבר רשומים לחוג זה." };
   }
+  if (
+    includeSelf &&
+    (existingEnrollments ?? []).some((enrollment) => enrollment.child_id == null)
+  ) {
+    return { success: false, error: "ההורה כבר רשום לחוג זה." };
+  }
 
   let takenQuery = supabase
     .from("enrollments")
@@ -338,7 +359,7 @@ export async function completeClassEnrollmentPayment(input: {
   const { count: takenCount } = await takenQuery;
 
   const available = cls.capacity - (takenCount ?? 0);
-  if (uniqueChildIds.length > available) {
+  if (participants.length > available) {
     return {
       success: false,
       error:
@@ -377,9 +398,9 @@ export async function completeClassEnrollmentPayment(input: {
   );
   const order = calculateOrderTotal(
     unitPrice,
-    uniqueChildIds.length,
+    participants.length,
     parseSiblingTiers(tiersJson),
-    alreadyEnrolledCount + uniqueChildIds.length
+    alreadyEnrolledCount + participants.length
   );
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
@@ -421,13 +442,13 @@ export async function completeClassEnrollmentPayment(input: {
   const totalAmount = Math.round((order.total - couponDiscount) * 100) / 100;
   const childAmounts = splitSiblingAmounts(
     unitPrice,
-    uniqueChildIds.length,
+    participants.length,
     order.percent,
     alreadyEnrolledCount,
     totalAmount,
   );
-  const amountPerChild = new Map(
-    uniqueChildIds.map((childId, index) => [childId, childAmounts[index]])
+  const amountPerParticipant = new Map(
+    participants.map((participantId, index) => [participantId, childAmounts[index]])
   );
 
   const receiptLabel = await resolveReceiptLabelForCheckout(
@@ -441,7 +462,7 @@ export async function completeClassEnrollmentPayment(input: {
 
   const chargeDescription = chargeDescriptionForCheckout({
     productTitle: cls.title,
-    participantCount: uniqueChildIds.length,
+    participantCount: participants.length,
     kind: "class",
     customLabel: receiptLabel.description,
   });
@@ -451,7 +472,7 @@ export async function completeClassEnrollmentPayment(input: {
   const awaitingCardcom = !deferred && totalAmount > 0;
 
   const paidAt = new Date().toISOString();
-  const enrollmentRows = uniqueChildIds.map((childId, index) => {
+  const enrollmentRows = participants.map((childId, index) => {
     const paysFull =
       order.percent <= 0 || (alreadyEnrolledCount === 0 && index === 0);
     return {
@@ -491,9 +512,7 @@ export async function completeClassEnrollmentPayment(input: {
       createdEnrollments.map((enrollment) => ({
         parent_id: profile.id,
         enrollment_id: enrollment.id,
-        amount:
-          (enrollment.child_id ? amountPerChild.get(enrollment.child_id) : null) ??
-          unitPrice,
+        amount: amountPerParticipant.get(enrollment.child_id) ?? unitPrice,
         payment_method: paymentMethod,
         status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
         paid_at: deferred || awaitingCardcom ? null : paidAt,
@@ -568,7 +587,10 @@ export async function completeClassEnrollmentPayment(input: {
       product: chargeDescription,
       amount: totalAmount,
       paymentMethod,
-      participants: children.map((child) => child.full_name),
+      participants: [
+        ...selectedChildren.map((child) => child.full_name),
+        ...(includeSelf ? [profile.full_name] : []),
+      ],
     });
   }
 
@@ -588,13 +610,17 @@ export async function completeClassEnrollmentPayment(input: {
 export async function joinClassWaitlist(input: {
   classId: string;
   childIds: string[];
+  includeSelf?: boolean;
   weeklySlotId?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   const profile = await requireRole("parent");
-  const uniqueChildIds = [...new Set(input.childIds.filter(Boolean))];
+  const { uniqueChildIds, participants, includeSelf } = resolveClassParticipants(
+    input.childIds,
+    Boolean(input.includeSelf)
+  );
 
-  if (uniqueChildIds.length === 0) {
-    return { success: false, error: "נא לבחור לפחות ילד/ה אחד/ת." };
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור מתאמן או מתאמנת." };
   }
 
   const supabase = await createClient();
@@ -608,13 +634,15 @@ export async function joinClassWaitlist(input: {
         )
         .eq("id", input.classId)
         .maybeSingle(),
-      supabase
-        .from("children")
-        .select(
-          "id, full_name, gender, birth_date, school_grade, grade_school_year"
-        )
-        .eq("parent_id", profile.id)
-        .in("id", uniqueChildIds),
+      uniqueChildIds.length > 0
+        ? supabase
+            .from("children")
+            .select(
+              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+            )
+            .eq("parent_id", profile.id)
+            .in("id", uniqueChildIds)
+        : Promise.resolve({ data: [] }),
       supabase
         .from("waitlist")
         .select("child_id")
@@ -665,18 +693,19 @@ export async function joinClassWaitlist(input: {
     }
   }
 
-  if (!children || children.length !== uniqueChildIds.length) {
+  const selectedChildren = children ?? [];
+  if (selectedChildren.length !== uniqueChildIds.length) {
     return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
   }
 
   const healthError = await requireHealthDeclarations(
     supabase,
     profile.id,
-    children
+    selectedChildren
   );
   if (healthError) return { success: false, error: healthError };
 
-  const eligibilityError = childrenEligibilityError(cls, children, slotGenders);
+  const eligibilityError = childrenEligibilityError(cls, selectedChildren, slotGenders);
   if (eligibilityError) {
     return { success: false, error: eligibilityError };
   }
@@ -686,10 +715,16 @@ export async function joinClassWaitlist(input: {
       .map((w) => w.child_id)
       .filter(Boolean) as string[]
   );
-  const toAdd = uniqueChildIds.filter((id) => !alreadyWaitlisted.has(id));
+  const parentAlreadyWaitlisted = (existingWaitlist ?? []).some(
+    (entry) => entry.child_id == null
+  );
+  const toAdd: (string | null)[] = uniqueChildIds.filter(
+    (id) => !alreadyWaitlisted.has(id)
+  );
+  if (includeSelf && !parentAlreadyWaitlisted) toAdd.push(null);
 
   if (toAdd.length === 0) {
-    return { success: false, error: "כל הילדים שנבחרו כבר ברשימת המתנה." };
+    return { success: false, error: "כל המתאמנים שנבחרו כבר ברשימת המתנה." };
   }
 
   const { error } = await supabase.from("waitlist").insert(

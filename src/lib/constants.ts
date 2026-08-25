@@ -210,10 +210,11 @@ export const DEFERRED_PAYMENT_HINT: Record<DeferredPaymentMethod, string> = {
 };
 
 export const BANK_TRANSFER_ACCOUNT = {
+  title: "פרטי חשבון בנק חדש",
   bank: "מזרחי מרכז מסחרי ערד",
   branch: "489",
-  account: "302095",
-  holder: "ראם ומורית שפירא",
+  account: "450892",
+  holder: "מורית שפירא",
 } as const;
 
 export function isDeferredPaymentMethod(

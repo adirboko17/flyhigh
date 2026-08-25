@@ -149,11 +149,13 @@ export default async function ClassDetailPage({
                         )
                   }
                 />
+                {cls.audience_type !== "open" && (
                 <DetailRow
                   icon="🎂"
                   label={formatAudienceFieldLabel(cls.audience_type)}
                   value={formatClassAudience(cls)}
                 />
+                )}
               </div>
               {(hasDetailValue(startDateLabel) || hasDetailValue(endDateLabel)) && (
                 <div className="grid grid-cols-1 gap-px sm:mt-4 sm:grid-cols-2 sm:gap-4">

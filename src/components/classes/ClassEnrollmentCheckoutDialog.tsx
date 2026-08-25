@@ -27,6 +27,7 @@ import {
 } from "@/lib/receipt-labels";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
+import { PARENT_TRAINEE_ID } from "@/lib/enrollment/trainees";
 import { formatCurrency, formatDate } from "@/utils/format";
 import {
   completeClassEnrollmentPayment,
@@ -46,6 +47,7 @@ interface ClassEnrollmentCheckoutDialogProps {
   proration: ProratedClassPrice;
   billingMonths?: number | null;
   selectedChildren: Child[];
+  includeSelf?: boolean;
   siblingTiers: SiblingDiscountTier[];
   /** אחים שכבר רשומים לאותה קטגוריה — נספרים למדרגת ההנחה. */
   enrolledSiblings: number;
@@ -62,6 +64,7 @@ export function ClassEnrollmentCheckoutDialog({
   proration,
   billingMonths,
   selectedChildren,
+  includeSelf = false,
   siblingTiers,
   enrolledSiblings,
   weeklySlotId,
@@ -83,6 +86,11 @@ export function ClassEnrollmentCheckoutDialog({
   );
 
   const months = parseBillingMonths(billingMonths);
+  const childIds = selectedChildren
+    .map((child) => child.id)
+    .filter((id) => id !== PARENT_TRAINEE_ID);
+  const selfSelected =
+    includeSelf || selectedChildren.some((child) => child.id === PARENT_TRAINEE_ID);
   const count = selectedChildren.length;
   const order = calculateOrderTotal(
     unitPrice,
@@ -116,7 +124,8 @@ export function ClassEnrollmentCheckoutDialog({
     const result = await previewClassCoupon({
       code: couponInput,
       classId,
-      childIds: selectedChildren.map((c) => c.id),
+      childIds,
+      includeSelf: selfSelected,
       weeklySlotId,
     });
 
@@ -150,7 +159,8 @@ export function ClassEnrollmentCheckoutDialog({
 
     const result = await completeClassEnrollmentPayment({
       classId,
-      childIds: selectedChildren.map((c) => c.id),
+      childIds,
+      includeSelf: selfSelected,
       paymentMethod: method,
       couponCode: coupon?.code ?? null,
       receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
@@ -191,8 +201,8 @@ export function ClassEnrollmentCheckoutDialog({
       description={
         step === "success"
           ? settledLater
-            ? "הילדים נרשמו לחוג. התשלום ייגבה מול המשרד."
-            : "הילדים נרשמו לחוג וקיבלתם אישור תשלום."
+            ? "נרשמתם לחוג. התשלום ייגבה מול המשרד."
+            : "נרשמתם לחוג וקיבלתם אישור תשלום."
           : step === "payment"
             ? "בחרו כיצד תרצו לשלם."
             : `בדקו את פרטי ההרשמה ל${classTitle} לפני המעבר לתשלום.`
@@ -208,7 +218,7 @@ export function ClassEnrollmentCheckoutDialog({
                 מועד: {weeklySlotLabel}
               </p>
             )}
-            <p className="text-sm font-semibold text-ink-700">ילדים להרשמה</p>
+            <p className="text-sm font-semibold text-ink-700">מתאמנים להרשמה</p>
             <ul className="mt-2 space-y-1.5">
               {selectedChildren.map((child) => (
                 <li
@@ -289,13 +299,13 @@ export function ClassEnrollmentCheckoutDialog({
             {(!months || proration.isLate) && (
               <div className="flex justify-between gap-3 text-ink-600">
                 <span>
-                  {proration.isLate ? "מחיר לילד/ה מעכשיו" : "מחיר לילד/ה"}
+                  {proration.isLate ? "מחיר למתאמן/ת מעכשיו" : "מחיר למתאמן/ת"}
                 </span>
                 <span className="shrink-0">{formatCurrency(unitPrice)}</span>
               </div>
             )}
             <div className="flex justify-between gap-3 text-ink-600">
-              <span>כמות ילדים</span>
+              <span>כמות מתאמנים</span>
               <span className="shrink-0">{count}</span>
             </div>
             {(order.percent > 0 || couponDiscount > 0) && (
@@ -368,7 +378,7 @@ export function ClassEnrollmentCheckoutDialog({
               <span className="shrink-0">{formatCurrency(total)}</span>
             </div>
             <p className="mt-1 break-words text-brand-700">
-              {count} {count === 1 ? "ילד/ה" : "ילדים"} · {classTitle}
+              {count} {count === 1 ? "מתאמן/ת" : "מתאמנים"} · {classTitle}
               {proration.isLate &&
                 ` · ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount}`}
               {order.percent > 0 &&
@@ -448,7 +458,7 @@ export function ClassEnrollmentCheckoutDialog({
             <p className="font-semibold text-ink-900">
               {count === 1
                 ? `${selectedChildren[0]?.full_name} נרשם/ה לחוג`
-                : `${count} ילדים נרשמו לחוג`}
+                : `${count} מתאמנים נרשמו לחוג`}
             </p>
             {settledLater ? (
               <p className="mt-1 text-sm text-ink-500">

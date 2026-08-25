@@ -6,10 +6,7 @@ import {
 } from "@/lib/class-audience";
 import { createClient } from "@/lib/supabase/server";
 import { listFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
-import {
-  parseSiblingTiers,
-  type SiblingDiscountTier,
-} from "@/lib/finance/siblingDiscount";
+import { parseSiblingTiers } from "@/lib/finance/siblingDiscount";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import type { PublicClass, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -112,6 +109,10 @@ export async function ClassEnrollmentPanel({
           soldOut={soldOut}
           ended={proration.hasEnded}
           availableSpots={cls.available}
+          parent={{
+            fullName: profile.full_name,
+            birthDate: profile.birth_date,
+          }}
           kids={(children ?? []).map((child) => ({
             ...child,
             hasHealthDeclaration: declaredIds.has(child.id),
@@ -154,8 +155,6 @@ export async function ClassEnrollmentPanel({
           </div>
         )}
 
-        <SiblingDiscountNote tiers={siblingTiers} category={cls.category} />
-
         {cls.pick_one_slot && slots.length > 0 ? (
           <div className="mt-5 rounded-2xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
             לכל מועד יש {cls.capacity} מקומות. המקומות הפנויים מופיעים אחרי
@@ -194,7 +193,9 @@ export async function ClassEnrollmentPanel({
                   slots[0]?.gender_policy ?? cls.gender_policy
                 )}
           </Badge>
-          <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
+          {cls.audience_type === "grade" && (
+            <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
+          )}
           {proration.billableCount > 0 && (
             <Badge tone="neutral">
               {proration.isLate
@@ -207,45 +208,5 @@ export async function ClassEnrollmentPanel({
         {enrollmentContent}
       </div>
     </aside>
-  );
-}
-
-function siblingOrdinal(n: number): string {
-  if (n === 2) return "השני";
-  if (n === 3) return "השלישי";
-  return `ה־${n}`;
-}
-
-function SiblingDiscountNote({
-  tiers,
-  category,
-}: {
-  tiers: SiblingDiscountTier[];
-  category: string | null;
-}) {
-  if (tiers.length === 0) return null;
-
-  const sorted = [...tiers].sort((a, b) => a.minChildren - b.minChildren);
-  const scope = category
-    ? `באותה קטגוריה (${category})`
-    : "באותו חוג";
-
-  return (
-    <div className="mt-3 rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
-      {sorted.length === 1 ? (
-        <p>
-          הנחת אחים {scope} · {sorted[0].percent}% מהילד{" "}
-          {siblingOrdinal(sorted[0].minChildren)}
-        </p>
-      ) : (
-        <ul className="space-y-0.5">
-          {sorted.map((tier) => (
-            <li key={tier.minChildren}>
-              {tier.percent}% מהילד {siblingOrdinal(tier.minChildren)} {scope}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
