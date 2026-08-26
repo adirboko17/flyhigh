@@ -11,6 +11,8 @@ import {
   formatClassGenderPolicy,
   pickOneSlotTraineeHint,
 } from "@/lib/class-audience";
+import { classIsSoldOut, isUnlimitedCapacity } from "@/lib/classes/capacity";
+import { isInterestClass } from "@/lib/classes/interest";
 import { dayLabel } from "@/lib/constants";
 import {
   getPublicClasses,
@@ -63,8 +65,12 @@ export default async function ClassDetailPage({
     today
   );
   const sessions = billableClassSessions(allSessions);
-  const soldOut = cls.available <= 0 || cls.status === "full";
-  const scheduleLabel = cls.schedule_days
+  const interestOnly = isInterestClass(cls);
+  const soldOut = classIsSoldOut(cls);
+  const unlimited = isUnlimitedCapacity(cls.capacity);
+  const scheduleLabel = interestOnly
+    ? "ללא מועד עדיין"
+    : cls.schedule_days
     ? `ימים ${cls.schedule_days}`
     : cls.schedule_type === "custom"
       ? "תאריכים מותאמים"
@@ -76,18 +82,28 @@ export default async function ClassDetailPage({
 
   const heroDescription =
     cls.description?.trim() ||
-    [scheduleLabel, formatTime(cls.start_time) !== "-" && cls.end_time
-      ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
-      : null, cls.instructor_name?.trim()]
-      .filter(Boolean)
-      .join(" · ");
+    (interestOnly
+      ? "הרשמה ללא תשלום וללא תאריך — בודקים כמה נרשמים לפני פתיחת החוג"
+      : [scheduleLabel, formatTime(cls.start_time) !== "-" && cls.end_time
+          ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
+          : null, cls.instructor_name?.trim()]
+          .filter(Boolean)
+          .join(" · "));
 
   return (
     <div className="bg-ink-50">
       <PublicPageHero
         badgeIcon="waves"
         badgeIconColor="var(--logo-cyan)"
-        badgeText={cls.category ? `חוג · ${cls.category}` : "חוג שחייה"}
+        badgeText={
+          interestOnly
+            ? cls.category
+              ? `הרשמת עניין · ${cls.category}`
+              : "הרשמת עניין"
+            : cls.category
+              ? `חוג · ${cls.category}`
+              : "חוג שחייה"
+        }
         title={cls.title}
         description={heroDescription}
         backLink={{ href: "/classes", label: "חזרה לכל החוגים" }}
@@ -103,7 +119,7 @@ export default async function ClassDetailPage({
               tone={soldOut ? "warning" : "success"}
               className="absolute end-3 top-3 z-10 px-3 py-1 text-sm shadow-sm sm:end-4 sm:top-4"
             >
-              {soldOut ? "מלא" : "יש מקום"}
+              {soldOut ? "מלא" : unlimited ? "ללא הגבלה" : "יש מקום"}
             </Badge>
             {cls.image_url ? (
               <Image
@@ -125,18 +141,22 @@ export default async function ClassDetailPage({
             <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
               <div className="grid grid-cols-2 gap-px sm:gap-4">
                 <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name} />
-                <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
-                <DetailRow
-                  icon="🕒"
-                  label={cls.pick_one_slot ? "הרשמה" : "שעות"}
-                  value={
-                    cls.pick_one_slot
-                      ? "בחירת מועד אחד בשבוע"
-                      : cls.start_time && cls.end_time
-                        ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
-                        : null
-                  }
-                />
+                {!interestOnly && (
+                  <>
+                    <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
+                    <DetailRow
+                      icon="🕒"
+                      label={cls.pick_one_slot ? "הרשמה" : "שעות"}
+                      value={
+                        cls.pick_one_slot
+                          ? "בחירת מועד אחד בשבוע"
+                          : cls.start_time && cls.end_time
+                            ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
+                            : null
+                      }
+                    />
+                  </>
+                )}
                 <DetailRow
                   icon="👥"
                   label="מיועד ל"
@@ -157,7 +177,8 @@ export default async function ClassDetailPage({
                 />
                 )}
               </div>
-              {(hasDetailValue(startDateLabel) || hasDetailValue(endDateLabel)) && (
+              {!interestOnly &&
+                (hasDetailValue(startDateLabel) || hasDetailValue(endDateLabel)) && (
                 <div className="grid grid-cols-1 gap-px sm:mt-4 sm:grid-cols-2 sm:gap-4">
                   <DetailRow
                     icon="🗓️"
@@ -173,7 +194,7 @@ export default async function ClassDetailPage({
               )}
             </div>
 
-            {cls.pick_one_slot && slots.length > 0 && (
+            {!interestOnly && cls.pick_one_slot && slots.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
                 <h2 className="font-display text-lg font-bold text-ink-900">
                   מועדים לבחירה
@@ -209,7 +230,7 @@ export default async function ClassDetailPage({
               </div>
             )}
 
-            {sessions.length > 0 && (
+            {!interestOnly && sessions.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
                 <h2 className="font-display text-lg font-bold text-ink-900">
                   מפגשים

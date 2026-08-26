@@ -7,6 +7,7 @@ import type { AdminClassRow } from "@/components/admin/ClassList";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { CLASS_SESSION_STATUS, CLASS_STATUS, dayLabel } from "@/lib/constants";
 import {
   formatAudienceFieldLabel,
@@ -68,7 +69,10 @@ export function ClassPreviewDialog({
 
   const status = CLASS_STATUS[cls.status];
   const tiers = parseSiblingTiers(cls.sibling_discount_tiers);
-  const available = Math.max(0, cls.capacity - registered);
+  const unlimited = isUnlimitedCapacity(cls.capacity);
+  const available = unlimited
+    ? null
+    : Math.max(0, (cls.capacity ?? 0) - registered);
   const upcoming = (sessions ?? []).filter(
     (session) => session.status === "scheduled"
   );
@@ -95,7 +99,11 @@ export function ClassPreviewDialog({
       open
       onClose={onClose}
       title={cls.title}
-      description={`${scheduleLabel} · ${hoursLabel}`}
+      description={
+        cls.interest_only
+          ? "הרשמת עניין · ללא תשלום וללא מועד"
+          : `${scheduleLabel} · ${hoursLabel}`
+      }
       className="max-w-2xl"
     >
       <div className="space-y-6">
@@ -117,6 +125,7 @@ export function ClassPreviewDialog({
 
         <div className="flex flex-wrap gap-1.5">
           <Badge tone={status.tone}>{status.label}</Badge>
+          {cls.interest_only && <Badge tone="info">הרשמת עניין</Badge>}
           {cls.category && <Badge tone="brand">{cls.category}</Badge>}
           {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
           {upcoming.length > 0 && (
@@ -136,8 +145,12 @@ export function ClassPreviewDialog({
             label="מדריכה"
             value={cls.instructors?.full_name ?? "לא שובצה"}
           />
-          <DetailBox icon="📅" label="לוח זמנים" value={scheduleLabel} />
-          <DetailBox icon="🕒" label="שעות" value={hoursLabel} />
+          {!cls.interest_only && (
+            <>
+              <DetailBox icon="📅" label="לוח זמנים" value={scheduleLabel} />
+              <DetailBox icon="🕒" label="שעות" value={hoursLabel} />
+            </>
+          )}
           <DetailBox icon="👥" label="מיועד ל" value={genderLabel} />
           <DetailBox
             icon="🎂"
@@ -148,29 +161,49 @@ export function ClassPreviewDialog({
             icon="💰"
             label="מחיר"
             value={
-              parseBillingMonths(cls.billing_months)
-                ? `${formatCurrency(cls.price)} לחודש × ${parseBillingMonths(cls.billing_months)} · סה״כ ${formatCurrency(classPeriodTotal(cls.price, cls.billing_months))}`
-                : formatCurrency(cls.price)
+              cls.interest_only
+                ? "ללא תשלום"
+                : parseBillingMonths(cls.billing_months)
+                  ? `${formatCurrency(cls.price)} לחודש × ${parseBillingMonths(cls.billing_months)} · סה״כ ${formatCurrency(classPeriodTotal(cls.price, cls.billing_months))}`
+                  : formatCurrency(cls.price)
             }
           />
           <DetailBox
             icon="👨‍👩‍👧"
             label="תפוסה"
-            value={`${registered} מתוך ${cls.capacity}`}
-            hint={available > 0 ? `${available} מקומות פנויים` : "אין מקומות פנויים"}
+            value={formatClassOccupancy(registered, cls.capacity)}
+            hint={
+              unlimited
+                ? "אין תקרת משתתפים"
+                : available && available > 0
+                  ? `${available} מקומות פנויים`
+                  : "אין מקומות פנויים"
+            }
           />
-          <DetailBox
-            icon="🗓️"
-            label="תאריך התחלה"
-            value={cls.start_date ? formatDate(cls.start_date) : "לא הוגדר"}
-          />
-          <DetailBox
-            icon="🏁"
-            label="תאריך סיום"
-            value={cls.end_date ? formatDate(cls.end_date) : "לא הוגדר"}
-          />
+          {!cls.interest_only && (
+            <>
+              <DetailBox
+                icon="🗓️"
+                label="תאריך התחלה"
+                value={cls.start_date ? formatDate(cls.start_date) : "לא הוגדר"}
+              />
+              <DetailBox
+                icon="🏁"
+                label="תאריך סיום"
+                value={cls.end_date ? formatDate(cls.end_date) : "לא הוגדר"}
+              />
+            </>
+          )}
         </div>
 
+        {cls.interest_only && (
+          <p className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+            זו הרשמת עניין: הלקוחות נרשמים בלי תשלום. אחרי שיהיו מספיק נרשמים
+            אפשר לפתוח חוג משולם או לגבות בטלפון.
+          </p>
+        )}
+
+        {!cls.interest_only && (
         <section>
           <h3 className="font-display text-base font-bold text-ink-900">
             הנחת אחים
@@ -192,7 +225,9 @@ export function ClassPreviewDialog({
             </p>
           )}
         </section>
+        )}
 
+        {!cls.interest_only && (
         <section>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="font-display text-base font-bold text-ink-900">
@@ -267,6 +302,7 @@ export function ClassPreviewDialog({
             </ul>
           )}
         </section>
+        )}
 
         <div className="flex flex-wrap gap-2 border-t border-ink-100 pt-4">
           <Link

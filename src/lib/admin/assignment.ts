@@ -119,7 +119,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity, title, billing_months, pick_one_slot")
+        .select("id, capacity, title, billing_months, pick_one_slot, interest_only")
         .eq("id", input.classId)
         .maybeSingle(),
       // אימות שהילדים באמת שייכים ללקוח שנבחר, ולא נשלחו מהדפדפן.
@@ -141,7 +141,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   }
 
   let weeklySlotId: string | null = input.weeklySlotId ?? null;
-  if (cls.pick_one_slot) {
+  if (cls.interest_only) {
+    weeklySlotId = null;
+  } else if (cls.pick_one_slot) {
     if (!weeklySlotId) {
       return { success: false, error: "נא לבחור מועד לשיבוץ." };
     }
@@ -201,9 +203,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     .eq("class_id", input.classId)
     .in("status", ["active", "pending"]);
 
-  const isCreditCard = input.method === "credit_card";
+  const isCreditCard = !cls.interest_only && input.method === "credit_card";
   const awaitingCardcom = isCreditCard && total > 0;
-  const settledNow = input.markPaid && !awaitingCardcom;
+  const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
 
   const { data: created, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -215,7 +217,11 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         weekly_slot_id: weeklySlotId,
         type: "class" as const,
         status: "active" as const,
-        payment_status: settledNow ? ("paid" as const) : ("unpaid" as const),
+        payment_status: cls.interest_only
+          ? ("not_required" as const)
+          : settledNow
+            ? ("paid" as const)
+            : ("unpaid" as const),
         admin_assigned: true,
       }))
     )
@@ -227,7 +233,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   let checkoutUrl: string | null = null;
 
-  if (input.method !== "none" && total > 0) {
+  if (!cls.interest_only && input.method !== "none" && total > 0) {
     const parts = splitAmount(total, created.length);
     const paidAt = settledNow ? new Date().toISOString() : null;
 
@@ -338,7 +344,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   return {
     success: true,
     assigned: created.length,
-    overCapacity: (takenBefore ?? 0) + created.length > cls.capacity,
+    overCapacity:
+      cls.capacity != null &&
+      (takenBefore ?? 0) + created.length > cls.capacity,
     checkoutUrl,
   };
 }

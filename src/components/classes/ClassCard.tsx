@@ -9,6 +9,8 @@ import { cn } from "@/utils/cn";
 import { classPeriodTotal } from "@/lib/finance/classPricing";
 import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
 import { formatTime } from "@/utils/format";
+import { classIsSoldOut } from "@/lib/classes/capacity";
+import { isInterestClass } from "@/lib/classes/interest";
 import type { PublicClass } from "@/types";
 import { ClassPriceAmount, ClassPriceNote, classPriceLabel } from "./ClassPrice";
 
@@ -35,27 +37,30 @@ export function ClassCard({
   cls: PublicClass;
   preview?: boolean;
 }) {
+  const interestOnly = isInterestClass(cls);
   const proration = classPriceFromPublicCounts(
     classPeriodTotal(Number(cls.price), cls.billing_months),
     cls.billable_session_count,
     cls.remaining_session_count
   );
-  const ended = proration.hasEnded;
-  const soldOut = !ended && (cls.available <= 0 || cls.status === "full");
+  const ended = !interestOnly && proration.hasEnded;
+  const soldOut = !ended && classIsSoldOut(cls);
   const closed = ended || soldOut;
   const isBlob = cls.image_url?.startsWith("blob:") ?? false;
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
   const href = `/classes/${cls.id}`;
 
-  const scheduleLabel = cls.pick_one_slot
-    ? cls.schedule_days
-      ? `בחירת מועד · ימים ${cls.schedule_days}`
-      : "בחירת מועד אחד בשבוע"
-    : cls.schedule_days
-    ? `ימים ${cls.schedule_days}`
-    : cls.schedule_type === "custom"
-      ? "תאריכים מותאמים"
-      : `יום ${dayLabel(cls.day_of_week)}`;
+  const scheduleLabel = interestOnly
+    ? "הרשמה ללא תאריך"
+    : cls.pick_one_slot
+      ? cls.schedule_days
+        ? `בחירת מועד · ימים ${cls.schedule_days}`
+        : "בחירת מועד אחד בשבוע"
+      : cls.schedule_days
+        ? `ימים ${cls.schedule_days}`
+        : cls.schedule_type === "custom"
+          ? "תאריכים מותאמים"
+          : `יום ${dayLabel(cls.day_of_week)}`;
 
   const audienceLabel =
     cls.audience_type === "grade" &&
@@ -159,7 +164,7 @@ export function ClassCard({
             <MetaRow icon="user" accent={accent} text={cls.instructor_name} />
           )}
           <MetaRow icon="calendar" accent={accent} text={scheduleLabel} />
-          {cls.start_time && (
+          {!interestOnly && cls.start_time && (
             <MetaRow
               icon="clock"
               accent={accent}
@@ -169,6 +174,7 @@ export function ClassCard({
         </ul>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          {interestOnly && <InfoChip>הרשמת עניין</InfoChip>}
           {genderLabel && <InfoChip>{genderLabel}</InfoChip>}
           {audienceLabel && <InfoChip>{audienceLabel}</InfoChip>}
           {availability && (
@@ -186,13 +192,14 @@ export function ClassCard({
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">
-              {classPriceLabel(proration, cls.billing_months)}
+              {classPriceLabel(proration, cls.billing_months, interestOnly)}
             </p>
             <div className="mt-0.5">
               <ClassPriceAmount
                 proration={proration}
                 soldOut={closed}
                 billingMonths={cls.billing_months}
+                interestOnly={interestOnly}
               />
             </div>
             <div className="mt-1 max-w-[12rem]">
@@ -200,6 +207,7 @@ export function ClassCard({
                 proration={proration}
                 compact
                 billingMonths={cls.billing_months}
+                interestOnly={interestOnly}
               />
             </div>
           </div>

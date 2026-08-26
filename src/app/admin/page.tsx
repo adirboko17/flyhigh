@@ -189,7 +189,10 @@ export default async function AdminDashboard() {
         title: cls.title,
         registered,
         capacity: cls.capacity,
-        percent: cls.capacity > 0 ? Math.round((registered / cls.capacity) * 100) : 0,
+        percent:
+          cls.capacity != null && cls.capacity > 0
+            ? Math.round((registered / cls.capacity) * 100)
+            : 0,
       };
     })
     .sort((a, b) => b.percent - a.percent || b.registered - a.registered);
@@ -599,13 +602,16 @@ function toOccupancyItem(cls: {
   id: string;
   title: string;
   registered: number;
-  capacity: number;
+  capacity: number | null;
   percent: number;
 }): RankItem {
   return {
     key: cls.id,
     label: cls.title,
-    sublabel: `${cls.registered}/${cls.capacity}`,
+    sublabel:
+      cls.capacity == null
+        ? `${cls.registered} · ללא הגבלה`
+        : `${cls.registered}/${cls.capacity}`,
     value: cls.percent,
     barClassName:
       cls.percent >= 100

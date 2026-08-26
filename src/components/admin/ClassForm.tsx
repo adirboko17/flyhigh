@@ -68,7 +68,7 @@ export type ClassFormData = {
   age_max: number | null;
   grade_min: number | null;
   grade_max: number | null;
-  capacity: number;
+  capacity: number | null;
   price: number;
   billing_months: number | null;
   pick_one_slot: boolean;
@@ -77,6 +77,7 @@ export type ClassFormData = {
   image_url: string | null;
   schedule_type?: "weekly" | "custom";
   sibling_discount_tiers?: Json | null;
+  interest_only?: boolean;
 };
 
 interface Props {
@@ -88,11 +89,16 @@ interface Props {
   categories: string[];
 }
 
-const FORM_STEPS = [
+const PAID_STEPS = [
   { id: "details", label: "פרטי החוג" },
   { id: "audience", label: "למי מיועד" },
   { id: "schedule", label: "מועדים" },
   { id: "pricing", label: "מחיר" },
+] as const;
+
+const INTEREST_STEPS = [
+  { id: "details", label: "פרטי החוג" },
+  { id: "audience", label: "למי מיועד" },
 ] as const;
 
 const emptyForm = {
@@ -109,12 +115,14 @@ const emptyForm = {
   grade_min: "",
   grade_max: "",
   capacity: "10",
+  capacity_limited: true,
   price: "",
   pick_one_slot: true,
   price_mode: "period" as const,
   billing_months: "10",
   instructor_id: "",
   image_url: "",
+  interest_only: false,
 };
 
 function toFormState(existing?: ClassFormData, categories: string[] = []) {
@@ -137,7 +145,8 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
     age_max_unit: monthsToFormBound(existing.age_max).unit,
     grade_min: existing.grade_min?.toString() ?? "",
     grade_max: existing.grade_max?.toString() ?? "",
-    capacity: existing.capacity.toString(),
+    capacity: existing.capacity != null ? existing.capacity.toString() : "10",
+    capacity_limited: existing.capacity != null,
     price: existing.price.toString(),
     pick_one_slot: existing.pick_one_slot ?? true,
     price_mode: parseBillingMonths(existing.billing_months)
@@ -146,6 +155,7 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
     billing_months: String(parseBillingMonths(existing.billing_months) ?? 10),
     instructor_id: existing.instructor_id ?? "",
     image_url: existing.image_url ?? "",
+    interest_only: existing.interest_only ?? false,
   };
 }
 
@@ -160,12 +170,14 @@ function toPayload(
   const isGrade = audienceType === "grade";
   const isOpen = audienceType === "open";
   const weeklyGender =
-    schedule.scheduleType === "weekly" && schedule.weeklySlots.length > 0
+    !form.interest_only &&
+    schedule.scheduleType === "weekly" &&
+    schedule.weeklySlots.length > 0
       ? genderPolicyFromWeeklySlots(schedule.weeklySlots)
       : form.gender_policy;
 
   return {
-    sibling_discount_tiers: siblingDiscountTiers,
+    sibling_discount_tiers: form.interest_only ? null : siblingDiscountTiers,
     title: form.title,
     description: form.description || null,
     category: form.category || null,
@@ -180,17 +192,20 @@ function toPayload(
       : parseAgeBoundInput(form.age_max, form.age_max_unit),
     grade_min: isGrade ? parseSchoolGradeInput(form.grade_min) : null,
     grade_max: isGrade ? parseSchoolGradeInput(form.grade_max) : null,
-    capacity: Number(form.capacity) || 0,
-    price: Number(form.price) || 0,
+    capacity: form.capacity_limited ? Number(form.capacity) || 0 : null,
+    price: form.interest_only ? 0 : Number(form.price) || 0,
     billing_months:
-      form.price_mode === "monthly"
-        ? parseBillingMonths(Number(form.billing_months))
-        : null,
+      form.interest_only
+        ? null
+        : form.price_mode === "monthly"
+          ? parseBillingMonths(Number(form.billing_months))
+          : null,
     instructor_id: form.instructor_id || null,
-    pick_one_slot: form.pick_one_slot,
+    pick_one_slot: form.interest_only ? false : form.pick_one_slot,
     status,
     image_url: imageUrl,
     schedule_type: schedule.scheduleType,
+    interest_only: form.interest_only,
   };
 }
 
@@ -206,7 +221,10 @@ function validateAudience(
   form: ReturnType<typeof toFormState>,
   schedule: ClassScheduleState
 ): string | null {
-  if (schedule.scheduleType !== "weekly" && !form.gender_policy) {
+  if (
+    (form.interest_only || schedule.scheduleType !== "weekly") &&
+    !form.gender_policy
+  ) {
     return "נא לבחור למי מיועד החוג.";
   }
 
@@ -253,6 +271,7 @@ function validatePricing(form: ReturnType<typeof toFormState>): string | null {
 }
 
 function validateCapacity(form: ReturnType<typeof toFormState>): string | null {
+  if (!form.capacity_limited) return null;
   if (!Number(form.capacity) || Number(form.capacity) < 1) {
     return "נא למלא מכסת משתתפים.";
   }
@@ -323,7 +342,8 @@ export function ClassForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
-  const lastStep = FORM_STEPS.length - 1;
+  const formSteps = form.interest_only ? INTEREST_STEPS : PAID_STEPS;
+  const lastStep = formSteps.length - 1;
 
   useEffect(() => {
     return () => {
@@ -388,6 +408,7 @@ export function ClassForm({
     if (index === 1) {
       return validateAudience(form, nextSchedule) ?? validateCapacity(form);
     }
+    if (form.interest_only) return null;
     if (index === 2) return validateSchedule(nextSchedule);
     return validatePricing(form);
   }
@@ -443,11 +464,15 @@ export function ClassForm({
       imageUrl = upload.url ?? null;
     }
 
+    const nextStatus =
+      !form.capacity_limited && existing?.status === "full"
+        ? "active"
+        : existing?.status ?? "active";
     const payload = toPayload(
       form,
       imageUrl,
       nextSchedule,
-      existing?.status ?? "active",
+      nextStatus,
       usesDefaultDiscount ? null : serializeSiblingTiers(siblingTiers)
     );
 
@@ -480,11 +505,17 @@ export function ClassForm({
       classId = inserted.id;
     }
 
-    const scheduleSave = await saveClassSchedule(supabase, classId!, nextSchedule);
-    if (scheduleSave.error) {
-      setError(scheduleSave.error);
-      setLoading(false);
-      return;
+    if (!form.interest_only) {
+      const scheduleSave = await saveClassSchedule(
+        supabase,
+        classId!,
+        nextSchedule
+      );
+      if (scheduleSave.error) {
+        setError(scheduleSave.error);
+        setLoading(false);
+        return;
+      }
     }
 
     await revalidatePublicCatalog();
@@ -502,7 +533,11 @@ export function ClassForm({
         }}
         className="min-w-0 space-y-6"
       >
-        <ClassFormStepper current={step} onSelect={goTo} />
+        <ClassFormStepper
+          steps={formSteps}
+          current={step}
+          onSelect={goTo}
+        />
 
         <Card className={step === 0 ? undefined : "hidden"}>
           <CardContent className="space-y-5">
@@ -510,6 +545,35 @@ export function ClassForm({
               title="פרטי החוג"
               hint="שם, קטגוריה ותיאור קצר — אפשר להוסיף תמונה עכשיו או אחר כך."
             />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AudienceModeOption
+                selected={!form.interest_only}
+                onSelect={() => {
+                  setForm((f) => ({ ...f, interest_only: false }));
+                  setError(null);
+                }}
+                title="חוג רגיל"
+                hint="עם מועדים, מחיר והרשמה לתשלום"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={form.interest_only}
+                onSelect={() => {
+                  setForm((f) => ({ ...f, interest_only: true }));
+                  setStep((current) => Math.min(current, 1));
+                  setError(null);
+                }}
+                title="הרשמת עניין"
+                hint="בלי תאריך ובלי תשלום — בודקים כמה נרשמים"
+                disabled={loading}
+              />
+            </div>
+            {form.interest_only && (
+              <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+                הלקוחות נרשמים בחינם. אחרי שתראו מספיק נרשמים אפשר לפתוח חוג
+                משולם או לגבות בטלפון.
+              </p>
+            )}
             <Field label="שם החוג" required>
               <Input
                 value={form.title}
@@ -561,13 +625,15 @@ export function ClassForm({
             <StepIntro
               title="למי מיועד החוג"
               hint={
-                schedule.scheduleType === "weekly"
-                  ? "בחרו גילאים או כיתות. מגדר נקבע אחר כך לכל מועד."
-                  : "בחרו מגדר, ואז גילאים, כיתות, או חוג פתוח לכולם."
+                form.interest_only
+                  ? "בחרו מגדר, מכסה, וגילאים או כיתות. אין מועדים בשלב הזה."
+                  : schedule.scheduleType === "weekly"
+                    ? "בחרו גילאים או כיתות. מגדר נקבע אחר כך לכל מועד."
+                    : "בחרו מגדר, ואז גילאים, כיתות, או חוג פתוח לכולם."
               }
             />
 
-            {schedule.scheduleType !== "weekly" && (
+            {(form.interest_only || schedule.scheduleType !== "weekly") && (
               <Field label="מגדר" required>
                 <Select
                   value={form.gender_policy}
@@ -674,19 +740,58 @@ export function ClassForm({
               </div>
             )}
 
-            <Field label="מכסת משתתפים" required>
-              <Input
-                type="number"
-                min={1}
-                value={form.capacity}
-                onChange={set("capacity")}
-                placeholder="למשל: 10"
-              />
-            </Field>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-ink-800">
+                מכסת משתתפים
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <AudienceModeOption
+                  selected={form.capacity_limited}
+                  onSelect={() =>
+                    setForm((f) => ({ ...f, capacity_limited: true }))
+                  }
+                  title="יש הגבלה"
+                  hint="ההרשמה נסגרת כשמגיעים למכסה"
+                  disabled={loading}
+                />
+                <AudienceModeOption
+                  selected={!form.capacity_limited}
+                  onSelect={() =>
+                    setForm((f) => ({ ...f, capacity_limited: false }))
+                  }
+                  title="אין הגבלה"
+                  hint="אפשר להירשם בלי תקרת משתתפים"
+                  disabled={loading}
+                />
+              </div>
+              {form.capacity_limited && (
+                <Field label="כמה משתתפים" required>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={form.capacity}
+                    onChange={set("capacity")}
+                    placeholder="למשל: 10"
+                  />
+                </Field>
+              )}
+            </div>
+            {form.interest_only && (
+              <Field label="מדריכה">
+                <Select value={form.instructor_id} onChange={set("instructor_id")}>
+                  <option value="">ללא שיוך</option>
+                  {instructors.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.isSelf ? `${i.full_name} (אני · מנהל)` : i.full_name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
           </CardContent>
         </Card>
 
-        <Card className={step === 2 ? undefined : "hidden"}>
+        <Card className={step === 2 && !form.interest_only ? undefined : "hidden"}>
           <CardContent className="space-y-5">
             <StepIntro
               title="מועדים"
@@ -716,7 +821,7 @@ export function ClassForm({
           </CardContent>
         </Card>
 
-        <Card className={step === 3 ? undefined : "hidden"}>
+        <Card className={step === 3 && !form.interest_only ? undefined : "hidden"}>
           <CardContent className="space-y-5">
             <StepIntro
               title="מחיר והנחות"
@@ -918,19 +1023,21 @@ function StepIntro({ title, hint }: { title: string; hint: string }) {
 }
 
 function ClassFormStepper({
+  steps,
   current,
   onSelect,
 }: {
+  steps: readonly { id: string; label: string }[];
   current: number;
   onSelect: (index: number) => void;
 }) {
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-ink-500 sm:hidden">
-        שלב {current + 1} מתוך {FORM_STEPS.length} · {FORM_STEPS[current]?.label}
+        שלב {current + 1} מתוך {steps.length} · {steps[current]?.label}
       </p>
       <ol className="flex list-none items-center gap-2 p-0">
-        {FORM_STEPS.map((item, index) => {
+        {steps.map((item, index) => {
           const done = current > index;
           const active = current === index;
           return (
@@ -961,7 +1068,7 @@ function ClassFormStepper({
               >
                 {item.label}
               </span>
-              {index < FORM_STEPS.length - 1 && (
+              {index < steps.length - 1 && (
                 <span className="h-px min-w-3 flex-1 bg-ink-100" />
               )}
             </li>

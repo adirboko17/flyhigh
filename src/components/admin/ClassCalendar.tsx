@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Icon } from "@/components/icons/Icon";
 import { SessionSubstituteDialog } from "@/components/admin/SessionSubstituteDialog";
+import { formatClassOccupancy } from "@/lib/classes/capacity";
 import { CLASS_SESSION_STATUS, DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { dayLabelLong, type CalendarDay } from "@/lib/scheduling/monthGrid";
 import { cn } from "@/utils/cn";
@@ -30,7 +31,7 @@ export type CalendarSession = {
   endTime: string;
   status: keyof typeof CLASS_SESSION_STATUS;
   notes: string | null;
-  capacity: number;
+  capacity: number | null;
   registered: number;
   /** לקוח/ילד בשיעור פרטי. */
   clientLabel?: string | null;
@@ -945,7 +946,7 @@ function SessionRow({
           )}
           {!isPrivate && (
             <span className="tabular-nums text-ink-600">
-              {session.registered}/{session.capacity}
+              {formatClassOccupancy(session.registered, session.capacity)}
             </span>
           )}
           {!isPrivate && !cancelled && (

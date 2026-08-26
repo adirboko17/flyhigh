@@ -7,6 +7,8 @@ import {
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
 import { requireRole } from "@/lib/auth";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
+import { revalidatePath } from "next/cache";
 import {
   DEFERRED_PAYMENT_METHODS,
   isDeferredPaymentMethod,
@@ -264,7 +266,7 @@ export async function completeClassEnrollmentPayment(input: {
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -288,6 +290,12 @@ export async function completeClassEnrollmentPayment(input: {
 
   if (!cls) {
     return { success: false, error: "החוג לא נמצא או אינו זמין להרשמה." };
+  }
+  if (cls.interest_only) {
+    return {
+      success: false,
+      error: "ההרשמה לחוג זה היא ללא תשלום. רעננו את העמוד ונסו שוב.",
+    };
   }
 
   let weeklySlotId: string | null = null;
@@ -369,15 +377,17 @@ export async function completeClassEnrollmentPayment(input: {
   }
   const { count: takenCount } = await takenQuery;
 
-  const available = cls.capacity - (takenCount ?? 0);
-  if (participants.length > available) {
-    return {
-      success: false,
-      error:
-        available <= 0
-          ? "החוג מלא. אפשר להצטרף לרשימת המתנה."
-          : "אין מספיק מקומות במועד זה להרשמה של כל המתאמנים שנבחרו.",
-    };
+  if (cls.capacity != null) {
+    const available = cls.capacity - (takenCount ?? 0);
+    if (participants.length > available) {
+      return {
+        success: false,
+        error:
+          available <= 0
+            ? "החוג מלא. אפשר להצטרף לרשימת המתנה."
+            : "אין מספיק מקומות במועד זה להרשמה של כל המתאמנים שנבחרו.",
+      };
+    }
   }
 
   // הנחת אחים נקבעת לפי אחים רשומים לאותה קטגוריה — גם בחוג אחר —
@@ -616,6 +626,172 @@ export async function completeClassEnrollmentPayment(input: {
     couponCode,
     couponDiscount,
   };
+}
+
+export async function registerInterestForClass(input: {
+  classId: string;
+  childIds: string[];
+  includeSelf?: boolean;
+}): Promise<{ success: true } | { success: false; error: string }> {
+  const profile = await requireRole("parent");
+  const { uniqueChildIds, participants, includeSelf } = resolveClassParticipants(
+    input.childIds,
+    Boolean(input.includeSelf)
+  );
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור מתאמן או מתאמנת." };
+  }
+
+  const supabase = await createClient();
+  const [{ data: cls }, { data: children }, { data: existingEnrollments }] =
+    await Promise.all([
+      supabase
+        .from("classes")
+        .select(
+          "id, title, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
+        )
+        .eq("id", input.classId)
+        .in("status", ["active", "full"])
+        .maybeSingle(),
+      uniqueChildIds.length > 0
+        ? supabase
+            .from("children")
+            .select(
+              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+            )
+            .eq("parent_id", profile.id)
+            .in("id", uniqueChildIds)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("enrollments")
+        .select("child_id")
+        .eq("class_id", input.classId)
+        .eq("parent_id", profile.id)
+        .neq("status", "cancelled"),
+    ]);
+
+  if (!cls?.interest_only) {
+    return { success: false, error: "החוג הזה אינו פתוח להרשמת עניין." };
+  }
+
+  const selectedChildren = children ?? [];
+  if (selectedChildren.length !== uniqueChildIds.length) {
+    return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+
+  const healthError = await requireHealthDeclarations(
+    supabase,
+    profile.id,
+    selectedChildren
+  );
+  if (healthError) return { success: false, error: healthError };
+
+  const eligibilityError = childrenEligibilityError(
+    cls,
+    selectedChildren,
+    [cls.gender_policy]
+  );
+  if (eligibilityError) return { success: false, error: eligibilityError };
+  if (includeSelf) {
+    const parentError = parentGenderError(
+      profile.full_name,
+      profile.gender,
+      cls.gender_policy,
+      [cls.gender_policy]
+    );
+    if (parentError) return { success: false, error: parentError };
+  }
+
+  const alreadyEnrolled = new Set(
+    (existingEnrollments ?? [])
+      .map((e) => e.child_id)
+      .filter(Boolean) as string[]
+  );
+  if (uniqueChildIds.some((id) => alreadyEnrolled.has(id))) {
+    return { success: false, error: "אחד או יותר מהילדים כבר רשומים לחוג זה." };
+  }
+  if (
+    includeSelf &&
+    (existingEnrollments ?? []).some((enrollment) => enrollment.child_id == null)
+  ) {
+    return { success: false, error: "ההורה כבר רשום לחוג זה." };
+  }
+
+  const { count: takenCount } = await supabase
+    .from("enrollments")
+    .select("id", { count: "exact", head: true })
+    .eq("class_id", input.classId)
+    .in("status", ["active", "pending"]);
+
+  if (cls.capacity != null) {
+    const available = cls.capacity - (takenCount ?? 0);
+    if (participants.length > available) {
+      return {
+        success: false,
+        error:
+          available <= 0
+            ? "ההרשמה לחוג זה מלאה."
+            : "אין מספיק מקומות להרשמה של כל המתאמנים שנבחרו.",
+      };
+    }
+  }
+
+  const { error: enrollmentError } = await supabase.from("enrollments").insert(
+    participants.map((childId) => ({
+      parent_id: profile.id,
+      child_id: childId,
+      class_id: input.classId,
+      type: "class" as const,
+      status: "active" as const,
+      payment_status: "not_required" as const,
+    }))
+  );
+
+  if (enrollmentError) {
+    return { success: false, error: "לא הצלחנו לשמור את ההרשמה. נסו שוב." };
+  }
+
+  revalidatePath("/parent/dashboard");
+  await revalidatePublicCatalog();
+  return { success: true };
+}
+
+export async function cancelInterestEnrollment(
+  enrollmentId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const profile = await requireRole("parent");
+  const supabase = await createClient();
+
+  const { data: enrollment } = await supabase
+    .from("enrollments")
+    .select("id, status, payment_status")
+    .eq("id", enrollmentId)
+    .eq("parent_id", profile.id)
+    .maybeSingle();
+
+  if (!enrollment) {
+    return { success: false, error: "ההרשמה לא נמצאה." };
+  }
+  if (enrollment.status === "cancelled") {
+    return { success: true };
+  }
+  if (enrollment.payment_status !== "not_required") {
+    return { success: false, error: "אפשר לבטל רק הרשמת עניין." };
+  }
+
+  const { error } = await supabase
+    .from("enrollments")
+    .update({ status: "cancelled" })
+    .eq("id", enrollment.id)
+    .eq("parent_id", profile.id);
+
+  if (error) {
+    return { success: false, error: "לא הצלחנו לבטל את ההרשמה. נסו שוב." };
+  }
+
+  revalidatePath("/parent/dashboard");
+  await revalidatePublicCatalog();
+  return { success: true };
 }
 
 export async function joinClassWaitlist(input: {

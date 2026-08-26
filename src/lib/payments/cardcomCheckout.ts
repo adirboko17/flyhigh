@@ -159,6 +159,32 @@ export async function startCardcomCheckout(input: {
   }
 }
 
+/** בודק מול קארדקום סשנים ממתינים — אם הסליקה עברה, מסמן את החיוב כשולם. */
+export async function reconcilePendingCardcomCheckouts() {
+  if (!process.env.CARDCOM_TERMINAL_NUMBER || !process.env.CARDCOM_API_NAME) {
+    return;
+  }
+
+  const admin = createAdminClient();
+  const { data: checkouts } = await admin
+    .from("payment_checkouts")
+    .select("id, low_profile_id")
+    .eq("status", "pending")
+    .not("low_profile_id", "is", null);
+
+  await Promise.all(
+    (checkouts ?? []).map((checkout) =>
+      settleCardcomCheckout({
+        checkoutId: checkout.id,
+        lowProfileId: checkout.low_profile_id,
+      }).catch(() => ({
+        success: false as const,
+        error: "reconcile failed",
+      }))
+    )
+  );
+}
+
 export async function settleCardcomCheckout(input: {
   checkoutId?: string | null;
   lowProfileId?: string | null;

@@ -21,7 +21,10 @@ import {
   pickOneSlotTraineeShort,
 } from "@/lib/class-audience";
 import { formatTime } from "@/utils/format";
-import { joinClassWaitlist } from "@/lib/enrollment/actions";
+import {
+  joinClassWaitlist,
+  registerInterestForClass,
+} from "@/lib/enrollment/actions";
 import {
   formatAgeRange,
   getAgeEligibility,
@@ -99,6 +102,7 @@ interface ClassEnrollmentActionsProps {
   pickOneSlot?: boolean;
   slots?: PublicClassSlot[];
   classGenderPolicy?: Enums<"class_gender_policy">;
+  interestOnly?: boolean;
 }
 
 export function ClassEnrollmentActions({
@@ -124,6 +128,7 @@ export function ClassEnrollmentActions({
   pickOneSlot = false,
   slots = [],
   classGenderPolicy = "mixed",
+  interestOnly = false,
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -309,6 +314,7 @@ export function ClassEnrollmentActions({
   }, [availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
+  const [interestConfirmOpen, setInterestConfirmOpen] = useState(false);
   const [enrollmentsExpanded, setEnrollmentsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -369,6 +375,38 @@ export function ClassEnrollmentActions({
     setError(null);
   }
 
+  async function handleInterestRegister() {
+    if (selectedIds.length === 0) {
+      setError("נא לבחור מתאמן או מתאמנת.");
+      return;
+    }
+    const eligibilityError = selectedTrainees
+      .map((trainee) => eligibilityByChildId.get(trainee.id))
+      .find((row) => row && !row.eligible)?.reason;
+    if (eligibilityError) {
+      setError(eligibilityError);
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    const result = await registerInterestForClass({
+      classId,
+      childIds: selectedChildIds,
+      includeSelf,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setInterestConfirmOpen(false);
+    setSelectedIds([]);
+    router.refresh();
+  }
+
   async function handleWaitlistJoin() {
     if (pickOneSlot && !weeklySlotId) {
       setError("נא לבחור מועד לחוג.");
@@ -400,6 +438,26 @@ export function ClassEnrollmentActions({
   }
 
   function handleContinue() {
+    if (interestOnly) {
+      if (slotSoldOut) {
+        void handleWaitlistJoin();
+        return;
+      }
+      if (selectedIds.length === 0) {
+        setError("נא לבחור מתאמן או מתאמנת.");
+        return;
+      }
+      const eligibilityError = selectedTrainees
+        .map((trainee) => eligibilityByChildId.get(trainee.id))
+        .find((row) => row && !row.eligible)?.reason;
+      if (eligibilityError) {
+        setError(eligibilityError);
+        return;
+      }
+      setError(null);
+      setInterestConfirmOpen(true);
+      return;
+    }
     if (pickOneSlot && !weeklySlotId) {
       setError("נא לבחור מועד לחוג.");
       return;
@@ -535,7 +593,7 @@ export function ClassEnrollmentActions({
 
         {!ended && (availableTrainees.length > 0 || ineligibleTrainees.length > 0) ? (
           <div className="space-y-3">
-            {pickOneSlot && slots.length > 0 && (
+            {!interestOnly && pickOneSlot && slots.length > 0 && (
               <SlotPickerTrigger
                 slotsCount={slots.length}
                 selectedSlot={selectedSlot}
@@ -596,13 +654,17 @@ export function ClassEnrollmentActions({
             >
               {loading
                 ? "שומר..."
-                : needsSlot
+                : needsSlot && !interestOnly
                   ? "נא לבחור מועד"
                   : slotSoldOut
                     ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
-                    : selectedIds.length > 1
-                      ? `הוספה לסל (${selectedIds.length} מתאמנים)`
-                      : "הוספה לסל"}
+                    : interestOnly
+                      ? selectedIds.length > 1
+                        ? `הרשמה לחוג (${selectedIds.length} מתאמנים)`
+                        : "הרשמה לחוג"
+                      : selectedIds.length > 1
+                        ? `הוספה לסל (${selectedIds.length} מתאמנים)`
+                        : "הוספה לסל"}
             </Button>
           </div>
         ) : (
@@ -619,7 +681,55 @@ export function ClassEnrollmentActions({
         )}
       </div>
 
-      {pickOneSlot && slots.length > 0 && (
+      {interestOnly && (
+        <Modal
+          open={interestConfirmOpen}
+          onClose={() => {
+            if (!loading) setInterestConfirmOpen(false);
+          }}
+          title="הרשמה לחוג"
+          description={classTitle}
+        >
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-ink-600">
+              כרגע זו רק הרשמה, בלי תשלום ובלי מועד קבוע. כשהחוג ייפתח באמת
+              נעדכן אתכם לגבי התשלום.
+            </p>
+            <div className="rounded-2xl bg-ink-50 px-4 py-3">
+              <p className="text-xs font-semibold text-ink-500">נרשמים עכשיו</p>
+              <ul className="mt-1.5 space-y-1 text-sm font-medium text-ink-900">
+                {selectedTrainees.map((trainee) => (
+                  <li key={trainee.id}>{trainee.full_name}</li>
+                ))}
+              </ul>
+            </div>
+            {error && (
+              <p className="text-sm text-red-600" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => setInterestConfirmOpen(false)}
+              >
+                חזרה
+              </Button>
+              <Button
+                type="button"
+                disabled={loading}
+                onClick={() => void handleInterestRegister()}
+              >
+                {loading ? "שומר..." : "הרשמה"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {!interestOnly && pickOneSlot && slots.length > 0 && (
         <Modal
           open={slotPickerOpen}
           onClose={() => setSlotPickerOpen(false)}
@@ -965,10 +1075,12 @@ export function GuestEnrollmentActions({
   classId,
   soldOut,
   ended = false,
+  interestOnly = false,
 }: {
   classId: string;
   soldOut: boolean;
   ended?: boolean;
+  interestOnly?: boolean;
 }) {
   if (ended) {
     return null;
@@ -990,7 +1102,9 @@ export function GuestEnrollmentActions({
       <p className="text-center text-xs text-ink-400">
         {soldOut
           ? "יש להתחבר או לפתוח חשבון כדי להצטרף לרשימת המתנה"
-          : "יש להתחבר או לפתוח חשבון כדי להירשם לחוג"}
+          : interestOnly
+            ? "יש להתחבר או לפתוח חשבון כדי להירשם — בלי תשלום"
+            : "יש להתחבר או לפתוח חשבון כדי להירשם לחוג"}
       </p>
     </div>
   );

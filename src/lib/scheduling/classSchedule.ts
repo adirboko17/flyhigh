@@ -7,6 +7,10 @@ import { DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { classPeriodTotal, parseBillingMonths } from "@/lib/finance/classPricing";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
+import {
+  UNLIMITED_AVAILABLE_SENTINEL,
+  isUnlimitedCapacity,
+} from "@/lib/classes/capacity";
 import type { PublicClass } from "@/types";
 
 export type ScheduleType = "weekly" | "custom";
@@ -451,36 +455,45 @@ export function formToPreviewClass(
     grade_min: string;
     grade_max: string;
     capacity: string;
+    capacity_limited?: boolean;
     price: string;
     billing_months?: string;
     price_mode?: "period" | "monthly";
     pick_one_slot?: boolean;
+    interest_only?: boolean;
   },
   schedule: ClassScheduleState,
   imageUrl: string | null,
   instructorName: string | null,
   previewStatus: PublicClass["status"] = "active"
 ): PublicClass {
-  const capacity = Number(form.capacity) || 10;
+  const capacity =
+    form.capacity_limited === false ? null : Number(form.capacity) || 10;
+  const interestOnly = Boolean(form.interest_only);
   const legacy = syncLegacyClassFields(
     schedule.scheduleType,
     schedule.weeklySlots,
     schedule.sessions
   );
-  const activeSessions = schedule.sessions.filter((s) => s.status !== "cancelled");
-  const billingMonths =
-    form.price_mode === "monthly"
+  const activeSessions = interestOnly
+    ? []
+    : schedule.sessions.filter((s) => s.status !== "cancelled");
+  const billingMonths = interestOnly
+    ? null
+    : form.price_mode === "monthly"
       ? parseBillingMonths(Number(form.billing_months))
       : null;
-  const proration = prorateClassPrice(
-    classPeriodTotal(Number(form.price) || 0, billingMonths),
-    schedule.sessions.map((session) => ({
-      session_date: session.sessionDate,
-      start_time: session.startTime,
-      status: session.status,
-    })),
-    todayInIsrael()
-  );
+  const proration = interestOnly
+    ? prorateClassPrice(0, [], todayInIsrael())
+    : prorateClassPrice(
+        classPeriodTotal(Number(form.price) || 0, billingMonths),
+        schedule.sessions.map((session) => ({
+          session_date: session.sessionDate,
+          start_time: session.startTime,
+          status: session.status,
+        })),
+        todayInIsrael()
+      );
   const isGrade = form.audience_type === "grade";
   const isOpen = form.audience_type === "open";
 
@@ -491,7 +504,9 @@ export function formToPreviewClass(
     category: form.category || "",
     level: form.level || "",
     gender_policy:
-      schedule.scheduleType === "weekly" && schedule.weeklySlots.length > 0
+      !interestOnly &&
+      schedule.scheduleType === "weekly" &&
+      schedule.weeklySlots.length > 0
         ? genderPolicyFromWeeklySlots(schedule.weeklySlots)
         : form.gender_policy || "mixed",
     audience_type: form.audience_type || "age",
@@ -505,26 +520,30 @@ export function formToPreviewClass(
     grade_max: isGrade && form.grade_max ? Number(form.grade_max) : 0,
     capacity,
     billing_months: billingMonths,
-    pick_one_slot: form.pick_one_slot ?? true,
-    price: Number(form.price) || 0,
-    start_date: legacy.start_date ?? "",
-    end_date: legacy.end_date ?? "",
-    day_of_week: legacy.day_of_week ?? 0,
-    start_time: legacy.start_time ?? "",
-    end_time: legacy.end_time ?? "",
+    pick_one_slot: interestOnly ? false : form.pick_one_slot ?? true,
+    price: interestOnly ? 0 : Number(form.price) || 0,
+    start_date: interestOnly ? "" : legacy.start_date ?? "",
+    end_date: interestOnly ? "" : legacy.end_date ?? "",
+    day_of_week: interestOnly ? 0 : legacy.day_of_week ?? 0,
+    start_time: interestOnly ? "" : legacy.start_time ?? "",
+    end_time: interestOnly ? "" : legacy.end_time ?? "",
     status: previewStatus,
     image_url: imageUrl ?? "",
     instructor_name: instructorName ?? "",
     taken_count: 0,
-    available: capacity,
+    available: isUnlimitedCapacity(capacity)
+      ? UNLIMITED_AVAILABLE_SENTINEL
+      : capacity ?? 0,
     schedule_type: schedule.scheduleType,
-    schedule_days:
-      schedule.scheduleType === "custom"
+    schedule_days: interestOnly
+      ? ""
+      : schedule.scheduleType === "custom"
         ? ""
         : formatWeeklyDays(schedule.weeklySlots.map((s) => s.dayOfWeek)) || "",
     session_count: activeSessions.length,
     billable_session_count: proration.billableCount,
     remaining_session_count: proration.remainingCount,
+    interest_only: interestOnly,
   };
 }
 

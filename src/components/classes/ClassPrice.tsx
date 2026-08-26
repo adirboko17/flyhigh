@@ -5,8 +5,10 @@ import { cn } from "@/utils/cn";
 
 export function classPriceLabel(
   proration: ProratedClassPrice,
-  billingMonths?: number | null
+  billingMonths?: number | null,
+  interestOnly?: boolean
 ): string {
+  if (interestOnly) return "הרשמה";
   if (proration.hasEnded) return "החוג הסתיים";
   if (proration.isLate) return "מחיר מעכשיו";
   if (parseBillingMonths(billingMonths)) return "מחיר לחודש";
@@ -18,11 +20,13 @@ export function ClassPriceAmount({
   soldOut = false,
   size = "card",
   billingMonths,
+  interestOnly = false,
 }: {
   proration: ProratedClassPrice;
   soldOut?: boolean;
   size?: "card" | "panel";
   billingMonths?: number | null;
+  interestOnly?: boolean;
 }) {
   const months = parseBillingMonths(billingMonths);
   const amountClass =
@@ -32,6 +36,14 @@ export function ClassPriceAmount({
   const monthlyPrice = months
     ? Math.round((proration.fullPrice / months) * 100) / 100
     : null;
+
+  if (interestOnly) {
+    return (
+      <p className={cn(amountClass, soldOut ? "text-ink-400" : "text-brand-700")}>
+        ללא תשלום
+      </p>
+    );
+  }
 
   if (proration.hasEnded) {
     return (
@@ -82,12 +94,22 @@ export function ClassPriceNote({
   proration,
   compact = false,
   billingMonths,
+  interestOnly = false,
 }: {
   proration: ProratedClassPrice;
   compact?: boolean;
   billingMonths?: number | null;
+  interestOnly?: boolean;
 }) {
   const months = parseBillingMonths(billingMonths);
+
+  if (interestOnly) {
+    return (
+      <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
+        בלי תאריך ובלי חיוב — רק הרשמה
+      </p>
+    );
+  }
 
   if (proration.hasEnded) {
     return (

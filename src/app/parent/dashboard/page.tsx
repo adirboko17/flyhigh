@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/Card";
+import { CancelInterestEnrollmentButton } from "@/components/parent/CancelInterestEnrollmentButton";
 import { PayOpenChargeButton } from "@/components/payments/PayOpenChargeButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
@@ -70,7 +71,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, people_count, classes(id, title, day_of_week, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
+        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -112,6 +113,9 @@ export default async function ParentDashboard() {
     (e) =>
       e.status !== "cancelled" &&
       (e.payment_status === "unpaid" || e.payment_status === "partial")
+  );
+  const interestEnrollments = classEnrollments.filter(
+    (e) => e.status !== "cancelled" && e.payment_status === "not_required"
   );
 
   const openPayments = allPayments.filter((p) => p.status === "pending");
@@ -279,6 +283,13 @@ export default async function ParentDashboard() {
       tone: "brand" as const,
       title: `${pendingEnrollments.length} ${pendingEnrollments.length === 1 ? "הרשמה ממתינה" : "הרשמות ממתינות"} לאישור`,
       detail: "נעדכן אותכם ברגע שההרשמה תאושר",
+      href: "#enrollments",
+    },
+    interestEnrollments.length > 0 && {
+      icon: "📝",
+      tone: "brand" as const,
+      title: `${interestEnrollments.length} ${interestEnrollments.length === 1 ? "הרשמת עניין" : "הרשמות עניין"}`,
+      detail: "נרשמתם בלי תשלום. כשהחוג ייפתח נעדכן לגבי התשלום",
       href: "#enrollments",
     },
     waitingList.length > 0 && {
@@ -795,6 +806,7 @@ type EnrollmentRowData = {
     day_of_week: number | null;
     start_time: string | null;
     end_time: string | null;
+    interest_only?: boolean | null;
   } | null;
   programs: { title: string; kind?: "membership" | "activity" | null } | null;
   pool_passes: { title: string; entries_count: number } | null;
@@ -865,38 +877,62 @@ function EnrollmentRow({
     enrollment.payment_status,
     paymentMethod
   );
+  const interestOnly =
+    enrollment.payment_status === "not_required" ||
+    Boolean(enrollment.classes?.interest_only);
+  const traineeName = enrollment.children?.full_name ?? parentName;
+  const canCancelInterest =
+    interestOnly && enrollment.status !== "cancelled";
 
   return (
-    <li className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-      <div className="min-w-0">
-        <p className="truncate font-semibold text-ink-900">
-          {enrollmentTitle(enrollment)}
-        </p>
-        <p className="truncate text-sm text-ink-500">
-          {enrollment.children?.full_name ?? parentName}
-          {" · "}
-          {schedule.day ?? ENROLLMENT_TYPE[enrollment.type]}
-          {schedule.time && (
-            <>
-              {" · "}
-              <span dir="ltr" className="tabular-nums">
-                {schedule.time}
-              </span>
-            </>
-          )}
-        </p>
-        {showDate && (
-          <p className="mt-0.5 text-xs text-ink-400">
-            נרשם ב-{formatDate(enrollment.created_at)}
+    <li className="space-y-2 py-3 first:pt-0 last:pb-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-ink-900">
+            {enrollmentTitle(enrollment)}
           </p>
-        )}
+          <p className="truncate text-sm text-ink-500">
+            {traineeName}
+            {" · "}
+            {interestOnly
+              ? "הרשמת עניין"
+              : schedule.day ?? ENROLLMENT_TYPE[enrollment.type]}
+            {!interestOnly && schedule.time && (
+              <>
+                {" · "}
+                <span dir="ltr" className="tabular-nums">
+                  {schedule.time}
+                </span>
+              </>
+            )}
+          </p>
+          {showDate && (
+            <p className="mt-0.5 text-xs text-ink-400">
+              נרשם ב-{formatDate(enrollment.created_at)}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
+            {ENROLLMENT_STATUS[enrollment.status].label}
+          </Badge>
+          <Badge tone={paymentBadge.tone}>{paymentBadge.label}</Badge>
+        </div>
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <Badge tone={ENROLLMENT_STATUS[enrollment.status].tone}>
-          {ENROLLMENT_STATUS[enrollment.status].label}
-        </Badge>
-        <Badge tone={paymentBadge.tone}>{paymentBadge.label}</Badge>
-      </div>
+      {canCancelInterest && (
+        <div className="rounded-xl bg-brand-50 px-3 py-2.5">
+          <p className="text-xs leading-relaxed text-brand-800">
+            זו הרשמת עניין בלבד. כשהחוג ייפתח נעדכן לגבי התשלום.
+          </p>
+          <div className="mt-2">
+            <CancelInterestEnrollmentButton
+              enrollmentId={enrollment.id}
+              classTitle={enrollment.classes?.title ?? "החוג"}
+              traineeName={traineeName}
+            />
+          </div>
+        </div>
+      )}
     </li>
   );
 }

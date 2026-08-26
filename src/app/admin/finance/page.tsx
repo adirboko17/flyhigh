@@ -13,7 +13,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
-import { PAYMENT_METHOD, PAYMENT_STATUS } from "@/lib/constants";
+import { adminPaymentBadge, PAYMENT_METHOD } from "@/lib/constants";
+import { reconcilePendingCardcomCheckouts } from "@/lib/payments/cardcomCheckout";
 import {
   buildPayroll,
   formatHours,
@@ -104,6 +105,7 @@ export default async function AdminFinancePage({
   const { start: monthStart, end: monthEnd } = monthRange(month);
 
   const supabase = await createAdminDataClient();
+  await reconcilePendingCardcomCheckouts();
 
   const [
     { data: payments },
@@ -312,7 +314,10 @@ export default async function AdminFinancePage({
   const newEnrollments = newEnrollmentsCount ?? 0;
 
   const activeClasses = (classes ?? []).filter((c) => c.status === "active");
-  const totalCapacity = activeClasses.reduce((sum, c) => sum + c.capacity, 0);
+  const totalCapacity = activeClasses.reduce(
+    (sum, c) => sum + (c.capacity ?? 0),
+    0
+  );
   const takenSeats = takenSeatsCount ?? 0;
   const occupancy =
     totalCapacity > 0 ? Math.round((takenSeats / totalCapacity) * 100) : 0;
@@ -605,7 +610,12 @@ export default async function AdminFinancePage({
               </TR>
             </THead>
             <TBody>
-              {monthPayments.map((payment) => (
+              {monthPayments.map((payment) => {
+                const badge = adminPaymentBadge(
+                  payment.status,
+                  payment.payment_method
+                );
+                return (
                 <TR key={payment.id}>
                   <TD className="max-w-[9rem] truncate font-semibold text-ink-900 sm:max-w-none">
                     {payment.profiles?.full_name ?? "-"}
@@ -622,15 +632,14 @@ export default async function AdminFinancePage({
                       : "-"}
                   </TD>
                   <TD className="hidden sm:table-cell">
-                    <Badge tone={PAYMENT_STATUS[payment.status].tone}>
-                      {PAYMENT_STATUS[payment.status].label}
-                    </Badge>
+                    <Badge tone={badge.tone}>{badge.label}</Badge>
                   </TD>
                   <TD className="whitespace-nowrap text-ink-500">
                     {formatDate(payment.paid_at ?? payment.created_at)}
                   </TD>
                 </TR>
-              ))}
+                );
+              })}
             </TBody>
           </Table>
         ) : (

@@ -404,7 +404,7 @@ export type Database = {
           age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           billing_months: number | null
-          capacity: number
+          capacity: number | null
           category: string | null
           created_at: string
           day_of_week: number | null
@@ -417,6 +417,7 @@ export type Database = {
           id: string
           image_url: string | null
           instructor_id: string | null
+          interest_only: boolean
           level: string | null
           pick_one_slot: boolean
           price: number
@@ -432,7 +433,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
-          capacity?: number
+          capacity?: number | null
           category?: string | null
           created_at?: string
           day_of_week?: number | null
@@ -445,6 +446,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           instructor_id?: string | null
+          interest_only?: boolean
           level?: string | null
           pick_one_slot?: boolean
           price?: number
@@ -460,7 +462,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
-          capacity?: number
+          capacity?: number | null
           category?: string | null
           created_at?: string
           day_of_week?: number | null
@@ -473,6 +475,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           instructor_id?: string | null
+          interest_only?: boolean
           level?: string | null
           pick_one_slot?: boolean
           price?: number
@@ -1596,7 +1599,7 @@ export type Database = {
         Args: { p_class_id: string }
         Returns: {
           available: number
-          capacity: number
+          capacity: number | null
           day_of_week: number
           end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
@@ -1614,7 +1617,7 @@ export type Database = {
           available: number
           billable_session_count: number
           billing_months: number | null
-          capacity: number
+          capacity: number | null
           category: string
           day_of_week: number
           description: string
@@ -1638,6 +1641,7 @@ export type Database = {
           status: Database["public"]["Enums"]["class_status"]
           taken_count: number
           title: string
+          interest_only: boolean
         }[]
       }
       preview_coupon:
@@ -1685,7 +1689,7 @@ export type Database = {
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
       coupon_discount_type: "percent" | "fixed"
-      enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded"
+      enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded" | "not_required"
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
       enrollment_type: "class" | "program" | "pool_pass" | "private_lesson"
       gender_type: "male" | "female" | "other"
@@ -1849,7 +1853,7 @@ export const Constants = {
       class_session_status: ["scheduled", "cancelled", "completed"],
       class_status: ["active", "inactive", "full"],
       coupon_discount_type: ["percent", "fixed"],
-      enrollment_payment_status: ["unpaid", "partial", "paid", "refunded"],
+      enrollment_payment_status: ["unpaid", "partial", "paid", "refunded", "not_required"],
       enrollment_status: ["pending", "active", "cancelled", "completed"],
       enrollment_type: ["class", "program", "pool_pass", "private_lesson"],
       gender_type: ["male", "female", "other"],

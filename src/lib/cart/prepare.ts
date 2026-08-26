@@ -172,7 +172,7 @@ async function prepareClassLine(
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -196,6 +196,12 @@ async function prepareClassLine(
 
   if (!cls) {
     return { success: false, error: `${item.title} אינו זמין להרשמה.` };
+  }
+  if (cls.interest_only) {
+    return {
+      success: false,
+      error: `ההרשמה ל${cls.title} היא ללא תשלום. רעננו את העמוד ונסו שוב.`,
+    };
   }
 
   let weeklySlotId: string | null = null;
@@ -278,15 +284,17 @@ async function prepareClassLine(
   const { count: takenCount } = await takenQuery;
   const reservedKey = `${classId}:${weeklySlotId ?? "all"}`;
   const reservedSpots = reserved.classSpots.get(reservedKey) ?? 0;
-  const available = cls.capacity - (takenCount ?? 0) - reservedSpots;
-  if (participants.length > available) {
-    return {
-      success: false,
-      error:
-        available <= 0
-          ? `${cls.title} מלא.`
-          : `אין מספיק מקומות ב${cls.title} לכל המתאמנים שבסל.`,
-    };
+  if (cls.capacity != null) {
+    const available = cls.capacity - (takenCount ?? 0) - reservedSpots;
+    if (participants.length > available) {
+      return {
+        success: false,
+        error:
+          available <= 0
+            ? `${cls.title} מלא.`
+            : `אין מספיק מקומות ב${cls.title} לכל המתאמנים שבסל.`,
+      };
+    }
   }
 
   const [{ data: tiersJson }, categorySiblingIds] = await Promise.all([

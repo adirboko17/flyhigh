@@ -94,6 +94,7 @@ export const ENROLLMENT_PAYMENT_STATUS: Record<
   partial: { label: "שולם חלקית", tone: "warning" },
   paid: { label: "שולם", tone: "success" },
   refunded: { label: "הוחזר", tone: "neutral" },
+  not_required: { label: "הרשמת עניין", tone: "info" },
 };
 
 /** תווית ללקוח כשהתשלום לא בוצע בכרטיס אשראי — נגבה/מאושר מול המשרד. */
@@ -131,6 +132,9 @@ export function parentEnrollmentDisplayBadge(
     chargeStatus?: Enums<"payment_status"> | null;
   }
 ): { label: string; tone: BadgeTone } {
+  if (paymentStatus === "not_required") {
+    return ENROLLMENT_PAYMENT_STATUS.not_required;
+  }
   if (paymentStatus === "paid") {
     return ENROLLMENT_STATUS.active;
   }
@@ -160,6 +164,17 @@ export const PAYMENT_STATUS: Record<
   failed: { label: "נכשל", tone: "danger" },
   refunded: { label: "הוחזר", tone: "neutral" },
 };
+
+/** אשראי שעדיין לא אושר בקארדקום — לא אותו דבר כמו חוב במזומן/העברה. */
+export function adminPaymentBadge(
+  status: Enums<"payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined
+): { label: string; tone: BadgeTone } {
+  if (status === "pending" && paymentMethod === "credit_card") {
+    return { label: "ממתין לסליקה", tone: "warning" };
+  }
+  return PAYMENT_STATUS[status];
+}
 
 /** תצוגת סטטוס חיוב באזור האישי — לא בניהול. */
 export function parentPaymentBadge(

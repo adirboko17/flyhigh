@@ -20,7 +20,12 @@ export async function setClassStatus(
         .in("status", ["active", "pending"]),
     ]);
 
-    if (cls && count != null && count >= cls.capacity) {
+    if (
+      cls &&
+      cls.capacity != null &&
+      count != null &&
+      count >= cls.capacity
+    ) {
       status = "full";
     }
   }

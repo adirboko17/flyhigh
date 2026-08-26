@@ -11,6 +11,7 @@ import {
   ClassAttendanceHistory,
   type AttendanceRecord,
 } from "@/components/instructor/ClassAttendanceHistory";
+import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { CLASS_STATUS, DAY_ABBR, dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
 import { formatDateShort, formatTime } from "@/utils/format";
@@ -23,7 +24,7 @@ export interface InstructorClassData {
   dayOfWeek: number | null;
   startTime: string | null;
   endTime: string | null;
-  capacity: number;
+  capacity: number | null;
   studentCount: number;
   students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
   attendanceHistory: AttendanceRecord[];
@@ -67,8 +68,11 @@ export function InstructorClassCard({
       ? Math.round((presentCount / attendanceHistory.length) * 100)
       : null;
 
+  const unlimited = isUnlimitedCapacity(capacity);
   const fillPercent =
-    capacity > 0 ? Math.min(Math.round((studentCount / capacity) * 100), 100) : 0;
+    capacity != null && capacity > 0
+      ? Math.min(Math.round((studentCount / capacity) * 100), 100)
+      : 0;
   const dayAbbr = dayOfWeek !== null ? DAY_ABBR[dayOfWeek] : "–";
 
   return (
@@ -132,10 +136,10 @@ export function InstructorClassCard({
             <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
               <span className="text-ink-500">תלמידים רשומים</span>
               <span className="font-semibold tabular-nums text-ink-800">
-                {studentCount}
-                <span className="text-ink-400"> / {capacity}</span>
+                {formatClassOccupancy(studentCount, capacity)}
               </span>
             </div>
+            {!unlimited && (
             <div className="h-2 overflow-hidden rounded-full bg-ink-100">
               <div
                 className={cn(
@@ -145,6 +149,7 @@ export function InstructorClassCard({
                 style={{ width: `${Math.max(fillPercent, 2)}%` }}
               />
             </div>
+            )}
           </div>
 
           <div className="rounded-xl bg-ink-50 px-3 py-2.5">

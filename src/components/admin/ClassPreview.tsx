@@ -12,6 +12,7 @@ import {
   type ClassAudienceType,
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
+import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { CLASS_STATUS } from "@/lib/constants";
 import {
   formatScheduleSummary,
@@ -42,10 +43,12 @@ export type ClassPreviewForm = {
   grade_min: string;
   grade_max: string;
   capacity: string;
+  capacity_limited?: boolean;
   price: string;
   price_mode?: "period" | "monthly";
   pick_one_slot?: boolean;
   billing_months?: string;
+  interest_only?: boolean;
 };
 
 export function ClassPreviewPanel({
@@ -160,6 +163,7 @@ function ClassPagePreview({
 
         <div className="flex flex-wrap gap-2">
           <Badge tone={status.tone}>{status.label}</Badge>
+          {cls.interest_only && <Badge tone="info">הרשמת עניין</Badge>}
           {cls.category && <Badge tone="brand">{cls.category}</Badge>}
           {cls.level && <Badge tone="info">רמה: {cls.level}</Badge>}
         </div>
@@ -179,12 +183,16 @@ function ClassPagePreview({
             label="מדריכה"
             value={cls.instructor_name ?? "-"}
           />
-          <PreviewDetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
-          <PreviewDetailRow
-            icon="🕒"
-            label="שעות"
-            value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
-          />
+          {!cls.interest_only && (
+            <>
+              <PreviewDetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
+              <PreviewDetailRow
+                icon="🕒"
+                label="שעות"
+                value={`${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`}
+              />
+            </>
+          )}
           <PreviewDetailRow
             icon="👥"
             label="מיועד ל"
@@ -195,19 +203,29 @@ function ClassPagePreview({
             label={formatAudienceFieldLabel(cls.audience_type)}
             value={formatClassAudience(cls)}
           />
-          <PreviewDetailRow
-            icon="🗓️"
-            label="תאריך התחלה"
-            value={formatDate(cls.start_date)}
-          />
-          <PreviewDetailRow
-            icon="🏁"
-            label="תאריך סיום"
-            value={formatDate(cls.end_date)}
-          />
+          {!cls.interest_only && (
+            <>
+              <PreviewDetailRow
+                icon="🗓️"
+                label="תאריך התחלה"
+                value={formatDate(cls.start_date)}
+              />
+              <PreviewDetailRow
+                icon="🏁"
+                label="תאריך סיום"
+                value={formatDate(cls.end_date)}
+              />
+            </>
+          )}
         </div>
 
-        {upcoming.length > 0 && (
+        {cls.interest_only && (
+          <p className="rounded-2xl bg-brand-50 px-3 py-2 text-xs text-brand-800">
+            הרשמה ללא תשלום וללא מועד — בודקים כמה נרשמים לפני פתיחת החוג.
+          </p>
+        )}
+
+        {upcoming.length > 0 && !cls.interest_only && (
           <div className="rounded-2xl border border-ink-100 bg-white p-3">
             <p className="text-xs font-semibold text-ink-700">מפגשים קרובים</p>
             <ul className="mt-2 space-y-1 text-xs text-ink-600">
@@ -227,10 +245,14 @@ function ClassPagePreview({
             <div className="flex justify-between">
               <span className="text-ink-500">מקומות פנויים</span>
               <span className="font-bold text-ink-900">
-                {cls.available} מתוך {cls.capacity}
+                {formatClassOccupancy(
+                  cls.taken_count ?? 0,
+                  isUnlimitedCapacity(cls.capacity) ? null : cls.capacity
+                )}
               </span>
             </div>
-            {(cls.billable_session_count ?? cls.session_count) > 0 && (
+            {!cls.interest_only &&
+              (cls.billable_session_count ?? cls.session_count) > 0 && (
               <div className="mt-1 flex justify-between">
                 <span className="text-ink-500">מפגשים</span>
                 <span className="font-bold text-ink-900">
@@ -240,7 +262,7 @@ function ClassPagePreview({
             )}
           </div>
           <Button type="button" size="sm" className="mt-3 w-full" disabled>
-            הרשמה לחוג
+            {cls.interest_only ? "הרשמה ללא תשלום" : "הרשמה לחוג"}
           </Button>
         </div>
       </div>
@@ -258,16 +280,18 @@ function ClassPreviewPrice({ cls }: { cls: PublicClass }) {
   return (
     <>
       <p className="text-xs text-ink-500">
-        {classPriceLabel(proration, cls.billing_months)}
+        {classPriceLabel(proration, cls.billing_months, cls.interest_only)}
       </p>
       <ClassPriceAmount
         proration={proration}
         billingMonths={cls.billing_months}
+        interestOnly={cls.interest_only}
       />
       <div className="mt-1">
         <ClassPriceNote
           proration={proration}
           billingMonths={cls.billing_months}
+          interestOnly={cls.interest_only}
         />
       </div>
     </>

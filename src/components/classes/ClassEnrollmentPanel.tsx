@@ -11,6 +11,7 @@ import {
   siblingTiersForCheckout,
 } from "@/lib/finance/siblingDiscount";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
+import { isInterestClass } from "@/lib/classes/interest";
 import type { PublicClass, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -38,7 +39,8 @@ export async function ClassEnrollmentPanel({
   proration,
   slots = [],
 }: ClassEnrollmentPanelProps) {
-  const registrationClosed = soldOut || proration.hasEnded;
+  const interestOnly = isInterestClass(cls);
+  const registrationClosed = soldOut || (!interestOnly && proration.hasEnded);
   const profile = await getSessionProfile();
 
   const supabase = await createClient();
@@ -54,7 +56,8 @@ export async function ClassEnrollmentPanel({
     <GuestEnrollmentActions
       classId={cls.id}
       soldOut={soldOut}
-      ended={proration.hasEnded}
+      ended={!interestOnly && proration.hasEnded}
+      interestOnly={interestOnly}
     />
   );
 
@@ -118,8 +121,9 @@ export async function ClassEnrollmentPanel({
           gradeMin={cls.grade_min}
           gradeMax={cls.grade_max}
           soldOut={soldOut}
-          ended={proration.hasEnded}
+          ended={!interestOnly && proration.hasEnded}
           availableSpots={cls.available}
+          interestOnly={interestOnly}
           parent={{
             fullName: profile.full_name,
             birthDate: profile.birth_date,
@@ -145,7 +149,7 @@ export async function ClassEnrollmentPanel({
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
         <p className="text-sm text-ink-500">
-          {classPriceLabel(proration, cls.billing_months)}
+          {classPriceLabel(proration, cls.billing_months, interestOnly)}
         </p>
         <div className="mt-1">
           <ClassPriceAmount
@@ -153,15 +157,17 @@ export async function ClassEnrollmentPanel({
             soldOut={registrationClosed}
             size="panel"
             billingMonths={cls.billing_months}
+            interestOnly={interestOnly}
           />
         </div>
         <div className="mt-1">
           <ClassPriceNote
             proration={proration}
             billingMonths={cls.billing_months}
+            interestOnly={interestOnly}
           />
         </div>
-        {(proration.isLate || proration.hasEnded) && (
+        {!interestOnly && (proration.isLate || proration.hasEnded) && (
           <div className="mt-3">
             <ClassLateRegistrationBanner proration={proration} />
           </div>
@@ -187,7 +193,8 @@ export async function ClassEnrollmentPanel({
           {cls.audience_type === "grade" && (
             <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           )}
-          {proration.billableCount > 0 && (
+          {interestOnly && <Badge tone="info">הרשמת עניין</Badge>}
+          {!interestOnly && proration.billableCount > 0 && (
             <Badge tone="neutral">
               {proration.isLate
                 ? `${proration.remainingCount} מתוך ${proration.billableCount} מפגשים`

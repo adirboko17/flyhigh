@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AdminRowActions } from "@/components/admin/AdminRowActions";
+import { CustomerForm } from "@/components/admin/CustomerForm";
+import type {
+  CustomerChild,
+  CustomerWithChildren,
+} from "@/components/admin/customerTypes";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import {
   Card,
   CardContent,
@@ -11,41 +19,17 @@ import {
 } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
+import { deleteCustomer } from "@/lib/admin/customerActions";
 import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
 import { declarationSchoolYear } from "@/lib/health-declaration";
 import { formatSchoolGrade } from "@/lib/school-grade";
 import { cn } from "@/utils/cn";
 import { calcAge, formatDate } from "@/utils/format";
-export type CustomerChild = {
-  id: string;
-  full_name: string;
-  birth_date: string | null;
-  gender: "male" | "female" | "other" | null;
-  school_grade: number | null;
-  grade_school_year: number | null;
-  notes: string | null;
-  created_at: string;
-  healthDeclaration: {
-    id_number: string;
-    signed_at: string;
-    accepted: boolean;
-    child_name: string;
-  } | null;
-};
 
-export type CustomerWithChildren = {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  birth_date: string | null;
-  city: string | null;
-  address: string | null;
-  created_at: string;
-  children: CustomerChild[];
-};
+export type { CustomerChild, CustomerWithChildren };
 
 interface CustomerListProps {
   customers: CustomerWithChildren[];
@@ -66,8 +50,17 @@ function matchesCustomer(customer: CustomerWithChildren, query: string) {
 }
 
 export function CustomerList({ customers }: CustomerListProps) {
-  const [selected, setSelected] = useState<CustomerWithChildren | null>(null);
+  const router = useRouter();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<CustomerWithChildren | "new" | null>(
+    null
+  );
   const [query, setQuery] = useState("");
+
+  const selected = useMemo(
+    () => customers.find((customer) => customer.id === selectedId) ?? null,
+    [customers, selectedId]
+  );
 
   const filtered = useMemo(
     () => customers.filter((c) => matchesCustomer(c, query)),
@@ -77,7 +70,7 @@ export function CustomerList({ customers }: CustomerListProps) {
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key === "Escape") setSelectedId(null);
     };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
@@ -87,8 +80,52 @@ export function CustomerList({ customers }: CustomerListProps) {
     };
   }, [selected]);
 
+  async function handleDelete(customer: CustomerWithChildren) {
+    const result = await deleteCustomer({ profileId: customer.id });
+    if (result.success) {
+      if (selectedId === customer.id) setSelectedId(null);
+      router.refresh();
+      return {};
+    }
+    return { error: result.error };
+  }
+
+  const formModal = (
+    <Modal
+      open={editing !== null}
+      onClose={() => setEditing(null)}
+      title={editing === "new" ? "הוספת לקוח" : "עריכת לקוח"}
+      description={
+        editing === "new"
+          ? "הלקוח יוכל להתחבר מיד עם המייל והסיסמה, בלי אימות מייל."
+          : "שינוי פרטי הלקוח, הילדים ופרטי ההתחברות."
+      }
+      className="max-w-2xl"
+    >
+      {editing !== null && (
+        <CustomerForm
+          existing={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </Modal>
+  );
+
   if (customers.length === 0) {
-    return <EmptyState title="אין לקוחות עדיין" />;
+    return (
+      <>
+        <EmptyState
+          title="אין לקוחות עדיין"
+          description="הוסיפו לקוח עם מייל וסיסמה, והוא יוכל להתחבר מיד."
+          action={
+            <Button type="button" onClick={() => setEditing("new")}>
+              + לקוח חדש
+            </Button>
+          }
+        />
+        {formModal}
+      </>
+    );
   }
 
   return (
@@ -98,6 +135,7 @@ export function CustomerList({ customers }: CustomerListProps) {
         onQueryChange={setQuery}
         resultCount={filtered.length}
         totalCount={customers.length}
+        onNew={() => setEditing("new")}
       />
 
       {filtered.length === 0 ? (
@@ -115,6 +153,7 @@ export function CustomerList({ customers }: CustomerListProps) {
                 <TH className="hidden md:table-cell">אימייל</TH>
                 <TH>ילדים</TH>
                 <TH className="hidden sm:table-cell">הצטרף</TH>
+                <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
             </THead>
             <TBody>
@@ -124,7 +163,7 @@ export function CustomerList({ customers }: CustomerListProps) {
                 <TR
                   key={customer.id}
                   className="cursor-pointer"
-                  onClick={() => setSelected(customer)}
+                  onClick={() => setSelectedId(customer.id)}
                 >
                   <TD>
                     <div className="flex items-center gap-2.5">
@@ -150,7 +189,7 @@ export function CustomerList({ customers }: CustomerListProps) {
                         className="cursor-pointer transition-opacity hover:opacity-80"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelected(customer);
+                          setSelectedId(customer.id);
                         }}
                       >
                         {kids} {kids === 1 ? "ילד" : "ילדים"}
@@ -161,6 +200,14 @@ export function CustomerList({ customers }: CustomerListProps) {
                   </TD>
                   <TD className="hidden whitespace-nowrap text-ink-500 sm:table-cell">
                     {formatDate(customer.created_at)}
+                  </TD>
+                  <TD onClick={(e) => e.stopPropagation()}>
+                    <AdminRowActions
+                      onView={() => setSelectedId(customer.id)}
+                      onEdit={() => setEditing(customer)}
+                      itemLabel={customer.full_name}
+                      onDelete={() => handleDelete(customer)}
+                    />
                   </TD>
                 </TR>
               );
@@ -173,9 +220,19 @@ export function CustomerList({ customers }: CustomerListProps) {
       {selected && (
         <CustomerDetailPanel
           customer={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => setSelectedId(null)}
+          onEdit={() => {
+            setSelectedId(null);
+            setEditing(selected);
+          }}
+          onDelete={async () => {
+            const result = await handleDelete(selected);
+            if (result.error) window.alert(result.error);
+          }}
         />
       )}
+
+      {formModal}
     </div>
   );
 }
@@ -185,11 +242,13 @@ function CustomerSearchBar({
   onQueryChange,
   resultCount,
   totalCount,
+  onNew,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
   resultCount: number;
   totalCount: number;
+  onNew: () => void;
 }) {
   const isSearching = query.trim().length > 0;
 
@@ -202,7 +261,8 @@ function CustomerSearchBar({
         </p>
       </div>
       <div className="p-4">
-        <div className="relative">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
           <SearchIcon className="pointer-events-none absolute inset-y-0 start-4 my-auto h-[18px] w-[18px] text-ink-400" />
           <Input
             type="search"
@@ -222,6 +282,14 @@ function CustomerSearchBar({
               <ClearIcon className="h-4 w-4" />
             </button>
           )}
+          </div>
+          <Button
+            type="button"
+            onClick={onNew}
+            className="h-12 shrink-0 px-6 sm:w-auto"
+          >
+            + לקוח חדש
+          </Button>
         </div>
         {isSearching && (
           <p className="mt-3 text-sm text-ink-500">
@@ -278,9 +346,13 @@ function ClearIcon({ className }: { className?: string }) {
 function CustomerDetailPanel({
   customer,
   onClose,
+  onEdit,
+  onDelete,
 }: {
   customer: CustomerWithChildren;
   onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void | Promise<void>;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -308,6 +380,30 @@ function CustomerDetailPanel({
             >
               סגירה
             </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-xl bg-white/15 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/25"
+              >
+                עריכה
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `למחוק את ${customer.full_name}? החשבון, הילדים וההרשמות יימחקו ולא ניתן לשחזר.`
+                    )
+                  ) {
+                    void onDelete();
+                  }
+                }}
+                className="rounded-xl bg-red-500/90 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-red-500"
+              >
+                מחיקה
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <Avatar
@@ -341,8 +437,14 @@ function CustomerDetailPanel({
               <DetailRow label="תאריך לידה">
                 {customer.birth_date ? formatDate(customer.birth_date) : "—"}
               </DetailRow>
+              <DetailRow label="מגדר">
+                {customer.gender ? GENDER[customer.gender] : "—"}
+              </DetailRow>
               <DetailRow label="עיר">{customer.city ?? "—"}</DetailRow>
               <DetailRow label="כתובת">{customer.address ?? "—"}</DetailRow>
+              {customer.receipt_name && (
+                <DetailRow label="שם לקבלה">{customer.receipt_name}</DetailRow>
+              )}
               <DetailRow label="תאריך הצטרפות">
                 {formatDate(customer.created_at)}
               </DetailRow>
@@ -354,9 +456,18 @@ function CustomerDetailPanel({
               <h3 className="font-display text-lg font-bold text-ink-900">
                 ילדים
               </h3>
-              {customer.children.length > 0 && (
-                <Badge tone="brand">{customer.children.length}</Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {customer.children.length > 0 && (
+                  <Badge tone="brand">{customer.children.length}</Badge>
+                )}
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="text-sm font-semibold text-brand-600 hover:underline"
+                >
+                  עריכה
+                </button>
+              </div>
             </div>
 
             {customer.children.length > 0 ? (
@@ -368,7 +479,14 @@ function CustomerDetailPanel({
             ) : (
               <Card className="bg-ink-50/60">
                 <CardContent className="py-8 text-center text-sm text-ink-500">
-                  אין ילדים רשומים ללקוח זה
+                  <p>אין ילדים רשומים ללקוח זה</p>
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="mt-2 font-semibold text-brand-600 hover:underline"
+                  >
+                    הוספת ילד/ה
+                  </button>
                 </CardContent>
               </Card>
             )}

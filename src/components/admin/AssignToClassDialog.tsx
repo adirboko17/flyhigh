@@ -231,8 +231,10 @@ export function AssignToClassDialog({
     );
   }, [customers, search]);
 
-  const available = cls.capacity - registered;
-  const overCapacity = childIds.length > 0 && childIds.length > available;
+  const available =
+    cls.capacity == null ? Number.POSITIVE_INFINITY : cls.capacity - registered;
+  const overCapacity =
+    cls.capacity != null && childIds.length > 0 && childIds.length > available;
   const isCreditCard = method === "credit_card";
 
   function handleMethodChange(next: AssignChargeMethod) {
@@ -254,7 +256,7 @@ export function AssignToClassDialog({
       setError("נא לבחור לקוח ולפחות ילד/ה אחד/ת.");
       return;
     }
-    if (cls.pick_one_slot && !weeklySlotId) {
+    if (!cls.interest_only && cls.pick_one_slot && !weeklySlotId) {
       setError("נא לבחור מועד לשיבוץ.");
       return;
     }
@@ -262,11 +264,13 @@ export function AssignToClassDialog({
     setSaving(true);
     setError(null);
 
-    const payload = {
-      amount: Number(amount || 0),
-      method,
-      markPaid,
-    };
+    const payload = cls.interest_only
+      ? { amount: 0, method: "none" as const, markPaid: false }
+      : {
+          amount: Number(amount || 0),
+          method,
+          markPaid,
+        };
 
     const result = isWaitlist
       ? await assignWaitlistEntry({ waitlistId: mode.entry.id, ...payload })
@@ -302,26 +306,37 @@ export function AssignToClassDialog({
       className="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {cls.interest_only && (
+          <p className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+            זו הרשמת עניין — השיבוץ יישמר בלי חיוב.
+          </p>
+        )}
+
         <div className="rounded-2xl border border-ink-100 bg-ink-50/60 p-4 text-sm">
           <div className="flex justify-between gap-3">
             <span className="text-ink-500">תפוסה נוכחית</span>
             <span className="font-semibold text-ink-900">
-              {registered} מתוך {cls.capacity}
+              {cls.capacity == null
+                ? `${registered} · ללא הגבלה`
+                : `${registered} מתוך ${cls.capacity}`}
             </span>
           </div>
           <div className="mt-1.5 flex justify-between gap-3">
-            <span className="text-ink-500">מחיר לילד/ה</span>
+            <span className="text-ink-500">
+              {cls.interest_only ? "תשלום" : "מחיר לילד/ה"}
+            </span>
             <span className="font-semibold text-ink-900">
-              {formatCurrency(unitPrice)}
+              {cls.interest_only ? "ללא תשלום" : formatCurrency(unitPrice)}
             </span>
           </div>
-          {unitPrice !== periodTotal && (
+          {!cls.interest_only && unitPrice !== periodTotal && (
             <div className="mt-1 flex justify-between gap-3 text-ink-400">
               <span>מחיר מלא לתקופה</span>
               <span className="line-through">{formatCurrency(periodTotal)}</span>
             </div>
           )}
-          {parseBillingMonths(cls.billing_months) ? (
+          {!cls.interest_only &&
+            (parseBillingMonths(cls.billing_months) ? (
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
               {formatCurrency(cls.price)} לחודש ×{" "}
               {parseBillingMonths(cls.billing_months)} חודשים. בדף הסליקה אפשר
@@ -332,15 +347,15 @@ export function AssignToClassDialog({
               בדף הסליקה אפשר לפרוס עד {classInstallmentsMax(cls.billing_months)}{" "}
               תשלומים.
             </p>
-          )}
-          {prorationNote && (
+          ))}
+          {!cls.interest_only && prorationNote && (
             <p className="mt-2 text-xs leading-relaxed text-amber-800">
               {prorationNote}
             </p>
           )}
         </div>
 
-        {cls.pick_one_slot && (
+        {!cls.interest_only && cls.pick_one_slot && (
           <Field label="מועד" required>
             <Select
               value={weeklySlotId}
@@ -403,7 +418,7 @@ export function AssignToClassDialog({
           </p>
         )}
 
-        {discountPercent > 0 && childIds.length > 0 && (
+        {!cls.interest_only && discountPercent > 0 && childIds.length > 0 && (
           <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
             הנחת אחים של {discountPercent}% חלה על הילד השני ומעלה
             {orderPreview.fullPriceChildren > 0
@@ -416,6 +431,8 @@ export function AssignToClassDialog({
           </p>
         )}
 
+        {!cls.interest_only && (
+          <>
         <Field
           label="אמצעי תשלום"
           htmlFor="assign-method"
@@ -487,6 +504,8 @@ export function AssignToClassDialog({
                 התשלום כבר התקבל — לסמן כשולם
               </label>
             )}
+          </>
+        )}
           </>
         )}
 

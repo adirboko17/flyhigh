@@ -22,6 +22,7 @@ function classSearchHaystack(cls: PublicClass) {
     cls.level,
     formatClassAudience(cls),
     formatClassGenderPolicy(cls.gender_policy),
+    cls.interest_only ? "הרשמת עניין ללא תשלום" : "",
   ]
     .filter(Boolean)
     .join(" ");

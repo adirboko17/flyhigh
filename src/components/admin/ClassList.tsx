@@ -46,6 +46,7 @@ import {
   WAITLIST_STATUS,
   dayLabel,
 } from "@/lib/constants";
+import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { cn } from "@/utils/cn";
@@ -116,7 +117,7 @@ export type AdminClassRow = {
   price: number;
   billing_months: number | null;
   pick_one_slot: boolean;
-  capacity: number;
+  capacity: number | null;
   status: keyof typeof CLASS_STATUS;
   schedule_type: Enums<"schedule_type">;
   start_date: string | null;
@@ -124,6 +125,7 @@ export type AdminClassRow = {
   sibling_discount_tiers: Json | null;
   instructors: { full_name: string } | null;
   instructor_id: string | null;
+  interest_only: boolean;
   registeredCount: number;
   waitlistCount: number;
   slots: AdminClassSlot[];
@@ -149,7 +151,9 @@ function matchesClass(item: AdminClassRow, query: string) {
   return (
     normalizeSearch(item.title).includes(q) ||
     normalizeSearch(item.category ?? "").includes(q) ||
-    normalizeSearch(item.instructors?.full_name ?? "").includes(q)
+    normalizeSearch(item.instructors?.full_name ?? "").includes(q) ||
+    (item.interest_only &&
+      (q.includes("עניין") || q.includes("הרשמת")))
   );
 }
 
@@ -171,7 +175,10 @@ function attendanceRate(item: AdminClassRow) {
   return Math.round((present / item.attendance.length) * 100);
 }
 
-function adminClassPriceLabel(item: Pick<AdminClassRow, "price" | "billing_months">) {
+function adminClassPriceLabel(
+  item: Pick<AdminClassRow, "price" | "billing_months" | "interest_only">
+) {
+  if (item.interest_only) return "ללא תשלום";
   const months = parseBillingMonths(item.billing_months);
   if (!months) return formatCurrency(item.price);
   return `${formatCurrency(item.price)} לחודש × ${months}`;
@@ -186,6 +193,7 @@ function audienceLabel(item: AdminClassRow) {
 }
 
 function scheduleLabel(item: AdminClassRow) {
+  if (item.interest_only) return "ללא מועד עדיין";
   if (item.day_of_week === null && !item.start_time) return "לוח זמנים לא הוגדר";
   const day = item.day_of_week === null ? null : `יום ${dayLabel(item.day_of_week)}`;
   const hours = item.start_time
@@ -338,9 +346,16 @@ function ClassCard({
           </div>
         )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-          <Badge tone={status.tone} className="shadow-soft">
-            {status.label}
-          </Badge>
+          <div className="flex flex-wrap gap-1.5">
+            <Badge tone={status.tone} className="shadow-soft">
+              {status.label}
+            </Badge>
+            {cls.interest_only && (
+              <Badge tone="info" className="shadow-soft">
+                הרשמת עניין
+              </Badge>
+            )}
+          </div>
           {/* בלי backdrop-filter/transform כאן — הם יוצרים containing block
               שכולא את תפריט הפעולות (position: fixed) בתוך ה-overflow-hidden של הכרטיס. */}
           <div className="rounded-lg bg-white/95 shadow-soft">
@@ -519,7 +534,7 @@ function ClassCard({
                             {slot.waitlistCount > 0
                               ? ` · ${slot.waitlistCount} בהמתנה`
                               : ""}
-                            {` · ${slot.registeredCount} / ${cls.capacity} תפוסה`}
+                            {` · ${formatClassOccupancy(slot.registeredCount, cls.capacity)}`}
                           </span>
                         </span>
                         <span
@@ -630,13 +645,15 @@ function SlotStats({
 }: {
   registered: number;
   waiting: number;
-  capacity: number;
+  capacity: number | null;
   attendanceLabel: string;
   onEnrollments: () => void;
   onWaitlist: () => void;
   onAttendance: () => void;
 }) {
-  const ratio = capacity > 0 ? registered / capacity : 0;
+  const unlimited = isUnlimitedCapacity(capacity);
+  const ratio =
+    capacity != null && capacity > 0 ? registered / capacity : 0;
   const barTone =
     ratio >= 1 ? "bg-red-500" : ratio >= 0.75 ? "bg-amber-500" : "bg-aqua-500";
 
@@ -645,16 +662,17 @@ function SlotStats({
       <div className="flex items-baseline justify-between text-sm">
         <span className="text-ink-500">תפוסה</span>
         <span className="font-semibold text-ink-900">
-          {registered}
-          <span className="text-ink-400"> / {capacity}</span>
+          {formatClassOccupancy(registered, capacity)}
         </span>
       </div>
+      {!unlimited && (
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
         <div
           className={cn("h-full rounded-full transition-all", barTone)}
           style={{ width: `${Math.min(100, ratio * 100)}%` }}
         />
       </div>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         <StatButton value={registered} label="נרשמים" onClick={onEnrollments} />
         <StatButton
@@ -918,10 +936,12 @@ function ClassDetailPanel({
             {cls.title}
           </h2>
           <p className="mt-1 text-sm text-white/80">
-            {(rosterLoading
-              ? selectedSlot?.registeredCount ?? cls.registeredCount
-              : enrollments.length)}{" "}
-            מתוך {cls.capacity} מקומות
+            {formatClassOccupancy(
+              rosterLoading
+                ? selectedSlot?.registeredCount ?? cls.registeredCount
+                : enrollments.length,
+              cls.capacity
+            )}
             {selectedSlot
               ? ` · ${formatWeeklySlotLabel(
                   selectedSlot.day_of_week,
