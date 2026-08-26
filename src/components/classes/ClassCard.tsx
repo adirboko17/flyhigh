@@ -11,6 +11,7 @@ import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
 import { formatTime } from "@/utils/format";
 import { classIsSoldOut } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
+import { instructorTitle } from "@/lib/instructors/labels";
 import type { PublicClass, PublicClassWeeklySlot } from "@/types";
 import { ClassPriceAmount, ClassPriceNote, classPriceLabel } from "./ClassPrice";
 
@@ -165,7 +166,7 @@ export function ClassCard({
         <ul className="mt-4 space-y-2">
           {cls.instructor_name && (
             <MetaRow icon="user" accent={accent}>
-              {cls.instructor_name}
+              {instructorTitle(cls.instructor_gender)} · {cls.instructor_name}
             </MetaRow>
           )}
           <MetaRow icon="calendar" accent={accent}>

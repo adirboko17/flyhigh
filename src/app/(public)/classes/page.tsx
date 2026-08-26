@@ -33,7 +33,7 @@ export default async function ClassesPage() {
         badgeIconColor="var(--logo-cyan)"
         badgeText="חוגים · שחייה לכל הגילאים"
         title="החוגים שלנו"
-        description="בחרו את החוג המתאים לילד שלכם והירשמו בקלות. כל החוגים מועברים על ידי מדריכות מוסמכות."
+        description="בחרו את החוג המתאים לילד שלכם והירשמו בקלות. כל החוגים מועברים על ידי מדריכים ומדריכות מוסמכים."
       />
 
       <div className="container-page relative z-[3] py-12">

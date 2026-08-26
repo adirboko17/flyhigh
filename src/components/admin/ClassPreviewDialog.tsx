@@ -8,6 +8,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
+import {
+  instructorTitle,
+  unassignedInstructorLabel,
+} from "@/lib/instructors/labels";
 import { CLASS_SESSION_STATUS, CLASS_STATUS, dayLabel } from "@/lib/constants";
 import {
   formatAudienceFieldLabel,
@@ -143,8 +147,11 @@ export function ClassPreviewDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailBox
             icon="👩‍🏫"
-            label="מדריכה"
-            value={cls.instructors?.full_name ?? "לא שובצה"}
+            label={instructorTitle(cls.instructors?.gender)}
+            value={
+              cls.instructors?.full_name ??
+              unassignedInstructorLabel(cls.instructors?.gender)
+            }
           />
           {!cls.interest_only && (
             <>

@@ -16,6 +16,8 @@ import {
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
+import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import {
   SessionNotesList,
   SessionNotesWorkspace,
@@ -47,6 +49,10 @@ import {
   dayLabel,
 } from "@/lib/constants";
 import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
+import {
+  instructorTitle,
+  unassignedInstructorLabel,
+} from "@/lib/instructors/labels";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { cn } from "@/utils/cn";
@@ -123,7 +129,7 @@ export type AdminClassRow = {
   start_date: string | null;
   end_date: string | null;
   sibling_discount_tiers: Json | null;
-  instructors: { full_name: string } | null;
+  instructors: { full_name: string; gender: Enums<"gender_type"> | null } | null;
   instructor_id: string | null;
   interest_only: boolean;
   registeredCount: number;
@@ -139,6 +145,7 @@ type AttendanceMode = "mark" | "history" | "notes";
 
 interface ClassListProps {
   classes: AdminClassRow[];
+  instructors: ClassInstructorOption[];
 }
 
 function normalizeSearch(value: string) {
@@ -204,7 +211,7 @@ function scheduleLabel(item: AdminClassRow) {
   return [day, hours].filter(Boolean).join(" · ");
 }
 
-export function ClassList({ classes }: ClassListProps) {
+export function ClassList({ classes, instructors }: ClassListProps) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<{
     cls: AdminClassRow;
@@ -214,6 +221,7 @@ export function ClassList({ classes }: ClassListProps) {
   } | null>(null);
   const [previewed, setPreviewed] = useState<AdminClassRow | null>(null);
   const [manualAssign, setManualAssign] = useState<AdminClassRow | null>(null);
+  const [quickEdit, setQuickEdit] = useState<AdminClassRow | null>(null);
 
   const filtered = useMemo(
     () => classes.filter((c) => matchesClass(c, query)),
@@ -268,6 +276,7 @@ export function ClassList({ classes }: ClassListProps) {
               }
               onPreview={() => setPreviewed(cls)}
               onAssign={() => setManualAssign(cls)}
+              onQuickEdit={() => setQuickEdit(cls)}
             />
           ))}
         </div>
@@ -299,6 +308,14 @@ export function ClassList({ classes }: ClassListProps) {
           onClose={() => setManualAssign(null)}
         />
       )}
+
+      {quickEdit && (
+        <ClassQuickEditDialog
+          cls={classes.find((item) => item.id === quickEdit.id) ?? quickEdit}
+          instructors={instructors}
+          onClose={() => setQuickEdit(null)}
+        />
+      )}
     </div>
   );
 }
@@ -308,6 +325,7 @@ function ClassCard({
   onOpenPanel,
   onPreview,
   onAssign,
+  onQuickEdit,
 }: {
   cls: AdminClassRow;
   onOpenPanel: (
@@ -317,6 +335,7 @@ function ClassCard({
   ) => void;
   onPreview: () => void;
   onAssign: () => void;
+  onQuickEdit: () => void;
 }) {
   const router = useRouter();
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
@@ -365,6 +384,17 @@ function ClassCard({
               itemLabel={cls.title}
               onView={onPreview}
               extraMenuItems={[
+                {
+                  label: "עריכה מהירה",
+                  icon: <QuickEditMenuIcon className="text-brand-600" />,
+                  onClick: onQuickEdit,
+                },
+                {
+                  label: "שכפול חוג",
+                  icon: <DuplicateMenuIcon className="text-brand-600" />,
+                  onClick: () =>
+                    router.push(`/admin/classes/new?from=${cls.id}`),
+                },
                 {
                   label: "שיבוץ לחוג",
                   icon: <UserPlusMenuIcon className="text-brand-600" />,
@@ -452,8 +482,12 @@ function ClassCard({
         </div>
 
         <dl className="space-y-1.5 text-sm">
-          <DetailLine icon="👩‍🏫" label="מדריכה">
-            {cls.instructors?.full_name ?? "לא שובצה"}
+          <DetailLine
+            icon="👩‍🏫"
+            label={instructorTitle(cls.instructors?.gender)}
+          >
+            {cls.instructors?.full_name ??
+              unassignedInstructorLabel(cls.instructors?.gender)}
           </DetailLine>
           {cls.slots.length <= 1 && (
             <DetailLine icon="🗓️" label="מועד">
@@ -1464,7 +1498,7 @@ function ClassSearchBar({
       <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
         <p className="text-sm font-medium text-ink-600">חיפוש חוגים</p>
         <p className="mt-0.5 text-xs text-ink-400">
-          לפי שם חוג, מדריכה או קטגוריה
+          לפי שם חוג, מדריך או קטגוריה
         </p>
       </div>
       <div className="p-4">
@@ -1475,7 +1509,7 @@ function ClassSearchBar({
               type="search"
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="הקלידו שם חוג, מדריכה או קטגוריה..."
+              placeholder="הקלידו שם חוג, מדריך או קטגוריה..."
               className="h-12 border-ink-100 bg-ink-50/50 ps-11 pe-11 shadow-soft focus:bg-white"
               aria-label="חיפוש חוגים"
             />
@@ -1529,6 +1563,48 @@ function SearchIcon({ className }: { className?: string }) {
     >
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function DuplicateMenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
+
+function QuickEditMenuIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 21v-7M4 10V3" />
+      <path d="M12 21v-9M12 8V3" />
+      <path d="M20 21v-5M20 12V3" />
+      <path d="M2 14h4M10 8h4M18 16h4" />
     </svg>
   );
 }

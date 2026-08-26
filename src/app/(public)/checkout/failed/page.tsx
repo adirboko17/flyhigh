@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { releaseAbandonedCartCheckout } from "@/lib/cart/actions";
 import {
   extractCardcomCheckoutId,
   extractCardcomLowProfileId,
@@ -22,11 +23,18 @@ export default async function CheckoutFailedPage({
     else if (Array.isArray(value) && value[0]) query.set(key, value[0]);
   }
 
-  await settleCardcomCheckout({
-    checkoutId: extractCardcomCheckoutId(query),
-    lowProfileId: extractCardcomLowProfileId(query),
-    markFailedIfUnpaid: true,
-  }).catch(() => null);
+  const checkoutId = extractCardcomCheckoutId(query);
+  const fromCart = query.get("from") === "cart";
+
+  if (fromCart && checkoutId) {
+    await releaseAbandonedCartCheckout(checkoutId).catch(() => null);
+  } else {
+    await settleCardcomCheckout({
+      checkoutId,
+      lowProfileId: extractCardcomLowProfileId(query),
+      markFailedIfUnpaid: true,
+    }).catch(() => null);
+  }
 
   return (
     <section className="container-page py-16">
@@ -38,11 +46,14 @@ export default async function CheckoutFailedPage({
           התשלום לא הושלם
         </h1>
         <p className="mt-2 text-sm text-ink-500">
-          לא בוצע חיוב, או שהעסקה נדחתה. ההרשמה נשמרה כחוב פתוח — אפשר לנסות שוב
-          מאזור האישי.
+          {fromCart
+            ? "לא בוצע חיוב. הפריטים נשארו בסל — אפשר לנסות שוב."
+            : "לא בוצע חיוב, או שהעסקה נדחתה. ההרשמה נשמרה כחוב פתוח — אפשר לנסות שוב מאזור האישי."}
         </p>
         <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <ButtonLink href="/parent/dashboard">לניסיון תשלום נוסף</ButtonLink>
+          <ButtonLink href={fromCart ? "/cart" : "/parent/dashboard"}>
+            {fromCart ? "חזרה לסל" : "לניסיון תשלום נוסף"}
+          </ButtonLink>
           <ButtonLink href="/contact" variant="outline">
             צור קשר
           </ButtonLink>

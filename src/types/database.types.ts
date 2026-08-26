@@ -859,6 +859,7 @@ export type Database = {
         Row: {
           created_at: string
           full_name: string
+          gender: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate: number | null
           id: string
           phone: string | null
@@ -868,6 +869,7 @@ export type Database = {
         Insert: {
           created_at?: string
           full_name: string
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate?: number | null
           id?: string
           phone?: string | null
@@ -877,6 +879,7 @@ export type Database = {
         Update: {
           created_at?: string
           full_name?: string
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate?: number | null
           id?: string
           phone?: string | null
@@ -1647,6 +1650,13 @@ export type Database = {
         Returns: {
           full_name: string
           id: string
+        }[]
+      }
+      list_public_class_instructor_genders: {
+        Args: never
+        Returns: {
+          class_id: string
+          gender: Database["public"]["Enums"]["gender_type"] | null
         }[]
       }
       list_public_class_sessions: {

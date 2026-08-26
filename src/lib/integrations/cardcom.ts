@@ -149,12 +149,14 @@ function createPayload(
     description: string;
     customer: CardcomCustomer;
     installments?: CardcomInstallments | null;
+    source?: "cart" | null;
   },
   includeDocument: boolean
 ) {
   const config = getCardcomConfig();
-  const successUrl = `${config.appUrl}/checkout/success?checkout=${input.checkoutId}`;
-  const failedUrl = `${config.appUrl}/checkout/failed?checkout=${input.checkoutId}`;
+  const fromCart = input.source === "cart" ? "&from=cart" : "";
+  const successUrl = `${config.appUrl}/checkout/success?checkout=${input.checkoutId}${fromCart}`;
+  const failedUrl = `${config.appUrl}/checkout/failed?checkout=${input.checkoutId}${fromCart}`;
 
   return {
     TerminalNumber: config.terminalNumber,
@@ -223,6 +225,7 @@ export async function createLowProfilePage(input: {
   description: string;
   customer: CardcomCustomer;
   installments?: CardcomInstallments | null;
+  source?: "cart" | null;
 }): Promise<{ lowProfileId: string; url: string }> {
   const attempt = async (includeDocument: boolean) => {
     const result = await postJson<Record<string, unknown>>(

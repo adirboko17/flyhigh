@@ -1,9 +1,11 @@
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
+import type { Enums } from "@/types/database.types";
 
 export type ClassInstructorOption = {
   id: string;
   full_name: string;
+  gender: Enums<"gender_type"> | null;
   /** המנהל המחובר — מוצג בראש הרשימה כ"אני". */
   isSelf?: boolean;
 };
@@ -20,7 +22,7 @@ export async function getClassInstructorOptions(): Promise<
 
   const { data: instructors } = await supabase
     .from("instructors")
-    .select("id, full_name, profile_id, status")
+    .select("id, full_name, gender, profile_id, status")
     .order("full_name");
 
   const rows = instructors ?? [];
@@ -31,7 +33,7 @@ export async function getClassInstructorOptions(): Promise<
       .from("instructors")
       .update({ status: "active", full_name: profile.full_name || self.full_name })
       .eq("id", self.id)
-      .select("id, full_name, profile_id, status")
+      .select("id, full_name, gender, profile_id, status")
       .single();
     if (reactivated) self = reactivated;
   }
@@ -41,12 +43,13 @@ export async function getClassInstructorOptions(): Promise<
       .from("instructors")
       .insert({
         full_name: profile.full_name.trim() || "מנהל",
+        gender: profile.gender,
         phone: profile.phone,
         profile_id: profile.id,
         status: "active",
         hourly_rate: 0,
       })
-      .select("id, full_name, profile_id, status")
+      .select("id, full_name, gender, profile_id, status")
       .single();
     self = created ?? null;
   }
@@ -56,13 +59,18 @@ export async function getClassInstructorOptions(): Promise<
       (row) =>
         row.status === "active" && (!self || row.id !== self.id),
     )
-    .map((row) => ({ id: row.id, full_name: row.full_name }));
+    .map((row) => ({
+      id: row.id,
+      full_name: row.full_name,
+      gender: row.gender,
+    }));
 
   const options: ClassInstructorOption[] = [];
   if (self) {
     options.push({
       id: self.id,
       full_name: self.full_name,
+      gender: self.gender,
       isSelf: true,
     });
   }

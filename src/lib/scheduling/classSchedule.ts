@@ -468,6 +468,7 @@ export function formToPreviewClass(
   schedule: ClassScheduleState,
   imageUrl: string | null,
   instructorName: string | null,
+  instructorGender: PublicClass["instructor_gender"] = null,
   previewStatus: PublicClass["status"] = "active"
 ): PublicClass {
   const capacity =
@@ -533,6 +534,7 @@ export function formToPreviewClass(
     status: previewStatus,
     image_url: imageUrl ?? "",
     instructor_name: instructorName ?? "",
+    instructor_gender: instructorGender,
     taken_count: 0,
     available: isUnlimitedCapacity(capacity)
       ? UNLIMITED_AVAILABLE_SENTINEL
@@ -611,5 +613,16 @@ export function buildInitialSchedule(
     rangeEnd: classItem.end_date ?? "",
     sessionCount: inferSessionCount(weeklySlots, sessions),
     sessions,
+  };
+}
+
+/** מעתיק לוח זמנים לחוג חדש — בלי מזהים של המועדים והמפגשים המקוריים. */
+export function cloneScheduleForNewClass(
+  schedule: ClassScheduleState
+): ClassScheduleState {
+  return {
+    ...schedule,
+    weeklySlots: schedule.weeklySlots.map(({ id: _id, ...slot }) => slot),
+    sessions: schedule.sessions.map(({ id: _id, ...session }) => session),
   };
 }

@@ -16,6 +16,11 @@ export const getPublicClasses = unstable_cache(
     if (error) throw error;
     if (slotsError) throw slotsError;
 
+    const genderResult = await supabase.rpc(
+      "list_public_class_instructor_genders"
+    );
+    const genderRows = genderResult.error ? [] : genderResult.data ?? [];
+
     const slotsByClass = new Map<string, PublicClass["weekly_slots"]>();
     for (const slot of slotRows ?? []) {
       const list = slotsByClass.get(slot.class_id) ?? [];
@@ -29,12 +34,18 @@ export const getPublicClasses = unstable_cache(
       slotsByClass.set(slot.class_id, list);
     }
 
-    return ((data as Omit<PublicClass, "weekly_slots">[]) ?? []).map((cls) => ({
+    const genderByClass = new Map<string, PublicClass["instructor_gender"]>();
+    for (const row of genderRows ?? []) {
+      genderByClass.set(row.class_id, row.gender ?? null);
+    }
+
+    return ((data as Omit<PublicClass, "weekly_slots" | "instructor_gender">[]) ?? []).map((cls) => ({
       ...cls,
       weekly_slots: slotsByClass.get(cls.id) ?? [],
+      instructor_gender: genderByClass.get(cls.id) ?? null,
     }));
   },
-  ["public-classes-v2"],
+  ["public-classes-v3"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-classes"],

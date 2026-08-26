@@ -1,9 +1,10 @@
 "use server";
 
 import { getSessionProfile } from "@/lib/auth";
-import { MIN_PASSWORD_LENGTH } from "@/lib/constants";
+import { MIN_PASSWORD_LENGTH, isGenderType } from "@/lib/constants";
 import { createAdminClient, isAdminClientConfigured } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { Enums } from "@/types/database.types";
 
 export type InstructorActionResult = { success: true } | { success: false; error: string };
 
@@ -28,6 +29,7 @@ async function createInstructorAuthUser(input: {
   account: InstructorAccountInput;
   fullName: string;
   phone: string | null;
+  gender?: Enums<"gender_type"> | null;
 }): Promise<{ success: true; profileId: string } | { success: false; error: string }> {
   if (!isAdminClientConfigured()) {
     return {
@@ -70,7 +72,10 @@ async function createInstructorAuthUser(input: {
 
   const { error: roleError } = await admin
     .from("profiles")
-    .update({ role: "instructor" })
+    .update({
+      role: "instructor",
+      ...(input.gender ? { gender: input.gender } : {}),
+    })
     .eq("id", data.user.id);
 
   if (roleError) {
@@ -83,6 +88,7 @@ async function createInstructorAuthUser(input: {
 
 export async function createInstructor(input: {
   fullName: string;
+  gender: Enums<"gender_type">;
   phone: string | null;
   hourlyRate: number | null;
   account: InstructorAccountInput | null;
@@ -95,6 +101,9 @@ export async function createInstructor(input: {
   if (!fullName) {
     return { success: false, error: "יש להזין שם מלא." };
   }
+  if (!isGenderType(input.gender)) {
+    return { success: false, error: "נא לבחור מגדר." };
+  }
 
   const phone = input.phone?.trim() || null;
   let profileId: string | null = null;
@@ -104,6 +113,7 @@ export async function createInstructor(input: {
       account: input.account,
       fullName,
       phone,
+      gender: input.gender,
     });
     if (!created.success) return created;
     profileId = created.profileId;
@@ -112,6 +122,7 @@ export async function createInstructor(input: {
   const supabase = await createClient();
   const { error } = await supabase.from("instructors").insert({
     full_name: fullName,
+    gender: input.gender,
     phone,
     hourly_rate: input.hourlyRate,
     status: "active",
@@ -143,7 +154,7 @@ export async function createInstructorAccount(input: {
   const supabase = await createClient();
   const { data: instructor } = await supabase
     .from("instructors")
-    .select("id, full_name, phone, profile_id")
+    .select("id, full_name, phone, profile_id, gender")
     .eq("id", input.instructorId)
     .maybeSingle();
 
@@ -158,6 +169,7 @@ export async function createInstructorAccount(input: {
     account: input.account,
     fullName: instructor.full_name,
     phone: instructor.phone,
+    gender: instructor.gender,
   });
   if (!created.success) return created;
 

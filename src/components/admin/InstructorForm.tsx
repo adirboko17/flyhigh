@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { MIN_PASSWORD_LENGTH } from "@/lib/constants";
+import { GENDER, MIN_PASSWORD_LENGTH, isGenderType } from "@/lib/constants";
+import type { Enums } from "@/types/database.types";
 import {
   createInstructor,
   createInstructorAccount,
@@ -15,6 +16,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 export type InstructorFormData = {
   id: string;
   full_name: string;
+  gender: Enums<"gender_type"> | null;
   phone: string | null;
   hourly_rate: number | null;
   status: "active" | "inactive";
@@ -25,6 +27,7 @@ export type InstructorFormData = {
 
 const emptyForm = {
   full_name: "",
+  gender: "",
   phone: "",
   hourly_rate: "",
   status: "active",
@@ -34,6 +37,7 @@ function toFormState(existing?: InstructorFormData) {
   if (!existing) return emptyForm;
   return {
     full_name: existing.full_name,
+    gender: existing.gender ?? "",
     phone: existing.phone ?? "",
     hourly_rate: existing.hourly_rate?.toString() ?? "",
     status: existing.status,
@@ -92,11 +96,17 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
       ? { email: account.email, password: account.password }
       : null;
 
+    if (!isGenderType(form.gender)) {
+      setError("נא לבחור מגדר.");
+      return;
+    }
+
     setLoading(true);
 
     if (!isEdit) {
       const result = await createInstructor({
         fullName: form.full_name,
+        gender: form.gender,
         phone: form.phone || null,
         hourlyRate: form.hourly_rate ? Number(form.hourly_rate) : null,
         account: credentials,
@@ -115,6 +125,7 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
       .from("instructors")
       .update({
         full_name: form.full_name,
+        gender: form.gender,
         phone: form.phone || null,
         hourly_rate: form.hourly_rate ? Number(form.hourly_rate) : null,
         status: form.status as "active" | "inactive",
@@ -155,6 +166,13 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
           autoFocus={inModal}
         />
       </Field>
+      <Field label="מגדר" required>
+        <Select value={form.gender} onChange={set("gender")} required>
+          <option value="">בחרו...</option>
+          <option value="male">{GENDER.male}</option>
+          <option value="female">{GENDER.female}</option>
+        </Select>
+      </Field>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="טלפון">
           <Input
@@ -177,8 +195,12 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
       {isEdit && (
         <Field label="סטטוס">
           <Select value={form.status} onChange={set("status")}>
-            <option value="active">פעילה</option>
-            <option value="inactive">לא פעילה</option>
+            <option value="active">
+              {form.gender === "male" ? "פעיל" : "פעילה"}
+            </option>
+            <option value="inactive">
+              {form.gender === "male" ? "לא פעיל" : "לא פעילה"}
+            </option>
           </Select>
         </Field>
       )}
@@ -222,7 +244,7 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
 
       <div className="flex gap-3">
         <Button type="submit" size={inModal ? "md" : "lg"} disabled={loading}>
-          {loading ? "שומר..." : isEdit ? "עדכון המדריכה" : "שמירת המדריכה"}
+          {loading ? "שומר..." : isEdit ? "עדכון" : "שמירה"}
         </Button>
         <Button
           type="button"

@@ -13,6 +13,7 @@ import {
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
 import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
+import { instructorTitle } from "@/lib/instructors/labels";
 import { CLASS_STATUS } from "@/lib/constants";
 import {
   formatScheduleSummary,
@@ -56,12 +57,14 @@ export function ClassPreviewPanel({
   schedule,
   imageUrl,
   instructorName,
+  instructorGender = null,
   previewStatus = "active",
 }: {
   form: ClassPreviewForm;
   schedule: ClassScheduleState;
   imageUrl: string | null;
   instructorName: string | null;
+  instructorGender?: PublicClass["instructor_gender"];
   previewStatus?: PublicClass["status"];
 }) {
   const cls = formToPreviewClass(
@@ -69,6 +72,7 @@ export function ClassPreviewPanel({
     schedule,
     imageUrl,
     instructorName,
+    instructorGender,
     previewStatus
   );
   const hasContent = Boolean(form.title.trim() || imageUrl);
@@ -180,7 +184,7 @@ function ClassPagePreview({
         <div className="grid gap-2 sm:grid-cols-2">
           <PreviewDetailRow
             icon="👩‍🏫"
-            label="מדריכה"
+            label={instructorTitle(cls.instructor_gender)}
             value={cls.instructor_name ?? "-"}
           />
           {!cls.interest_only && (

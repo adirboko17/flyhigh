@@ -17,7 +17,12 @@ import {
   checkoutCart,
   previewCartCoupon,
   quoteCart,
+  releaseAbandonedCartCheckout,
 } from "@/lib/cart/actions";
+import {
+  readPendingCartCheckoutId,
+  writePendingCartCheckoutId,
+} from "@/lib/cart/pendingCheckout";
 import type { CartItem } from "@/lib/cart/types";
 import {
   DEFERRED_PAYMENT_HINT,
@@ -64,25 +69,55 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"review" | "payment">("review");
+  const [resumeTick, setResumeTick] = useState(0);
 
   useEffect(() => {
-    if (!ready || viewer.kind !== "parent" || items.length === 0) {
-      setQuote(null);
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) setResumeTick((value) => value + 1);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || viewer.kind !== "parent") {
+      if (items.length === 0) setQuote(null);
       return;
     }
 
     let cancelled = false;
-    setQuoteLoading(true);
-    quoteCart(items).then((result) => {
+    setQuoteLoading(items.length > 0);
+
+    (async () => {
+      const pendingId = readPendingCartCheckoutId();
+      if (pendingId) {
+        const abandoned = await releaseAbandonedCartCheckout(pendingId);
+        if (cancelled) return;
+        writePendingCartCheckoutId(null);
+        if (abandoned.paid) {
+          clear();
+          setQuote(null);
+          setQuoteLoading(false);
+          return;
+        }
+      }
+
+      if (items.length === 0) {
+        setQuote(null);
+        setQuoteLoading(false);
+        return;
+      }
+
+      const result = await quoteCart(items);
       if (cancelled) return;
       setQuote(result);
       setQuoteLoading(false);
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [ready, items, viewer.kind]);
+  }, [ready, items, viewer.kind, clear, resumeTick]);
 
   useEffect(() => {
     setCoupon(null);
@@ -128,19 +163,27 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
       paymentMethod: method,
       couponCode: coupon?.code ?? null,
       receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
+      abandonCheckoutId: readPendingCartCheckoutId(),
     });
     setLoading(false);
 
     if (!result.success) {
+      if (result.paid) {
+        clear();
+        writePendingCartCheckoutId(null);
+      }
       setError(result.error);
       return;
     }
 
-    clear();
     if (result.checkoutUrl) {
+      if (result.checkoutId) writePendingCartCheckoutId(result.checkoutId);
       window.location.assign(result.checkoutUrl);
       return;
     }
+
+    clear();
+    writePendingCartCheckoutId(null);
     router.push("/parent/dashboard");
     router.refresh();
   }

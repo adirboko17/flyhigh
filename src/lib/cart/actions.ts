@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { getSessionProfile, requireRole } from "@/lib/auth";
 import type { CartItem } from "@/lib/cart/types";
 import type { Enums } from "@/types/database.types";
 import { prepareCartLine, type PreparedCartLine } from "@/lib/cart/prepare";
@@ -15,6 +15,7 @@ import { isValidCouponCode, normalizeCouponCode } from "@/lib/finance/coupon";
 import { installmentOptions } from "@/lib/finance/installments";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
+import { voidUnpaidCardcomCheckout } from "@/lib/payments/cardcomCheckout";
 import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_METHODS: readonly CheckoutPaymentMethod[] = [
@@ -42,12 +43,29 @@ export type CheckoutCartResult =
   | {
       success: true;
       checkoutUrl: string | null;
+      checkoutId: string | null;
       deferred: boolean;
       total: number;
       couponCode: string | null;
       couponDiscount: number;
     }
-  | { success: false; error: string };
+  | { success: false; error: string; paid?: boolean };
+
+export async function releaseAbandonedCartCheckout(checkoutId: string): Promise<{
+  released: boolean;
+  paid: boolean;
+}> {
+  const profile = await getSessionProfile();
+  if (!profile || profile.role !== "parent") {
+    return { released: false, paid: false };
+  }
+
+  const result = await voidUnpaidCardcomCheckout({
+    checkoutId,
+    parentId: profile.id,
+  });
+  return { released: result.voided, paid: result.paid };
+}
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
@@ -241,9 +259,21 @@ export async function checkoutCart(input: {
   paymentMethod: CheckoutPaymentMethod;
   couponCode?: string | null;
   receiptLabelId?: string | null;
+  abandonCheckoutId?: string | null;
 }): Promise<CheckoutCartResult> {
   const profile = await requireRole("parent");
   const { paymentMethod } = input;
+
+  if (input.abandonCheckoutId) {
+    const abandoned = await releaseAbandonedCartCheckout(input.abandonCheckoutId);
+    if (abandoned.paid) {
+      return {
+        success: false,
+        paid: true,
+        error: "התשלום כבר התקבל. רעננו את העמוד.",
+      };
+    }
+  }
 
   if (!ALLOWED_METHODS.includes(paymentMethod)) {
     return { success: false, error: "אמצעי התשלום שנבחר אינו נתמך." };
@@ -438,6 +468,7 @@ export async function checkoutCart(input: {
       : `רכישה מרוכזת (${lines.length} פריטים)`);
 
   let checkoutUrl: string | null = null;
+  let chargeCheckoutId: string | null = null;
 
   if (awaitingCardcom) {
     const charge = await getPaymentProvider().createCharge({
@@ -469,6 +500,7 @@ export async function checkoutCart(input: {
       };
     }
     checkoutUrl = charge.redirectUrl;
+    chargeCheckoutId = charge.checkoutId ?? null;
   }
 
   if (deferred && totalAmount > 0) {
@@ -487,6 +519,7 @@ export async function checkoutCart(input: {
   return {
     success: true,
     checkoutUrl,
+    checkoutId: chargeCheckoutId,
     deferred,
     total: totalAmount,
     couponCode,

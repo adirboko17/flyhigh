@@ -15,10 +15,13 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/client";
+import { instructorStatusLabel, instructorTitle } from "@/lib/instructors/labels";
+import type { Enums } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 export type AdminInstructorRow = {
   id: string;
   full_name: string;
+  gender: Enums<"gender_type"> | null;
   phone: string | null;
   hourly_rate: number | null;
   status: "active" | "inactive";
@@ -60,10 +63,14 @@ export function InstructorList({ instructors }: InstructorListProps) {
     <Modal
       open={editing !== null}
       onClose={() => setEditing(null)}
-      title={editing === "new" ? "מדריכה חדשה" : "עריכת מדריכה"}
+      title={
+        editing === "new"
+          ? "מדריך חדש"
+          : `עריכת ${instructorTitle(editing?.gender)}`
+      }
       description={
         editing === "new"
-          ? "המדריכה תיווצר כפעילה וניתן יהיה לשבץ אותה לחוגים."
+          ? "בחרו מגדר כדי שבכרטיסי החוג יופיע מדריך או מדריכה."
           : undefined
       }
     >
@@ -80,11 +87,11 @@ export function InstructorList({ instructors }: InstructorListProps) {
     return (
       <>
         <EmptyState
-          title="אין מדריכות עדיין"
-          description="הוסיפו את המדריכה הראשונה לצוות."
+          title="אין מדריכים עדיין"
+          description="הוסיפו את המדריך או המדריכה הראשונים לצוות."
           action={
             <Button type="button" onClick={() => setEditing("new")}>
-              + מדריכה חדשה
+              + מדריך חדש
             </Button>
           }
         />
@@ -105,7 +112,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
 
       {filtered.length === 0 ? (
         <EmptyState
-          title="לא נמצאו מדריכות"
+          title="לא נמצאו מדריכים"
           description="נסו מונח חיפוש אחר או נקו את השדה"
         />
       ) : (
@@ -161,7 +168,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
                   <TD className="hidden lg:table-cell">{i.classCount}</TD>
                   <TD>
                     <Badge tone={i.status === "active" ? "success" : "neutral"}>
-                      {i.status === "active" ? "פעילה" : "לא פעילה"}
+                      {instructorStatusLabel(i.status, i.gender)}
                     </Badge>
                   </TD>
                   <TD>
@@ -210,7 +217,7 @@ function InstructorSearchBar({
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
-        <p className="text-sm font-medium text-ink-600">חיפוש מדריכות</p>
+        <p className="text-sm font-medium text-ink-600">חיפוש מדריכים</p>
         <p className="mt-0.5 text-xs text-ink-400">לפי שם או טלפון</p>
       </div>
       <div className="p-4">
@@ -223,7 +230,7 @@ function InstructorSearchBar({
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder="הקלידו שם או טלפון..."
               className="h-12 border-ink-100 bg-ink-50/50 ps-11 pe-11 shadow-soft focus:bg-white"
-              aria-label="חיפוש מדריכות"
+              aria-label="חיפוש מדריכים"
             />
             {isSearching && (
               <button
@@ -241,18 +248,18 @@ function InstructorSearchBar({
             onClick={onNew}
             className="h-12 shrink-0 px-6 sm:w-auto"
           >
-            + מדריכה חדשה
+            + מדריך חדש
           </Button>
         </div>
         {isSearching && (
           <p className="mt-3 text-sm text-ink-500">
             {resultCount === totalCount ? (
-              <>מוצגות כל {totalCount} המדריכות</>
+              <>מוצגים כל {totalCount} המדריכים</>
             ) : (
               <>
                 נמצאו{" "}
                 <span className="font-semibold text-brand-700">{resultCount}</span>{" "}
-                מדריכות מתוך {totalCount}
+                מדריכים מתוך {totalCount}
               </>
             )}
           </p>

@@ -23,6 +23,7 @@ export interface CreateChargeInput {
 export interface ChargeResult {
   success: boolean;
   reference: string;
+  checkoutId?: string;
   /** כתובת לדף התשלום המאובטח של קארדקום. */
   redirectUrl?: string;
   error?: string;
@@ -54,6 +55,7 @@ class CardcomPaymentProvider implements PaymentProvider {
       description: input.description,
       couponRedemptionId: input.couponRedemptionId,
       installments: input.installments,
+      source: input.metadata?.cart === true ? "cart" : null,
     });
 
     if (!checkout.success) {
@@ -63,6 +65,7 @@ class CardcomPaymentProvider implements PaymentProvider {
     return {
       success: true,
       reference: checkout.reference,
+      checkoutId: checkout.checkoutId,
       redirectUrl: checkout.checkoutUrl,
     };
   }

@@ -84,6 +84,8 @@ interface Props {
   instructors: ClassInstructorOption[];
   existing?: ClassFormData;
   initialSchedule?: ClassScheduleState;
+  /** מילוי מחוג קיים, אבל השמירה יוצרת חוג חדש. */
+  duplicate?: boolean;
   /** מדרגות ברירת המחדל של המערכת, מוצגות כשהחוג לא מגדיר מדרגות משלו. */
   defaultSiblingTiers: SiblingDiscountTier[];
   categories: string[];
@@ -319,11 +321,12 @@ export function ClassForm({
   instructors,
   existing,
   initialSchedule,
+  duplicate = false,
   defaultSiblingTiers,
   categories,
 }: Props) {
   const router = useRouter();
-  const isEdit = Boolean(existing);
+  const isEdit = Boolean(existing) && !duplicate;
   const [categoryNames, setCategoryNames] = useState(categories);
   const [form, setForm] = useState(() => toFormState(existing, categories));
   const [schedule, setSchedule] = useState(
@@ -353,12 +356,11 @@ export function ClassForm({
 
   const previewImageUrl = imagePreviewUrl || form.image_url.trim() || null;
 
-  const instructorName = useMemo(() => {
-    if (!form.instructor_id) return null;
-    return (
-      instructors.find((i) => i.id === form.instructor_id)?.full_name ?? null
-    );
-  }, [form.instructor_id, instructors]);
+  const selectedInstructor = useMemo(
+    () => instructors.find((i) => i.id === form.instructor_id) ?? null,
+    [form.instructor_id, instructors]
+  );
+  const instructorName = selectedInstructor?.full_name ?? null;
 
   const set =
     (k: keyof typeof form) =>
@@ -464,10 +466,11 @@ export function ClassForm({
       imageUrl = upload.url ?? null;
     }
 
-    const nextStatus =
-      !form.capacity_limited && existing?.status === "full"
+    const nextStatus = isEdit
+      ? !form.capacity_limited && existing?.status === "full"
         ? "active"
-        : existing?.status ?? "active";
+        : existing?.status ?? "active"
+      : "active";
     const payload = toPayload(
       form,
       imageUrl,
@@ -777,7 +780,7 @@ export function ClassForm({
               )}
             </div>
             {form.interest_only && (
-              <Field label="מדריכה">
+              <Field label="מדריך או מדריכה">
                 <Select value={form.instructor_id} onChange={set("instructor_id")}>
                   <option value="">ללא שיוך</option>
                   {instructors.map((i) => (
@@ -907,7 +910,7 @@ export function ClassForm({
                 {DEFAULT_CLASS_INSTALLMENTS} תשלומים בקארדקום.
               </p>
             )}
-            <Field label="מדריכה">
+            <Field label="מדריך או מדריכה">
               <Select value={form.instructor_id} onChange={set("instructor_id")}>
                 <option value="">ללא שיוך</option>
                 {instructors.map((i) => (
@@ -1007,6 +1010,7 @@ export function ClassForm({
         schedule={schedule}
         imageUrl={previewImageUrl}
         instructorName={instructorName}
+        instructorGender={selectedInstructor?.gender ?? null}
         previewStatus={existing?.status ?? "active"}
       />
     </div>

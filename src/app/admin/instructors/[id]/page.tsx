@@ -7,9 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
+import { GENDER } from "@/lib/constants";
+import { instructorStatusLabel, instructorTitle } from "@/lib/instructors/labels";
 import { formatCurrency } from "@/utils/format";
 
-export const metadata = { title: "פרופיל מדריכה" };
+export const metadata = { title: "פרופיל מדריך" };
 
 export default async function AdminInstructorProfilePage({
   params,
@@ -25,7 +27,7 @@ export default async function AdminInstructorProfilePage({
       supabase
         .from("instructors")
         .select(
-          "id, full_name, phone, hourly_rate, status, profile_id, created_at, profiles(email)"
+          "id, full_name, gender, phone, hourly_rate, status, profile_id, created_at, profiles(email)"
         )
         .eq("id", id)
         .maybeSingle(),
@@ -53,17 +55,17 @@ export default async function AdminInstructorProfilePage({
           href="/admin/instructors"
           className="mb-3 inline-flex text-sm font-medium text-ink-500 transition hover:text-ink-800"
         >
-          ← חזרה למדריכות
+          ← חזרה למדריכים
         </Link>
         <PageHeader
           title={instructor.full_name}
-          description="פרופיל מדריכה · פרטים ומסמכי העסקה"
+          description={`פרופיל ${instructorTitle(instructor.gender)} · פרטים ומסמכי העסקה`}
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>פרטי מדריכה</CardTitle>
+          <CardTitle>פרטי {instructorTitle(instructor.gender)}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -77,7 +79,7 @@ export default async function AdminInstructorProfilePage({
                   <Badge
                     tone={instructor.status === "active" ? "success" : "neutral"}
                   >
-                    {instructor.status === "active" ? "פעילה" : "לא פעילה"}
+                    {instructorStatusLabel(instructor.status, instructor.gender)}
                   </Badge>
                 </div>
                 <p className="text-sm text-ink-500">
@@ -93,6 +95,12 @@ export default async function AdminInstructorProfilePage({
             </div>
 
             <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:text-end">
+              <div>
+                <dt className="text-ink-400">מגדר</dt>
+                <dd className="font-medium text-ink-800">
+                  {instructor.gender ? GENDER[instructor.gender] : "לא צוין"}
+                </dd>
+              </div>
               <div>
                 <dt className="text-ink-400">טלפון</dt>
                 <dd dir="ltr" className="font-medium text-ink-800 sm:text-end">

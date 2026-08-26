@@ -1,4 +1,5 @@
 import { notifyAdminCardcomPaid } from "@/lib/notifications/adminPayment";
+import { isAbandonedCardcomCharge } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database.types";
 import {
@@ -54,6 +55,7 @@ export async function startCardcomCheckout(input: {
   description: string;
   couponRedemptionId?: string | null;
   installments?: CardcomInstallments | null;
+  source?: "cart" | null;
 }): Promise<CardcomCheckoutResult> {
   const amount = round2(input.amount);
   const paymentIds = [...new Set(input.paymentIds.filter(Boolean))];
@@ -111,6 +113,7 @@ export async function startCardcomCheckout(input: {
       description: input.description,
       customer: await loadCustomer(input.parentId),
       installments: input.installments,
+      source: input.source,
     });
 
     const { error: updateError } = await admin
@@ -313,4 +316,112 @@ export async function settleCardcomCheckout(input: {
   });
 
   return { success: true, status: "paid", transactionId };
+}
+
+/**
+ * מבטל סשן אשראי שלא שולם — מוחק הרשמות וחיובים שנוצרו רק לצורך דף הסליקה.
+ * אם קארדקום כבר חייב, מסמן כשולם ולא מוחק.
+ */
+export async function voidUnpaidCardcomCheckout(input: {
+  checkoutId: string;
+  parentId: string;
+}): Promise<{ voided: boolean; paid: boolean }> {
+  const admin = createAdminClient();
+  const checkoutId = input.checkoutId.trim();
+  if (!checkoutId) return { voided: false, paid: false };
+
+  const { data: checkout } = await admin
+    .from("payment_checkouts")
+    .select("id, parent_id, status, low_profile_id, coupon_redemption_id")
+    .eq("id", checkoutId)
+    .eq("parent_id", input.parentId)
+    .maybeSingle();
+
+  if (!checkout) return { voided: false, paid: false };
+  if (checkout.status === "paid") return { voided: false, paid: true };
+
+  const settled = await settleCardcomCheckout({
+    checkoutId: checkout.id,
+    lowProfileId: checkout.low_profile_id,
+  }).catch(() => null);
+
+  if (
+    settled?.success &&
+    (settled.status === "paid" || settled.status === "already_paid")
+  ) {
+    return { voided: false, paid: true };
+  }
+
+  const { data: payments } = await admin
+    .from("payments")
+    .select("id, enrollment_id, status, payment_method, external_reference")
+    .eq("checkout_id", checkout.id);
+
+  const rows = payments ?? [];
+  if (rows.length === 0) {
+    if (checkout.status === "pending") {
+      await admin
+        .from("payment_checkouts")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", checkout.id);
+    }
+    return { voided: true, paid: false };
+  }
+
+  if (
+    rows.some(
+      (payment) =>
+        payment.status === "paid" ||
+        Boolean(payment.external_reference) ||
+        !isAbandonedCardcomCharge(
+          payment.status,
+          payment.payment_method,
+          payment.external_reference
+        )
+    )
+  ) {
+    return { voided: false, paid: rows.some((payment) => payment.status === "paid") };
+  }
+
+  const paymentIds = rows.map((payment) => payment.id);
+  const enrollmentIds = [
+    ...new Set(
+      rows
+        .map((payment) => payment.enrollment_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (paymentIds.length) {
+    await admin.from("payments").delete().in("id", paymentIds);
+  }
+  if (enrollmentIds.length) {
+    await admin
+      .from("private_lesson_slots")
+      .delete()
+      .in("enrollment_id", enrollmentIds);
+    await admin
+      .from("activity_bookings")
+      .delete()
+      .in("enrollment_id", enrollmentIds);
+    await admin.from("enrollments").delete().in("id", enrollmentIds);
+  }
+  if (checkout.coupon_redemption_id) {
+    await admin.rpc("release_coupon", {
+      p_redemption_id: checkout.coupon_redemption_id,
+    });
+  }
+
+  await admin
+    .from("payment_checkouts")
+    .update({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", checkout.id);
+
+  return { voided: true, paid: false };
 }

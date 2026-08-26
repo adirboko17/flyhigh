@@ -1,7 +1,7 @@
 ﻿import { InstructorList } from "@/components/admin/InstructorList";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 
-export const metadata = { title: "מדריכות" };
+export const metadata = { title: "מדריכים" };
 
 export default async function AdminInstructorsPage() {
   const supabase = await createAdminDataClient();
@@ -9,7 +9,7 @@ export default async function AdminInstructorsPage() {
   const [{ data: instructors }, { data: classes }] = await Promise.all([
     supabase
       .from("instructors")
-      .select("id, full_name, phone, hourly_rate, status, profile_id, profiles(email)")
+      .select("id, full_name, gender, phone, hourly_rate, status, profile_id, profiles(email)")
       .order("created_at", { ascending: false }),
     supabase.from("classes").select("instructor_id"),
   ]);

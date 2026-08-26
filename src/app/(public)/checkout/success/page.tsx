@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ClearCartOnPaid } from "@/components/cart/ClearCartOnPaid";
 import {
   extractCardcomCheckoutId,
   extractCardcomLowProfileId,
@@ -31,6 +32,7 @@ export default async function CheckoutSuccessPage({
 
   return (
     <section className="container-page py-16">
+      <ClearCartOnPaid paid={paid} />
       <div className="mx-auto max-w-lg rounded-3xl border border-ink-100 bg-white p-8 text-center shadow-sm">
         <div
           className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl ${

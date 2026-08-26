@@ -28,7 +28,7 @@ export function navHrefs(entries: NavEntry[]): string[] {
 export const ADMIN_NAV: NavEntry[] = [
   { href: "/admin", label: "דשבורד", icon: "📊" },
   { href: "/admin/customers", label: "לקוחות", icon: "👨‍👩‍👧" },
-  { href: "/admin/instructors", label: "מדריכות", icon: "👩‍🏫" },
+  { href: "/admin/instructors", label: "מדריכים", icon: "🧑‍🏫" },
   { href: "/admin/classes", label: "חוגים", icon: "🏊" },
   {
     href: "/admin/tracks",

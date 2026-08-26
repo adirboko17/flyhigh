@@ -20,9 +20,9 @@ export type Receipt = Tables<"receipts">;
 export type SystemSetting = Tables<"system_settings">;
 export type RecurringIncome = Tables<"recurring_incomes">;
 
-/** חוג עם פרטי מדריכה (לתצוגה). */
+/** חוג עם פרטי מדריך (לתצוגה). */
 export type ClassWithInstructor = Class & {
-  instructor?: Pick<Instructor, "id" | "full_name"> | null;
+  instructor?: Pick<Instructor, "id" | "full_name" | "gender"> | null;
 };
 
 export type PublicClassWeeklySlot = Omit<
@@ -30,10 +30,11 @@ export type PublicClassWeeklySlot = Omit<
   "class_id"
 >;
 
-/** חוג ציבורי כפי שמוחזר מ-list_public_classes (כולל זמינות, שם מדריכה ומועדים). */
+/** חוג ציבורי כפי שמוחזר מ-list_public_classes (כולל זמינות, שם מדריך ומועדים). */
 export type PublicClass =
   Database["public"]["Functions"]["list_public_classes"]["Returns"][number] & {
     weekly_slots: PublicClassWeeklySlot[];
+    instructor_gender: Database["public"]["Enums"]["gender_type"] | null;
   };
 
 export type PublicClassSlot =

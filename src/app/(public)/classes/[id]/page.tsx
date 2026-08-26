@@ -27,6 +27,7 @@ import {
   prorateClassPrice,
 } from "@/lib/finance/proratedClassPrice";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
+import { instructorTitle } from "@/lib/instructors/labels";
 import { formatTime, formatDate } from "@/utils/format";
 
 export const revalidate = 60;
@@ -143,7 +144,11 @@ export default async function ClassDetailPage({
           <div className="order-3 lg:mt-6">
             <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
               <div className="grid grid-cols-2 gap-px sm:gap-4">
-                <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name} />
+                <DetailRow
+                  icon="👩‍🏫"
+                  label={instructorTitle(cls.instructor_gender)}
+                  value={cls.instructor_name}
+                />
                 {interestOnly ? (
                   <>
                     <DetailRow
