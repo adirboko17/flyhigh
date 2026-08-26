@@ -994,6 +994,70 @@ export type Database = {
           },
         ]
       }
+      payment_refunds: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          document_number: string | null
+          document_url: string | null
+          external_reference: string | null
+          id: string
+          note: string | null
+          parent_id: string
+          payment_id: string
+          sent_to_email: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          document_number?: string | null
+          document_url?: string | null
+          external_reference?: string | null
+          id?: string
+          note?: string | null
+          parent_id: string
+          payment_id: string
+          sent_to_email?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          document_number?: string | null
+          document_url?: string | null
+          external_reference?: string | null
+          id?: string
+          note?: string | null
+          parent_id?: string
+          payment_id?: string
+          sent_to_email?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_refunds_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number

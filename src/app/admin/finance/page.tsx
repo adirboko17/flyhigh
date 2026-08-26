@@ -13,7 +13,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
-import { adminPaymentBadge, PAYMENT_METHOD } from "@/lib/constants";
+import {
+  adminPaymentBadge,
+  isAbandonedCardcomCharge,
+  PAYMENT_METHOD,
+} from "@/lib/constants";
 import { reconcilePendingCardcomCheckouts } from "@/lib/payments/cardcomCheckout";
 import {
   buildPayroll,
@@ -119,7 +123,7 @@ export default async function AdminFinancePage({
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
       )
       // חלון המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
       .or(
@@ -215,6 +219,15 @@ export default async function AdminFinancePage({
 
   const monthPayments = allPayments.filter((p) => paymentMonth(p) === month);
   const monthPaid = monthPayments.filter((p) => p.status === "paid");
+  // אשראי שלא נסלק הוא עגלה נטושה — לא מופיע ביומן העסקאות.
+  const monthTransactions = monthPayments.filter(
+    (p) =>
+      !isAbandonedCardcomCharge(
+        p.status,
+        p.payment_method,
+        p.external_reference
+      )
+  );
 
   const methodTotals = new Map<string, number>();
   const kindTotals = new Map<string, number>();
@@ -595,9 +608,9 @@ export default async function AdminFinancePage({
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>עסקאות · {monthTitle}</CardTitle>
-          <span className="text-sm text-ink-400">{monthPayments.length} רשומות</span>
+          <span className="text-sm text-ink-400">{monthTransactions.length} רשומות</span>
         </CardHeader>
-        {monthPayments.length > 0 ? (
+        {monthTransactions.length > 0 ? (
           <Table>
             <THead>
               <TR>
@@ -610,10 +623,11 @@ export default async function AdminFinancePage({
               </TR>
             </THead>
             <TBody>
-              {monthPayments.map((payment) => {
+              {monthTransactions.map((payment) => {
                 const badge = adminPaymentBadge(
                   payment.status,
-                  payment.payment_method
+                  payment.payment_method,
+                  { cardcomReference: payment.external_reference }
                 );
                 return (
                 <TR key={payment.id}>

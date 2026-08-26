@@ -67,6 +67,7 @@ export const ADMIN_NAV: NavEntry[] = [
         matchPaths: ["/admin/payments", "/admin/reports"],
       },
       { href: "/admin/collections", label: "גבייה", icon: "🧾" },
+      { href: "/admin/refunds", label: "זיכויים", icon: "↩️" },
       { href: "/admin/receipt-labels", label: "תוויות לקבלה", icon: "🏷️" },
       { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
     ],

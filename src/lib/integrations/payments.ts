@@ -3,7 +3,10 @@
  */
 
 import { startCardcomCheckout } from "@/lib/payments/cardcomCheckout";
-import type { CardcomInstallments } from "@/lib/integrations/cardcom";
+import {
+  refundCardcomTransaction,
+  type CardcomInstallments,
+} from "@/lib/integrations/cardcom";
 
 export interface CreateChargeInput {
   amount: number;
@@ -64,12 +67,32 @@ class CardcomPaymentProvider implements PaymentProvider {
     };
   }
 
-  async refund(reference: string): Promise<ChargeResult> {
-    return {
-      success: false,
-      reference,
-      error: "החזרים מתבצעים כרגע מממשק קארדקום.",
-    };
+  async refund(reference: string, amount?: number): Promise<ChargeResult> {
+    if (amount == null || amount <= 0) {
+      return {
+        success: false,
+        reference,
+        error: "חסר סכום לזיכוי.",
+      };
+    }
+
+    try {
+      const result = await refundCardcomTransaction({
+        transactionId: reference,
+        amount,
+      });
+      return {
+        success: true,
+        reference: result.refundTransactionId ?? reference,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        reference,
+        error:
+          error instanceof Error ? error.message : "הזיכוי בקארדקום נכשל.",
+      };
+    }
   }
 }
 

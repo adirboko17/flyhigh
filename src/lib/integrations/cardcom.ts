@@ -307,6 +307,10 @@ export type CardcomStandaloneDocument = {
   sentToEmail: string | null;
 };
 
+export type CardcomDocumentType =
+  | "TaxInvoiceAndReceipt"
+  | "TaxInvoiceAndReceiptRefund";
+
 type StandaloneDocumentInput = {
   amount: number;
   description: string;
@@ -317,6 +321,8 @@ type StandaloneDocumentInput = {
   asCash: boolean;
   comment?: string | null;
   documentDate?: string | null;
+  /** ברירת מחדל: חשבונית מס קבלה. לזיכוי — חשבונית זיכוי והחזר כספים. */
+  documentType?: CardcomDocumentType;
 };
 
 /** קארדקום דורש תאריך מסמך בפורמט dd/MM/yyyy בלבד. */
@@ -357,7 +363,7 @@ function standaloneDocumentBody(input: StandaloneDocumentInput, forceCash: boole
         }
       : {}),
     Document: {
-      DocumentTypeToCreate: "TaxInvoiceAndReceipt",
+      DocumentTypeToCreate: input.documentType ?? "TaxInvoiceAndReceipt",
       Name: (input.customer.invoiceName || input.customer.name).slice(0, 50),
       TaxId: input.customer.taxId?.trim()?.slice(0, 50) || undefined,
       Email: sendEmail ? email : undefined,
@@ -387,6 +393,7 @@ function parseDocumentInfo(result: Record<string, unknown>): CardcomStandaloneDo
 } {
   const code = Number(result.ResponseCode ?? -1);
   const info = asRecord(result) ?? result;
+  const documentInfo = asRecord(result.DocumentInfo) ?? info;
   if (code !== 0) {
     return {
       ok: false,
@@ -399,8 +406,8 @@ function parseDocumentInfo(result: Record<string, unknown>): CardcomStandaloneDo
 
   return {
     ok: true,
-    documentNumber: pickString(info, ["DocumentNumber", "documentNumber"]),
-    documentUrl: pickString(info, ["DocumentUrl", "documentUrl"]),
+    documentNumber: pickString(documentInfo, ["DocumentNumber", "documentNumber"]),
+    documentUrl: pickString(documentInfo, ["DocumentUrl", "documentUrl"]),
     sentToEmail: null,
   };
 }
@@ -461,4 +468,58 @@ export function extractCardcomCheckoutId(
       : source;
 
   return pickString(record, ["checkout", "ReturnValue", "returnValue"]);
+}
+
+/**
+ * זיכוי עסקה לפי מזהה קארדקום. PartialSum מאפשר זיכוי חלקי,
+ * ו־AllowMultipleRefunds מאפשר כמה זיכויים על אותה עסקה.
+ * המסמך לא מופק אוטומטית בזיכוי זה.
+ */
+export async function refundCardcomTransaction(input: {
+  transactionId: string | number;
+  amount: number;
+}): Promise<{ refundTransactionId: string | null }> {
+  const config = getCardcomConfig();
+  if (!config.apiPassword) {
+    throw new Error("חסרה סיסמת API של קארדקום לזיכויים.");
+  }
+
+  const transactionId = Number(input.transactionId);
+  if (!Number.isFinite(transactionId) || transactionId <= 0) {
+    throw new Error("מספר העסקה בקארדקום אינו תקין.");
+  }
+
+  const amount = Math.round(input.amount * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("סכום הזיכוי אינו תקין.");
+  }
+
+  const result = await postJson<Record<string, unknown>>(
+    "/Transactions/RefundByTransactionId",
+    {
+      ApiName: config.apiName,
+      ApiPassword: config.apiPassword,
+      TransactionId: transactionId,
+      PartialSum: amount,
+      CancelOnly: false,
+      AllowMultipleRefunds: true,
+    }
+  );
+
+  const code = Number(result.ResponseCode ?? -1);
+  if (code !== 0) {
+    throw new Error(
+      pickString(result, ["Description", "description"]) ||
+        "הזיכוי בקארדקום נכשל."
+    );
+  }
+
+  return {
+    refundTransactionId: pickString(result, [
+      "TransactionId",
+      "TranzactionId",
+      "NewTransactionId",
+      "RefundTransactionId",
+    ]),
+  };
 }

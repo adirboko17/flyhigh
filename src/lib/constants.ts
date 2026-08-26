@@ -165,12 +165,33 @@ export const PAYMENT_STATUS: Record<
   refunded: { label: "הוחזר", tone: "neutral" },
 };
 
-/** אשראי שעדיין לא אושר בקארדקום — לא אותו דבר כמו חוב במזומן/העברה. */
+/** אשראי שנפתח לדף סליקה ולא הושלם — עגלה נטושה, לא עסקה. */
+export function isAbandonedCardcomCharge(
+  status: Enums<"payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined,
+  cardcomReference?: string | null
+): boolean {
+  return (
+    paymentMethod === "credit_card" &&
+    (status === "pending" || status === "failed") &&
+    !cardcomReference
+  );
+}
+
+/**
+ * "ממתין לסליקה" רק אחרי עסקת אשראי שאושרה בקארדקום ועדיין לא סומנה כשולמה.
+ * כניסה לדף תשלום בלי סליקה היא פשוט חוב פתוח — "לא שולם".
+ */
 export function adminPaymentBadge(
   status: Enums<"payment_status">,
-  paymentMethod: Enums<"payment_method"> | null | undefined
+  paymentMethod: Enums<"payment_method"> | null | undefined,
+  options?: { cardcomReference?: string | null }
 ): { label: string; tone: BadgeTone } {
-  if (status === "pending" && paymentMethod === "credit_card") {
+  if (
+    status === "pending" &&
+    paymentMethod === "credit_card" &&
+    Boolean(options?.cardcomReference)
+  ) {
     return { label: "ממתין לסליקה", tone: "warning" };
   }
   return PAYMENT_STATUS[status];
