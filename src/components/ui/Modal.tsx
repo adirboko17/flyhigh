@@ -66,7 +66,7 @@ export function Modal({
   return createPortal(
     <div
       data-theme-color-overlay={THEME_COLOR.modalOverlay}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
     >
       <button
         type="button"

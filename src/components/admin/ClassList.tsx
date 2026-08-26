@@ -10,7 +10,7 @@ import {
   UserPlusMenuIcon,
 } from "@/components/admin/AdminRowActions";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
-import { loadClassRoster } from "@/lib/admin/classRoster";
+import { loadClassAttendance, loadClassRoster } from "@/lib/admin/classRoster";
 import {
   AssignToClassDialog,
   type AssignMode,
@@ -18,6 +18,11 @@ import {
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
 import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
+import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
+import {
+  participantDisplayName,
+  participantSecondaryLine,
+} from "@/lib/enrollment/participant";
 import {
   SessionNotesList,
   SessionNotesWorkspace,
@@ -71,6 +76,11 @@ export type AdminClassEnrollment = {
   created_at: string;
   children: { full_name: string; birth_date: string | null } | null;
   profiles: { full_name: string; phone: string | null } | null;
+  payments?: {
+    status: Enums<"payment_status">;
+    payment_method: Enums<"payment_method"> | null;
+    external_reference: string | null;
+  }[] | null;
 };
 
 export type AdminClassWaitlistEntry = {
@@ -140,8 +150,8 @@ export type AdminClassRow = {
   attendance: AdminClassAttendance[];
 };
 
-type PanelTab = "enrollments" | "waitlist" | "attendance";
-type AttendanceMode = "mark" | "history" | "notes";
+export type PanelTab = "enrollments" | "waitlist" | "attendance";
+export type AttendanceMode = "mark" | "history" | "notes";
 
 interface ClassListProps {
   classes: AdminClassRow[];
@@ -164,9 +174,11 @@ function matchesClass(item: AdminClassRow, query: string) {
   );
 }
 
-/** נרשמים שתופסים מקום בפועל — ביטולים לא נספרים. */
+/** נרשמים שתופסים מקום בפועל — ביטולים ואשראי שלא שולם לא נספרים. */
 function activeEnrollments(item: AdminClassRow) {
-  return item.enrollments.filter((e) => e.status !== "cancelled");
+  return item.enrollments.filter(
+    (e) => e.status !== "cancelled" && enrollmentHoldsSeat(e)
+  );
 }
 
 /** ממתינים שעדיין רלוונטיים — מי שהצטרף, ויתר או פג תוקפו כבר לא בתור. */
@@ -227,19 +239,6 @@ export function ClassList({ classes, instructors }: ClassListProps) {
     () => classes.filter((c) => matchesClass(c, query)),
     [classes, query]
   );
-
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelected(null);
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [selected]);
 
   if (classes.length === 0) {
     return (
@@ -785,17 +784,19 @@ function personSearchHaystack(...parts: Array<string | null | undefined>) {
   return normalizeSearch(parts.filter(Boolean).join(" "));
 }
 
-function ClassDetailPanel({
+export function ClassDetailPanel({
   cls,
   initialTab,
   initialAttendanceMode = "mark",
   weeklySlotId = null,
+  initialSessionDate = null,
   onClose,
 }: {
   cls: AdminClassRow;
   initialTab: PanelTab;
   initialAttendanceMode?: AttendanceMode;
   weeklySlotId?: string | null;
+  initialSessionDate?: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<PanelTab>(initialTab);
@@ -808,6 +809,9 @@ function ClassDetailPanel({
     waitlist: AdminClassWaitlistEntry[];
   } | null>(null);
   const [rosterLoading, setRosterLoading] = useState(true);
+  const [attendance, setAttendance] = useState<AdminClassAttendance[]>(
+    cls.attendance
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -822,6 +826,31 @@ function ClassDetailPanel({
       cancelled = true;
     };
   }, [cls.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAttendance(cls.attendance);
+    loadClassAttendance(cls.id).then((rows) => {
+      if (!cancelled) setAttendance(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cls.id, cls.attendance]);
+
+  useEffect(() => {
+    if (assigning) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [assigning, onClose]);
 
   const rosterClass = roster
     ? { ...cls, enrollments: roster.enrollments, waitlist: roster.waitlist }
@@ -935,10 +964,10 @@ function ClassDetailPanel({
     (tab === "waitlist" && waiting.length >= 6) ||
     (tab === "attendance" &&
       attendanceMode === "history" &&
-      cls.attendance.length >= 8);
+      attendance.length >= 8);
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4">
       <button
         type="button"
         aria-label="סגירה"
@@ -949,43 +978,41 @@ function ClassDetailPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="class-panel-title"
-        className={cn(
-          "relative z-10 ms-auto flex h-full w-full max-w-xl flex-col",
-          "border-s border-ink-100 bg-white shadow-card animate-fade-in"
-        )}
+        className="relative z-10 flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-card animate-fade-in"
       >
-        <div className="shrink-0 bg-brand-gradient px-5 pb-5 pt-5 text-white sm:px-6">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl bg-white/15 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/25"
+        <div className="flex shrink-0 items-start justify-between gap-3 bg-brand-gradient px-5 py-4 text-white sm:px-6">
+          <div className="min-w-0">
+            <h2
+              id="class-panel-title"
+              className="break-words font-display text-xl font-bold sm:text-2xl"
             >
-              סגירה
-            </button>
+              {cls.title}
+            </h2>
+            <p className="mt-0.5 text-sm text-white/80">
+              {formatClassOccupancy(
+                rosterLoading
+                  ? selectedSlot?.registeredCount ?? cls.registeredCount
+                  : enrollments.length,
+                cls.capacity
+              )}
+              {selectedSlot
+                ? ` · ${formatWeeklySlotLabel(
+                    selectedSlot.day_of_week,
+                    selectedSlot.start_time,
+                    selectedSlot.end_time,
+                    selectedSlot.gender_policy
+                  )}`
+                : ` · ${scheduleLabel(cls)}`}
+            </p>
           </div>
-          <h2
-            id="class-panel-title"
-            className="break-words font-display text-xl font-bold sm:text-2xl"
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="סגירה"
+            className="-me-1.5 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 transition-colors hover:bg-white/25"
           >
-            {cls.title}
-          </h2>
-          <p className="mt-1 text-sm text-white/80">
-            {formatClassOccupancy(
-              rosterLoading
-                ? selectedSlot?.registeredCount ?? cls.registeredCount
-                : enrollments.length,
-              cls.capacity
-            )}
-            {selectedSlot
-              ? ` · ${formatWeeklySlotLabel(
-                  selectedSlot.day_of_week,
-                  selectedSlot.start_time,
-                  selectedSlot.end_time,
-                  selectedSlot.gender_policy
-                )}`
-              : ` · ${scheduleLabel(cls)}`}
-          </p>
+            <Icon name="x" size={18} />
+          </button>
         </div>
 
         <div className="flex shrink-0 gap-1 border-b border-ink-100 bg-ink-50/70 p-1.5">
@@ -1084,8 +1111,10 @@ function ClassDetailPanel({
           {tab === "attendance" && (
             <AttendanceTab
               cls={cls}
+              attendance={attendance}
               students={students}
               weeklySlotId={weeklySlotId}
+              initialSessionDate={initialSessionDate}
               mode={attendanceMode}
               onModeChange={setAttendanceMode}
               query={listQuery}
@@ -1183,15 +1212,20 @@ function EnrollmentRow({
   index?: number;
   muted?: boolean;
 }) {
-  const childName = enrollment.children?.full_name ?? "—";
-  const age = calcAge(enrollment.children?.birth_date);
+  const childName = enrollment.children?.full_name;
+  const displayName = participantDisplayName(
+    childName,
+    enrollment.profiles?.full_name,
+    "—"
+  );
+  const age = childName ? calcAge(enrollment.children?.birth_date) : null;
   const status = ENROLLMENT_STATUS[enrollment.status];
   const payment = ENROLLMENT_PAYMENT_STATUS[enrollment.payment_status];
-  const parentLine = enrollment.profiles
-    ? [enrollment.profiles.full_name, enrollment.profiles.phone]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
+  const parentLine = participantSecondaryLine(
+    childName,
+    enrollment.profiles?.full_name,
+    enrollment.profiles?.phone
+  );
 
   return (
     <li
@@ -1207,11 +1241,11 @@ function EnrollmentRow({
       ) : (
         <span className="w-5 shrink-0" />
       )}
-      <Avatar name={childName} className="h-8 w-8 text-[11px]" />
+      <Avatar name={displayName} className="h-8 w-8 text-[11px]" />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
-            {childName}
+            {displayName}
           </p>
           {age !== null && (
             <span className="shrink-0 text-[11px] text-ink-400">גיל {age}</span>
@@ -1260,13 +1294,18 @@ function WaitlistRow({
   position: number;
   onAssign: () => void;
 }) {
-  const childName = entry.children?.full_name ?? "—";
+  const childName = entry.children?.full_name;
+  const displayName = participantDisplayName(
+    childName,
+    entry.profiles?.full_name,
+    "—"
+  );
   const status = WAITLIST_STATUS[entry.status];
-  const parentLine = entry.profiles
-    ? [entry.profiles.full_name, entry.profiles.phone]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
+  const parentLine = participantSecondaryLine(
+    childName,
+    entry.profiles?.full_name,
+    entry.profiles?.phone
+  );
 
   return (
     <li className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-ink-50/80">
@@ -1276,7 +1315,7 @@ function WaitlistRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
-            {childName}
+            {displayName}
           </p>
           <Badge tone={status.tone} className="px-1.5 py-0 text-[10px]">
             {status.label}
@@ -1305,20 +1344,24 @@ function WaitlistRow({
 
 function AttendanceTab({
   cls,
+  attendance,
   students,
   weeklySlotId = null,
+  initialSessionDate = null,
   mode,
   onModeChange,
   query,
 }: {
   cls: AdminClassRow;
+  attendance: AdminClassAttendance[];
   students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
   weeklySlotId?: string | null;
+  initialSessionDate?: string | null;
   mode: AttendanceMode;
   onModeChange: (mode: AttendanceMode) => void;
   query: string;
 }) {
-  const records = cls.attendance;
+  const records = attendance;
   const notesByDate = useClassSessionNotesByDate(cls.id);
   const q = normalizeSearch(query);
 
@@ -1393,6 +1436,7 @@ function AttendanceTab({
             instructorId={cls.instructor_id}
             students={students}
             weeklySlotId={weeklySlotId}
+            preferredDate={initialSessionDate}
             emptySessionsHint="לא נמצאו מפגשים מתוכננים. עדכנו את לוח המפגשים בעריכת החוג."
           />
         </div>

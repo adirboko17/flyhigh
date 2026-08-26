@@ -24,6 +24,7 @@ import {
   countFamilyChildrenInCategory,
   listFamilyChildrenInCategory,
 } from "@/lib/enrollment/categorySiblings";
+import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
   classInstallmentOptions,
   classPeriodTotal,
@@ -282,7 +283,9 @@ export async function completeClassEnrollmentPayment(input: {
         : Promise.resolve({ data: [] }),
       supabase
         .from("enrollments")
-        .select("child_id")
+        .select(
+          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+        )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
         .neq("status", "cancelled"),
@@ -351,10 +354,11 @@ export async function completeClassEnrollmentPayment(input: {
     if (parentError) return { success: false, error: parentError };
   }
 
+  const holdingEnrollments = (existingEnrollments ?? []).filter((enrollment) =>
+    enrollmentHoldsSeat(enrollment)
+  );
   const alreadyEnrolled = new Set(
-    (existingEnrollments ?? [])
-      .map((e) => e.child_id)
-      .filter(Boolean) as string[]
+    holdingEnrollments.map((e) => e.child_id).filter(Boolean) as string[]
   );
   const duplicate = uniqueChildIds.find((id) => alreadyEnrolled.has(id));
   if (duplicate) {
@@ -362,20 +366,12 @@ export async function completeClassEnrollmentPayment(input: {
   }
   if (
     includeSelf &&
-    (existingEnrollments ?? []).some((enrollment) => enrollment.child_id == null)
+    holdingEnrollments.some((enrollment) => enrollment.child_id == null)
   ) {
     return { success: false, error: "ההורה כבר רשום לחוג זה." };
   }
 
-  let takenQuery = supabase
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("class_id", classId)
-    .in("status", ["active", "pending"]);
-  if (weeklySlotId) {
-    takenQuery = takenQuery.eq("weekly_slot_id", weeklySlotId);
-  }
-  const { count: takenCount } = await takenQuery;
+  const takenCount = await countHeldSeats(supabase, classId, weeklySlotId);
 
   if (cls.capacity != null) {
     const available = cls.capacity - (takenCount ?? 0);
@@ -664,7 +660,9 @@ export async function registerInterestForClass(input: {
         : Promise.resolve({ data: [] }),
       supabase
         .from("enrollments")
-        .select("child_id")
+        .select(
+          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+        )
         .eq("class_id", input.classId)
         .eq("parent_id", profile.id)
         .neq("status", "cancelled"),
@@ -702,26 +700,23 @@ export async function registerInterestForClass(input: {
     if (parentError) return { success: false, error: parentError };
   }
 
+  const holdingEnrollments = (existingEnrollments ?? []).filter((enrollment) =>
+    enrollmentHoldsSeat(enrollment)
+  );
   const alreadyEnrolled = new Set(
-    (existingEnrollments ?? [])
-      .map((e) => e.child_id)
-      .filter(Boolean) as string[]
+    holdingEnrollments.map((e) => e.child_id).filter(Boolean) as string[]
   );
   if (uniqueChildIds.some((id) => alreadyEnrolled.has(id))) {
     return { success: false, error: "אחד או יותר מהילדים כבר רשומים לחוג זה." };
   }
   if (
     includeSelf &&
-    (existingEnrollments ?? []).some((enrollment) => enrollment.child_id == null)
+    holdingEnrollments.some((enrollment) => enrollment.child_id == null)
   ) {
     return { success: false, error: "ההורה כבר רשום לחוג זה." };
   }
 
-  const { count: takenCount } = await supabase
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("class_id", input.classId)
-    .in("status", ["active", "pending"]);
+  const takenCount = await countHeldSeats(supabase, input.classId);
 
   if (cls.capacity != null) {
     const available = cls.capacity - (takenCount ?? 0);

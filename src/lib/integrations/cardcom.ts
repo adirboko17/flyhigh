@@ -301,7 +301,20 @@ export function cardcomChargedAmount(result: CardcomLpResult) {
 
 export function cardcomDocumentNumber(result: CardcomLpResult) {
   const info = asRecord(result.DocumentInfo);
-  return pickString(info, ["DocumentNumber", "documentNumber"]);
+  const tx = cardcomTransactionRecord(result);
+  return pickString(
+    { ...tx, ...info },
+    ["DocumentNumber", "documentNumber"]
+  );
+}
+
+export function cardcomDocumentUrl(result: CardcomLpResult) {
+  const info = asRecord(result.DocumentInfo);
+  const tx = cardcomTransactionRecord(result);
+  return pickString(
+    { ...info, ...tx },
+    ["DocumentUrl", "documentUrl"]
+  );
 }
 
 export type CardcomStandaloneDocument = {

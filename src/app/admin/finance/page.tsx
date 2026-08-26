@@ -16,6 +16,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import {
   adminPaymentBadge,
   isAbandonedCardcomCharge,
+  isCollectibleOpenCharge,
   PAYMENT_METHOD,
 } from "@/lib/constants";
 import { reconcilePendingCardcomCheckouts } from "@/lib/payments/cardcomCheckout";
@@ -206,8 +207,12 @@ export default async function AdminFinancePage({
   const monthRevenue = paymentsRevenue + matnasAmount;
   const netProfit = monthRevenue - monthPayroll;
 
-  const openCharges = allPayments.filter(
-    (p) => p.status === "pending" || p.status === "partial"
+  const openCharges = allPayments.filter((p) =>
+    isCollectibleOpenCharge(
+      p.status,
+      p.payment_method,
+      p.external_reference
+    )
   );
   const openTotal = openCharges.reduce((sum, p) => {
     const paid = (p.payment_receipts ?? []).reduce(

@@ -29,6 +29,8 @@ interface ClassAttendanceFormProps {
   students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
   /** כשמוגדר — מציגים רק מפגשים של המועד הזה. */
   weeklySlotId?: string | null;
+  /** מפגש מועדף (למשל התאריך שנלחץ בלוח השנה). */
+  preferredDate?: string | null;
   /** הודעה כשאין מפגשים — ברירת מחדל מתאימה למדריכה. */
   emptySessionsHint?: string;
   onSaved?: () => void;
@@ -39,6 +41,7 @@ export function ClassAttendanceForm({
   instructorId,
   students,
   weeklySlotId = null,
+  preferredDate = null,
   emptySessionsHint = "לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.",
   onSaved,
 }: ClassAttendanceFormProps) {
@@ -89,7 +92,7 @@ export function ClassAttendanceForm({
 
       const list = (data ?? []) as ClassSessionOption[];
       setSessions(list);
-      setSelectedIndex(defaultSessionIndex(list, todayInIsrael()));
+      setSelectedIndex(defaultSessionIndex(list, todayInIsrael(), preferredDate));
       setSessionsLoading(false);
     }
 
@@ -97,7 +100,7 @@ export function ClassAttendanceForm({
     return () => {
       cancelled = true;
     };
-  }, [classId, weeklySlotId]);
+  }, [classId, weeklySlotId, preferredDate]);
 
   useEffect(() => {
     if (students.length === 0 || !date) return;

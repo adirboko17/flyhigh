@@ -381,11 +381,15 @@ export function AssignToClassDialog({
           <div className="rounded-2xl border border-ink-100 p-4">
             <p className="text-xs text-ink-400">מרשימת ההמתנה</p>
             <p className="mt-0.5 font-semibold text-ink-900">
-              {mode.entry.children?.full_name ?? "—"}
+              {mode.entry.children?.full_name?.trim() ||
+                mode.entry.profiles?.full_name ||
+                "—"}
             </p>
-            <p className="text-sm text-ink-500">
-              הורה: {mode.entry.profiles?.full_name ?? "—"}
-            </p>
+            {mode.entry.children?.full_name?.trim() && (
+              <p className="text-sm text-ink-500">
+                הורה: {mode.entry.profiles?.full_name ?? "—"}
+              </p>
+            )}
           </div>
         ) : (
           <CustomerPicker

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countHeldSeats } from "@/lib/enrollment/holdsSeat";
 import type { Database, Enums } from "@/types/database.types";
 
 type ClassStatus = Enums<"class_status">;
@@ -11,13 +12,9 @@ export async function setClassStatus(
   let status: ClassStatus = nextStatus;
 
   if (nextStatus === "active") {
-    const [{ data: cls }, { count }] = await Promise.all([
+    const [{ data: cls }, count] = await Promise.all([
       supabase.from("classes").select("capacity").eq("id", classId).single(),
-      supabase
-        .from("enrollments")
-        .select("*", { count: "exact", head: true })
-        .eq("class_id", classId)
-        .in("status", ["active", "pending"]),
+      countHeldSeats(supabase, classId),
     ]);
 
     if (

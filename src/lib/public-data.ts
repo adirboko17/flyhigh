@@ -45,7 +45,7 @@ export const getPublicClasses = unstable_cache(
       instructor_gender: genderByClass.get(cls.id) ?? null,
     }));
   },
-  ["public-classes-v3"],
+  ["public-classes-v4"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-classes"],

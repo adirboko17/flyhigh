@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
+import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { PAYMENT_METHOD } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
 import {
@@ -169,6 +170,9 @@ export async function refundCardcomPayment(input: {
 
   revalidatePath("/admin/refunds");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/classes");
+  revalidatePath("/admin/calendar");
   revalidatePath("/parent/dashboard");
+  await revalidatePublicCatalog();
   return { success: true, warning: documentWarning };
 }

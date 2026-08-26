@@ -15,6 +15,7 @@ import {
   healthDeclarationErrorFor,
   missingHealthDeclarationChildren,
 } from "@/lib/health-declaration";
+import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import { createClient } from "@/lib/supabase/server";
 
 /** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — דף סליקה של קארדקום. */
@@ -130,7 +131,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         .in("id", childIds),
       supabase
         .from("enrollments")
-        .select("child_id, children(full_name)")
+        .select(
+          "child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference)"
+        )
         .eq("class_id", input.classId)
         .in("child_id", childIds)
         .neq("status", "cancelled"),
@@ -184,8 +187,11 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     };
   }
 
-  if (existing && existing.length > 0) {
-    const names = existing
+  const holdingExisting = (existing ?? []).filter((row) =>
+    enrollmentHoldsSeat(row)
+  );
+  if (holdingExisting.length > 0) {
+    const names = holdingExisting
       .map((row) => row.children?.full_name)
       .filter(Boolean)
       .join(", ");
@@ -197,11 +203,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     };
   }
 
-  const { count: takenBefore } = await supabase
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("class_id", input.classId)
-    .in("status", ["active", "pending"]);
+  const takenBefore = await countHeldSeats(supabase, input.classId);
 
   const isCreditCard = !cls.interest_only && input.method === "credit_card";
   const awaitingCardcom = isCreditCard && total > 0;

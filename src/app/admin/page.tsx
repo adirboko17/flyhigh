@@ -9,7 +9,9 @@ import {
   ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
   ENROLLMENT_TYPE,
+  isCollectibleOpenCharge,
 } from "@/lib/constants";
+import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
   membershipExpiryLabel,
   membershipExpiryStatus,
@@ -69,7 +71,9 @@ export default async function AdminDashboard() {
       .gte("paid_at", previousMonthStart),
     supabase
       .from("payments")
-      .select("amount, status, payment_receipts(amount)")
+      .select(
+        "amount, status, payment_method, external_reference, payment_receipts(amount)"
+      )
       .in("status", ["pending", "partial"]),
     supabase
       .from("enrollments")
@@ -87,7 +91,9 @@ export default async function AdminDashboard() {
       .eq("status", "pending"),
     supabase
       .from("enrollments")
-      .select("class_id")
+      .select(
+        "class_id, status, payment_status, payments(status, payment_method, external_reference)"
+      )
       .eq("type", "class")
       .eq("status", "active")
       .not("class_id", "is", null),
@@ -152,7 +158,13 @@ export default async function AdminDashboard() {
   const revenueThisMonth = revenueOfMonth(currentMonth);
   const revenueLastMonth = revenueOfMonth(previousMonth);
 
-  const openCharges = openPaymentRows ?? [];
+  const openCharges = (openPaymentRows ?? []).filter((payment) =>
+    isCollectibleOpenCharge(
+      payment.status,
+      payment.payment_method,
+      payment.external_reference
+    )
+  );
   const openAmount = openCharges.reduce((sum, payment) => {
     const paid = (payment.payment_receipts ?? []).reduce(
       (acc, receipt) => acc + Number(receipt.amount),
@@ -173,7 +185,7 @@ export default async function AdminDashboard() {
 
   const registeredByClass = new Map<string, number>();
   for (const enrollment of activeClassEnrollments ?? []) {
-    if (!enrollment.class_id) continue;
+    if (!enrollment.class_id || !enrollmentHoldsSeat(enrollment)) continue;
     registeredByClass.set(
       enrollment.class_id,
       (registeredByClass.get(enrollment.class_id) ?? 0) + 1

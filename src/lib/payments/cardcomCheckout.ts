@@ -6,6 +6,7 @@ import {
   cardcomChargeSucceeded,
   cardcomChargedAmount,
   cardcomDocumentNumber,
+  cardcomDocumentUrl,
   cardcomTransactionId,
   createLowProfilePage,
   getLowProfileResult,
@@ -254,6 +255,7 @@ export async function settleCardcomCheckout(input: {
 
   const transactionId = cardcomTransactionId(result);
   const documentNumber = cardcomDocumentNumber(result);
+  const documentUrl = cardcomDocumentUrl(result);
   const { data: payments } = await admin
     .from("payments")
     .select("id, amount, status, parent_id, enrollment_id")
@@ -289,6 +291,7 @@ export async function settleCardcomCheckout(input: {
       parent_id: payment.parent_id,
       payment_id: payment.id,
       receipt_number: documentNumber,
+      receipt_url: documentUrl,
       sent_to_email: null,
     }));
 

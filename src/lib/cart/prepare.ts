@@ -10,6 +10,7 @@ import {
   countFamilyChildrenInCategory,
   listFamilyChildrenInCategory,
 } from "@/lib/enrollment/categorySiblings";
+import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 import {
   classInstallmentsMax,
@@ -188,7 +189,9 @@ async function prepareClassLine(
         : Promise.resolve({ data: [] }),
       supabase
         .from("enrollments")
-        .select("child_id")
+        .select(
+          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+        )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
         .neq("status", "cancelled"),
@@ -260,28 +263,23 @@ async function prepareClassLine(
     if (parentError) return { success: false, error: parentError };
   }
 
+  const holdingEnrollments = (existingEnrollments ?? []).filter((enrollment) =>
+    enrollmentHoldsSeat(enrollment)
+  );
   const alreadyEnrolled = new Set(
-    (existingEnrollments ?? [])
-      .map((row) => row.child_id)
-      .filter(Boolean) as string[]
+    holdingEnrollments.map((row) => row.child_id).filter(Boolean) as string[]
   );
   if (uniqueChildIds.some((id) => alreadyEnrolled.has(id))) {
     return { success: false, error: `אחד או יותר כבר רשומים ל${cls.title}.` };
   }
   if (
     includeSelf &&
-    (existingEnrollments ?? []).some((enrollment) => enrollment.child_id == null)
+    holdingEnrollments.some((enrollment) => enrollment.child_id == null)
   ) {
     return { success: false, error: `ההורה כבר רשום ל${cls.title}.` };
   }
 
-  let takenQuery = supabase
-    .from("enrollments")
-    .select("id", { count: "exact", head: true })
-    .eq("class_id", classId)
-    .in("status", ["active", "pending"]);
-  if (weeklySlotId) takenQuery = takenQuery.eq("weekly_slot_id", weeklySlotId);
-  const { count: takenCount } = await takenQuery;
+  const takenCount = await countHeldSeats(supabase, classId, weeklySlotId);
   const reservedKey = `${classId}:${weeklySlotId ?? "all"}`;
   const reservedSpots = reserved.classSpots.get(reservedKey) ?? 0;
   if (cls.capacity != null) {

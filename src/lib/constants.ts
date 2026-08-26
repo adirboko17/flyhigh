@@ -178,6 +178,16 @@ export function isAbandonedCardcomCharge(
   );
 }
 
+/** חוב פתוח לגבייה במשרד — בלי אשראי שננטש בדף הסליקה. */
+export function isCollectibleOpenCharge(
+  status: Enums<"payment_status">,
+  paymentMethod: Enums<"payment_method"> | null | undefined,
+  cardcomReference?: string | null
+): boolean {
+  if (status !== "pending" && status !== "partial") return false;
+  return !isAbandonedCardcomCharge(status, paymentMethod, cardcomReference);
+}
+
 /**
  * "ממתין לסליקה" רק אחרי עסקת אשראי שאושרה בקארדקום ועדיין לא סומנה כשולמה.
  * כניסה לדף תשלום בלי סליקה היא פשוט חוב פתוח — "לא שולם".

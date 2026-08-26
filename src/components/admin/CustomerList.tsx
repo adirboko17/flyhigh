@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
+import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
+import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
 import { CustomerForm } from "@/components/admin/CustomerForm";
 import type {
   CustomerChild,
@@ -26,7 +28,6 @@ import { deleteCustomer } from "@/lib/admin/customerActions";
 import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
 import { declarationSchoolYear } from "@/lib/health-declaration";
 import { formatSchoolGrade } from "@/lib/school-grade";
-import { cn } from "@/utils/cn";
 import { calcAge, formatDate } from "@/utils/format";
 
 export type { CustomerChild, CustomerWithChildren };
@@ -66,19 +67,6 @@ export function CustomerList({ customers }: CustomerListProps) {
     () => customers.filter((c) => matchesCustomer(c, query)),
     [customers, query]
   );
-
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedId(null);
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [selected]);
 
   async function handleDelete(customer: CustomerWithChildren) {
     const result = await deleteCustomer({ profileId: customer.id });
@@ -217,20 +205,27 @@ export function CustomerList({ customers }: CustomerListProps) {
       </Card>
       )}
 
-      {selected && (
-        <CustomerDetailPanel
-          customer={selected}
-          onClose={() => setSelectedId(null)}
-          onEdit={() => {
-            setSelectedId(null);
-            setEditing(selected);
-          }}
-          onDelete={async () => {
-            const result = await handleDelete(selected);
-            if (result.error) window.alert(result.error);
-          }}
-        />
-      )}
+      <Modal
+        open={selected !== null}
+        onClose={() => setSelectedId(null)}
+        title={selected?.full_name ?? "כרטיס לקוח"}
+        description="פרטי קשר, ילדים, הרשמות ומסמכים שהופקו"
+        className="max-w-2xl"
+      >
+        {selected && (
+          <CustomerDetail
+            customer={selected}
+            onEdit={() => {
+              setSelectedId(null);
+              setEditing(selected);
+            }}
+            onDelete={async () => {
+              const result = await handleDelete(selected);
+              if (result.error) window.alert(result.error);
+            }}
+          />
+        )}
+      </Modal>
 
       {formModal}
     </div>
@@ -343,87 +338,46 @@ function ClearIcon({ className }: { className?: string }) {
   );
 }
 
-function CustomerDetailPanel({
+function CustomerDetail({
   customer,
-  onClose,
   onEdit,
   onDelete,
 }: {
   customer: CustomerWithChildren;
-  onClose: () => void;
   onEdit: () => void;
   onDelete: () => void | Promise<void>;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <button
-        type="button"
-        aria-label="סגירה"
-        className="absolute inset-0 bg-ink-900/40 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="customer-panel-title"
-        className={cn(
-          "relative z-10 ms-auto flex h-full w-full max-w-lg flex-col",
-          "border-s border-ink-100 bg-white shadow-card animate-fade-in"
-        )}
-      >
-        <div className="bg-brand-gradient px-5 pb-8 pt-6 text-white sm:px-6">
-          <div className="mb-5 flex items-start justify-between gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl bg-white/15 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/25"
-            >
-              סגירה
-            </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onEdit}
-                className="rounded-xl bg-white/15 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/25"
-              >
-                עריכה
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `למחוק את ${customer.full_name}? החשבון, הילדים וההרשמות יימחקו ולא ניתן לשחזר.`
-                    )
-                  ) {
-                    void onDelete();
-                  }
-                }}
-                className="rounded-xl bg-red-500/90 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-red-500"
-              >
-                מחיקה
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Avatar
-              name={customer.full_name}
-              className="h-14 w-14 border-2 border-white/30 text-lg"
-            />
-            <div className="min-w-0">
-              <h2
-                id="customer-panel-title"
-                className="truncate font-display text-xl font-bold sm:text-2xl"
-              >
-                {customer.full_name}
-              </h2>
-              <p className="mt-0.5 text-sm text-white/80">כרטיס לקוח</p>
-            </div>
-          </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={customer.full_name} className="h-12 w-12 shrink-0" />
+          <p className="text-sm text-ink-500">הצטרף {formatDate(customer.created_at)}</p>
         </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+            עריכה
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `למחוק את ${customer.full_name}? החשבון, הילדים וההרשמות יימחקו ולא ניתן לשחזר.`
+                )
+              ) {
+                void onDelete();
+              }
+            }}
+          >
+            מחיקה
+          </Button>
+        </div>
+      </div>
 
-        <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-5">
-          <Card>
+      <Card>
             <CardHeader className="py-3">
               <CardTitle className="text-base">פרטי קשר</CardTitle>
             </CardHeader>
@@ -491,8 +445,13 @@ function CustomerDetailPanel({
               </Card>
             )}
           </div>
-        </div>
-      </aside>
+
+          <CustomerRegistrations
+            parentId={customer.id}
+            parentName={customer.full_name}
+          />
+
+          <CustomerDocuments parentId={customer.id} />
     </div>
   );
 }

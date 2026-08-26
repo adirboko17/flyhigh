@@ -121,9 +121,17 @@ function NavButton({
 /** מפגש היום, אחרת הקרוב הבא, אחרת האחרון שעבר. */
 export function defaultSessionIndex(
   sessions: ClassSessionOption[],
-  today: string
+  today: string,
+  preferredDate?: string | null
 ): number {
   if (sessions.length === 0) return 0;
+
+  if (preferredDate) {
+    const preferredIdx = sessions.findIndex(
+      (s) => s.session_date === preferredDate
+    );
+    if (preferredIdx !== -1) return preferredIdx;
+  }
 
   const todayIdx = sessions.findIndex((s) => s.session_date === today);
   if (todayIdx !== -1) return todayIdx;

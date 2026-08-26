@@ -25,6 +25,7 @@ import {
   DAY_ABBR,
   ENROLLMENT_STATUS,
   ENROLLMENT_TYPE,
+  isCollectibleOpenCharge,
   isNonImmediatePaymentMethod,
   parentEnrollmentPaymentBadge,
   parentPaymentBadge,
@@ -118,7 +119,9 @@ export default async function ParentDashboard() {
     (e) => e.status !== "cancelled" && e.payment_status === "not_required"
   );
 
-  const openPayments = allPayments.filter((p) => p.status === "pending");
+  const openPayments = allPayments.filter((p) =>
+    isCollectibleOpenCharge(p.status, p.payment_method, p.external_reference)
+  );
   const openAmount = sumAmount(openPayments);
   const paidAmount = sumAmount(allPayments.filter((p) => p.status === "paid"));
 

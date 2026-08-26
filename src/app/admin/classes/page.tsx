@@ -5,6 +5,7 @@
 } from "@/components/admin/ClassList";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 
 export const metadata = { title: "ניהול חוגים" };
 
@@ -28,7 +29,9 @@ export default async function AdminClassesPage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("enrollments")
-        .select("class_id, weekly_slot_id, status")
+        .select(
+          "class_id, weekly_slot_id, status, payment_status, payments(status, payment_method, external_reference)"
+        )
         .eq("type", "class")
         .not("class_id", "is", null)
         .in("status", ["active", "pending"]),
@@ -47,7 +50,7 @@ export default async function AdminClassesPage() {
   const registeredByClass = new Map<string, number>();
   const registeredBySlot = new Map<string, number>();
   for (const row of enrollmentCounts ?? []) {
-    if (!row.class_id) continue;
+    if (!row.class_id || !enrollmentHoldsSeat(row)) continue;
     registeredByClass.set(
       row.class_id,
       (registeredByClass.get(row.class_id) ?? 0) + 1

@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Icon } from "@/components/icons/Icon";
+import {
+  ClassDetailPanel,
+  type AdminClassRow,
+} from "@/components/admin/ClassList";
 import { SessionSubstituteDialog } from "@/components/admin/SessionSubstituteDialog";
+import { loadAdminClassSummary } from "@/lib/admin/classRoster";
 import { formatClassOccupancy } from "@/lib/classes/capacity";
 import { CLASS_SESSION_STATUS, DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { dayLabelLong, type CalendarDay } from "@/lib/scheduling/monthGrid";
@@ -33,6 +38,7 @@ export type CalendarSession = {
   notes: string | null;
   capacity: number | null;
   registered: number;
+  weeklySlotId?: string | null;
   /** לקוח/ילד בשיעור פרטי. */
   clientLabel?: string | null;
 };
@@ -122,6 +128,14 @@ export function ClassCalendar({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hiddenClasses, setHiddenClasses] = useState<string[]>([]);
   const [substituteFor, setSubstituteFor] = useState<CalendarSession | null>(null);
+  const [classPanel, setClassPanel] = useState<{
+    cls: AdminClassRow;
+    weeklySlotId: string | null;
+    sessionDate: string;
+  } | null>(null);
+  const [classPanelLoadingId, setClassPanelLoadingId] = useState<string | null>(
+    null
+  );
 
   const gridDates = useMemo(() => new Set(days.map((day) => day.date)), [days]);
   const periodSessions = useMemo(
@@ -186,7 +200,7 @@ export function ClassCalendar({
   const todaySessions = periodContainsToday ? sessionsByDate.get(today) ?? [] : null;
 
   useEffect(() => {
-    if (!selectedDate) return;
+    if (!selectedDate || classPanel) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSelectedDate(null);
     };
@@ -196,7 +210,20 @@ export function ClassCalendar({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedDate]);
+  }, [selectedDate, classPanel]);
+
+  async function openClassPanel(session: CalendarSession) {
+    if (session.kind !== "class") return;
+    setClassPanelLoadingId(session.id);
+    const cls = await loadAdminClassSummary(session.classId);
+    setClassPanelLoadingId(null);
+    if (!cls) return;
+    setClassPanel({
+      cls,
+      weeklySlotId: session.weeklySlotId ?? null,
+      sessionDate: session.date,
+    });
+  }
 
   function toggleClass(classId: string) {
     setHiddenClasses((current) =>
@@ -356,8 +383,20 @@ export function ClassCalendar({
           date={selectedDate}
           sessions={sessionsByDate.get(selectedDate) ?? []}
           colorByClass={colorByClass}
+          loadingSessionId={classPanelLoadingId}
           onClose={() => setSelectedDate(null)}
           onSubstitute={setSubstituteFor}
+          onOpenClass={openClassPanel}
+        />
+      )}
+
+      {classPanel && (
+        <ClassDetailPanel
+          cls={classPanel.cls}
+          initialTab="enrollments"
+          weeklySlotId={classPanel.weeklySlotId}
+          initialSessionDate={classPanel.sessionDate}
+          onClose={() => setClassPanel(null)}
         />
       )}
 
@@ -772,14 +811,18 @@ function DayPanel({
   date,
   sessions,
   colorByClass,
+  loadingSessionId,
   onClose,
   onSubstitute,
+  onOpenClass,
 }: {
   date: string;
   sessions: CalendarSession[];
   colorByClass: Map<string, ClassColor>;
+  loadingSessionId: string | null;
   onClose: () => void;
   onSubstitute: (session: CalendarSession) => void;
+  onOpenClass: (session: CalendarSession) => void;
 }) {
   const totalMinutes = sessions.reduce(
     (sum, session) => sum + durationMinutes(session.startTime, session.endTime),
@@ -843,7 +886,9 @@ function DayPanel({
                         key={session.id}
                         session={session}
                         color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
+                        opening={loadingSessionId === session.id}
                         onSubstitute={() => onSubstitute(session)}
+                        onOpenClass={() => onOpenClass(session)}
                       />
                     ))}
                   </ul>
@@ -885,11 +930,15 @@ function sessionInstructorLabel(session: CalendarSession) {
 function SessionRow({
   session,
   color,
+  opening,
   onSubstitute,
+  onOpenClass,
 }: {
   session: CalendarSession;
   color: ClassColor;
+  opening: boolean;
   onSubstitute: () => void;
+  onOpenClass: () => void;
 }) {
   const status = CLASS_SESSION_STATUS[session.status];
   const cancelled = session.status === "cancelled";
@@ -958,16 +1007,23 @@ function SessionRow({
               {session.substituteInstructor ? "עדכון החלפה" : "החלפה"}
             </button>
           )}
-          <Link
-            href={
-              isPrivate
-                ? "/admin/private-lessons"
-                : `/admin/classes/${session.classId}/edit`
-            }
-            className="font-semibold text-brand-600 transition-colors hover:text-brand-700"
-          >
-            {isPrivate ? "תיאום" : "החוג"}
-          </Link>
+          {isPrivate ? (
+            <Link
+              href="/admin/private-lessons"
+              className="font-semibold text-brand-600 transition-colors hover:text-brand-700"
+            >
+              תיאום
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={opening}
+              onClick={onOpenClass}
+              className="font-semibold text-brand-600 transition-colors hover:text-brand-700 disabled:opacity-60"
+            >
+              {opening ? "טוען..." : "החוג"}
+            </button>
+          )}
         </div>
 
         {session.notes && (
