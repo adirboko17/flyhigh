@@ -176,23 +176,26 @@ export function PublicHeader({
               "pointer-events-none opacity-0 md:pointer-events-auto md:opacity-100"
           )}
         >
-          <button
-            type="button"
-            data-public-header-menu
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen(true);
-            }}
-            className={cn(
-              "relative z-40 flex h-11 w-11 shrink-0 items-center justify-center transition-colors md:hidden",
-              glass ? "text-ink-700" : "text-white"
-            )}
-            aria-label="פתיחת תפריט"
-            aria-expanded={open}
-            aria-controls="mobile-menu"
-          >
-            <Icon name="menu" size={24} />
-          </button>
+          <div className="relative z-40 flex shrink-0 items-center md:hidden">
+            <button
+              type="button"
+              data-public-header-menu
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpen(true);
+              }}
+              className={cn(
+                "flex h-11 w-11 items-center justify-center transition-colors",
+                glass ? "text-ink-700" : "text-white"
+              )}
+              aria-label="פתיחת תפריט"
+              aria-expanded={open}
+              aria-controls="mobile-menu"
+            >
+              <Icon name="menu" size={24} />
+            </button>
+            <CartButton light={overlayHeader && !glass} />
+          </div>
 
           <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center md:static md:z-auto md:translate-y-0">
             <span className="pointer-events-auto md:hidden">
@@ -219,7 +222,9 @@ export function PublicHeader({
           </nav>
 
           <div className="relative z-40 flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <CartButton light={overlayHeader && !glass} />
+            <span className="hidden md:contents">
+              <CartButton light={overlayHeader && !glass} />
+            </span>
             {authControls}
           </div>
         </div>
