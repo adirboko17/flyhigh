@@ -115,6 +115,7 @@ export function ClassPreviewDialog({
               fill
               sizes="(max-width: 768px) 100vw, 640px"
               className="object-cover"
+              unoptimized
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-brand-gradient text-5xl text-white">

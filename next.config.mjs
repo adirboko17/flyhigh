@@ -21,6 +21,9 @@ const nextConfig = {
     },
   },
   images: {
+    // וורסל גובה על אופטימיזציית /_next/image ומחזיר 402 בלי חבילה בתשלום.
+    // תמונות החוגים כבר מגיעות מ־CDN של Supabase, אז טוענים אותן ישירות.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",

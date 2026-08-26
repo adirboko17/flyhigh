@@ -102,7 +102,7 @@ export function ClassCard({
               fill
               sizes="(max-width: 768px) 100vw, 33vw"
               className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-              unoptimized={preview}
+              unoptimized
             />
           )
         ) : (

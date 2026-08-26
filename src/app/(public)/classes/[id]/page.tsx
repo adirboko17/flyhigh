@@ -129,6 +129,7 @@ export default async function ClassDetailPage({
                 sizes="(max-width: 1024px) 100vw, 60vw"
                 className="object-cover"
                 priority
+                unoptimized
               />
             ) : (
               <div className="flex h-full items-center justify-center bg-brand-gradient text-6xl text-white">
