@@ -21,6 +21,7 @@ export type WeeklySlot = {
   startTime: string;
   endTime: string;
   genderPolicy: ClassGenderPolicy;
+  note?: string;
 };
 
 export function weeklySlotKey(slot: Pick<WeeklySlot, "dayOfWeek" | "startTime">) {
@@ -398,6 +399,7 @@ export function weeklySlotsFromDb(
     start_time: string;
     end_time: string;
     gender_policy?: ClassGenderPolicy | null;
+    note?: string | null;
   }[]
 ): WeeklySlot[] {
   return rows
@@ -407,6 +409,7 @@ export function weeklySlotsFromDb(
       startTime: r.start_time.slice(0, 5),
       endTime: r.end_time.slice(0, 5),
       genderPolicy: r.gender_policy ?? "mixed",
+      note: r.note?.trim() || undefined,
     }))
     .sort(
       (a, b) =>
@@ -544,6 +547,17 @@ export function formToPreviewClass(
     billable_session_count: proration.billableCount,
     remaining_session_count: proration.remainingCount,
     interest_only: interestOnly,
+    weekly_slots: interestOnly
+      ? []
+      : schedule.weeklySlots
+          .filter((slot) => slot.startTime.trim())
+          .map((slot) => ({
+            day_of_week: slot.dayOfWeek,
+            start_time: slot.startTime,
+            end_time: slot.endTime,
+            gender_policy: slot.genderPolicy,
+            note: slot.note?.trim() || null,
+          })),
   };
 }
 
@@ -563,6 +577,7 @@ export function buildInitialSchedule(
     start_time: string;
     end_time: string;
     gender_policy?: ClassGenderPolicy | null;
+    note?: string | null;
   }[],
   sessionRows: {
     id: string;

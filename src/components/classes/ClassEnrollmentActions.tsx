@@ -41,6 +41,7 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
+import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
 import type { PublicClassSlot } from "@/types";
 import type { Enums } from "@/types/database.types";
 
@@ -770,6 +771,7 @@ export function ClassEnrollmentActions({
                       {" · "}
                       {formatClassGenderPolicy(slot.gender_policy)}
                     </span>
+                    <SlotNoteBadge note={slot.note} className="mt-1.5" />
                     {full && (
                     <span className="mt-1 block text-xs text-ink-500">
                         המועד מלא — אפשר להצטרף לרשימת המתנה
@@ -973,6 +975,7 @@ function SlotPickerTrigger({
               {formatClassGenderPolicy(selectedSlot.gender_policy)}
               {selectedSlot.available <= 0 ? " · המועד מלא" : ""}
             </span>
+            <SlotNoteBadge note={selectedSlot.note} className="mt-1.5" />
           </>
         ) : (
           <>

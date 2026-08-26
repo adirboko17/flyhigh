@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/icons/Icon";
+import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
 import { formatWeeklySlotLabel, sessionWeekday } from "@/lib/scheduling/classSchedule";
 import { isElapsedClassSession } from "@/lib/finance/proratedClassPrice";
 import type { PublicClassSession, PublicClassSlot } from "@/types";
@@ -134,7 +135,10 @@ function SlotSessionCard({
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
       >
         <span className="min-w-0">
-          <span className="block font-semibold text-ink-900">{title}</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-ink-900">{title}</span>
+            <SlotNoteBadge note={group.slot?.note} />
+          </span>
           <span className="mt-0.5 block text-xs text-ink-500">
             {group.sessions.length} מפגשים
             {range ? ` · ${range}` : ""}

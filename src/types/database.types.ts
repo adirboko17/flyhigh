@@ -366,6 +366,7 @@ export type Database = {
           end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           id: string
+          note: string | null
           start_time: string
         }
         Insert: {
@@ -375,6 +376,7 @@ export type Database = {
           end_time: string
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
+          note?: string | null
           start_time: string
         }
         Update: {
@@ -384,6 +386,7 @@ export type Database = {
           end_time?: string
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
+          note?: string | null
           start_time?: string
         }
         Relationships: [
@@ -1604,6 +1607,7 @@ export type Database = {
           end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           id: string
+          note: string | null
           start_time: string
           taken_count: number
         }[]
@@ -1642,6 +1646,17 @@ export type Database = {
           taken_count: number
           title: string
           interest_only: boolean
+        }[]
+      }
+      list_public_weekly_slots: {
+        Args: never
+        Returns: {
+          class_id: string
+          day_of_week: number
+          end_time: string
+          gender_policy: Database["public"]["Enums"]["class_gender_policy"]
+          note: string | null
+          start_time: string
         }[]
       }
       preview_coupon:

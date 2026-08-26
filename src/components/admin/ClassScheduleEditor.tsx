@@ -173,8 +173,9 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
             {value.weeklySlots.map((slot, index) => (
               <div
                 key={slot.id ?? `new-${index}`}
-                className="grid grid-cols-1 items-end gap-2 rounded-xl border border-ink-100 bg-ink-50/60 p-3 sm:grid-cols-[minmax(6.5rem,1fr)_1fr_1fr_minmax(6.5rem,1fr)_auto] sm:gap-3"
+                className="space-y-2 rounded-xl border border-ink-100 bg-ink-50/60 p-3"
               >
+                <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(6.5rem,1fr)_1fr_1fr_minmax(6.5rem,1fr)_auto] sm:gap-3">
                 <Field label="יום">
                   <Select
                     value={String(slot.dayOfWeek)}
@@ -243,6 +244,17 @@ export function ClassScheduleEditor({ value, onChange, disabled }: Props) {
                 >
                   הסרה
                 </Button>
+                </div>
+                <Field label="הערה לתצוגה">
+                  <Input
+                    value={slot.note ?? ""}
+                    onChange={(e) =>
+                      updateWeeklySlot(index, { note: e.target.value })
+                    }
+                    placeholder="למשל: מותנה בכמות נרשמות"
+                    disabled={disabled}
+                  />
+                </Field>
               </div>
             ))}
             <Button

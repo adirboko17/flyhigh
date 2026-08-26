@@ -1,17 +1,17 @@
 import Link from "next/link";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Icon } from "@/components/icons/Icon";
 import type { IconName } from "@/components/icons/paths";
 import { formatClassAudience, formatClassGenderPolicy } from "@/lib/class-audience";
-import { dayLabel } from "@/lib/constants";
+import { DAY_ABBR, dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
 import { classPeriodTotal } from "@/lib/finance/classPricing";
 import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
 import { formatTime } from "@/utils/format";
 import { classIsSoldOut } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
-import type { PublicClass } from "@/types";
+import type { PublicClass, PublicClassWeeklySlot } from "@/types";
 import { ClassPriceAmount, ClassPriceNote, classPriceLabel } from "./ClassPrice";
 
 const ACCENTS = [
@@ -50,17 +50,20 @@ export function ClassCard({
   const accent = accentFor(cls.category ?? cls.level ?? cls.title);
   const href = `/classes/${cls.id}`;
 
+  const slots = cls.weekly_slots ?? [];
   const scheduleLabel = interestOnly
     ? "הרשמה ללא תאריך"
-    : cls.pick_one_slot
-      ? cls.schedule_days
-        ? `בחירת מועד · ימים ${cls.schedule_days}`
-        : "בחירת מועד אחד בשבוע"
+    : slots.length > 1 && cls.pick_one_slot
+      ? "בחירת מועד"
       : cls.schedule_days
-        ? `ימים ${cls.schedule_days}`
+        ? `${cls.pick_one_slot ? "בחירת מועד · " : ""}ימים ${cls.schedule_days}`
         : cls.schedule_type === "custom"
           ? "תאריכים מותאמים"
           : `יום ${dayLabel(cls.day_of_week)}`;
+  const slotTimeRows = groupSlotsByDay(slots);
+  const showSlotTimes = !interestOnly && slots.length > 1;
+  const singleStartTime = slots[0]?.start_time || cls.start_time;
+  const showSingleTime = !interestOnly && !showSlotTimes && Boolean(singleStartTime);
 
   const audienceLabel =
     cls.audience_type === "grade" &&
@@ -161,15 +164,41 @@ export function ClassCard({
 
         <ul className="mt-4 space-y-2">
           {cls.instructor_name && (
-            <MetaRow icon="user" accent={accent} text={cls.instructor_name} />
+            <MetaRow icon="user" accent={accent}>
+              {cls.instructor_name}
+            </MetaRow>
           )}
-          <MetaRow icon="calendar" accent={accent} text={scheduleLabel} />
-          {!interestOnly && cls.start_time && (
-            <MetaRow
-              icon="clock"
-              accent={accent}
-              text={formatTime(cls.start_time)}
-            />
+          <MetaRow icon="calendar" accent={accent}>
+            {scheduleLabel}
+          </MetaRow>
+          {showSlotTimes && (
+            <MetaRow icon="clock" accent={accent}>
+              <span className="flex flex-col gap-1">
+                {slotTimeRows.map((row) => (
+                  <span
+                    key={row.day}
+                    className="flex flex-wrap items-center gap-x-1.5 gap-y-1"
+                  >
+                    <span>יום {DAY_ABBR[row.day] ?? row.day}</span>
+                    {row.slots.map((slot, index) => (
+                      <Fragment key={`${slot.day_of_week}-${slot.start_time}`}>
+                        <span className="text-ink-300">
+                          {index === 0 ? "·" : "או"}
+                        </span>
+                        <span className="tabular-nums">
+                          {formatTime(slot.start_time)}
+                        </span>
+                      </Fragment>
+                    ))}
+                  </span>
+                ))}
+              </span>
+            </MetaRow>
+          )}
+          {showSingleTime && (
+            <MetaRow icon="clock" accent={accent}>
+              {formatTime(singleStartTime)}
+            </MetaRow>
           )}
         </ul>
 
@@ -243,24 +272,36 @@ export function ClassCard({
   );
 }
 
+function groupSlotsByDay(slots: PublicClassWeeklySlot[]) {
+  const groups = new Map<number, PublicClassWeeklySlot[]>();
+  for (const slot of slots) {
+    const list = groups.get(slot.day_of_week) ?? [];
+    list.push(slot);
+    groups.set(slot.day_of_week, list);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([day, daySlots]) => ({ day, slots: daySlots }));
+}
+
 function MetaRow({
   icon,
   accent,
-  text,
+  children,
 }: {
   icon: IconName;
   accent: string;
-  text: string;
+  children: ReactNode;
 }) {
   return (
-    <li className="flex min-w-0 items-center gap-2.5 text-sm text-ink-700">
+    <li className="flex min-w-0 items-start gap-2.5 text-sm text-ink-700">
       <span
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
+        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white"
         style={{ background: accent }}
       >
         <Icon name={icon} size={14} />
       </span>
-      <span className="truncate font-medium">{text}</span>
+      <span className="min-w-0 font-medium leading-6">{children}</span>
     </li>
   );
 }

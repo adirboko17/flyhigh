@@ -2,6 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
 import { ClassSessionGroups } from "@/components/classes/ClassSessionGroups";
+import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -267,13 +268,16 @@ export default async function ClassDetailPage({
                       key={slot.id}
                       className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
                     >
-                      <span className="font-semibold text-ink-900">
-                        {formatWeeklySlotLabel(
-                          slot.day_of_week,
-                          slot.start_time,
-                          slot.end_time,
-                          slot.gender_policy
-                        )}
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="font-semibold text-ink-900">
+                          {formatWeeklySlotLabel(
+                            slot.day_of_week,
+                            slot.start_time,
+                            slot.end_time,
+                            slot.gender_policy
+                          )}
+                        </span>
+                        <SlotNoteBadge note={slot.note} />
                       </span>
                       {slot.available <= 0 && (
                         <span className="text-ink-500">מלא</span>

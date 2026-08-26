@@ -23,6 +23,7 @@ function classSearchHaystack(cls: PublicClass) {
     formatClassAudience(cls),
     formatClassGenderPolicy(cls.gender_policy),
     cls.interest_only ? "הרשמת עניין ללא תשלום" : "",
+    ...(cls.weekly_slots ?? []).map((slot) => slot.start_time.slice(0, 5)),
   ]
     .filter(Boolean)
     .join(" ");

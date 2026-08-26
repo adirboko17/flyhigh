@@ -25,9 +25,16 @@ export type ClassWithInstructor = Class & {
   instructor?: Pick<Instructor, "id" | "full_name"> | null;
 };
 
-/** חוג ציבורי כפי שמוחזר מ-list_public_classes (כולל זמינות ושם מדריכה). */
+export type PublicClassWeeklySlot = Omit<
+  Database["public"]["Functions"]["list_public_weekly_slots"]["Returns"][number],
+  "class_id"
+>;
+
+/** חוג ציבורי כפי שמוחזר מ-list_public_classes (כולל זמינות, שם מדריכה ומועדים). */
 export type PublicClass =
-  Database["public"]["Functions"]["list_public_classes"]["Returns"][number];
+  Database["public"]["Functions"]["list_public_classes"]["Returns"][number] & {
+    weekly_slots: PublicClassWeeklySlot[];
+  };
 
 export type PublicClassSlot =
   Database["public"]["Functions"]["list_public_class_slots"]["Returns"][number];

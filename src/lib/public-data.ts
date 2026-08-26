@@ -7,12 +7,34 @@ const PUBLIC_DATA_REVALIDATE_SECONDS = 60;
 export const getPublicClasses = unstable_cache(
   async (): Promise<PublicClass[]> => {
     const supabase = createPublicClient();
-    const { data, error } = await supabase.rpc("list_public_classes");
+    const [{ data, error }, { data: slotRows, error: slotsError }] =
+      await Promise.all([
+        supabase.rpc("list_public_classes"),
+        supabase.rpc("list_public_weekly_slots"),
+      ]);
 
     if (error) throw error;
-    return (data as PublicClass[]) ?? [];
+    if (slotsError) throw slotsError;
+
+    const slotsByClass = new Map<string, PublicClass["weekly_slots"]>();
+    for (const slot of slotRows ?? []) {
+      const list = slotsByClass.get(slot.class_id) ?? [];
+      list.push({
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        gender_policy: slot.gender_policy,
+        note: slot.note,
+      });
+      slotsByClass.set(slot.class_id, list);
+    }
+
+    return ((data as Omit<PublicClass, "weekly_slots">[]) ?? []).map((cls) => ({
+      ...cls,
+      weekly_slots: slotsByClass.get(cls.id) ?? [],
+    }));
   },
-  ["public-classes"],
+  ["public-classes-v2"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-classes"],
@@ -75,7 +97,7 @@ export const getPublicClassSlots = unstable_cache(
     if (error) throw error;
     return (data as PublicClassSlot[]) ?? [];
   },
-  ["public-class-slots-v2"],
+  ["public-class-slots-v4"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-class-slots"],
