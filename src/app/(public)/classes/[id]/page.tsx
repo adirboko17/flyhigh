@@ -80,15 +80,16 @@ export default async function ClassDetailPage({
   const startDateLabel = formatDate(cls.start_date);
   const endDateLabel = formatDate(cls.end_date);
 
-  const heroDescription =
-    cls.description?.trim() ||
-    (interestOnly
-      ? "הרשמה ללא תשלום וללא תאריך — בודקים כמה נרשמים לפני פתיחת החוג"
-      : [scheduleLabel, formatTime(cls.start_time) !== "-" && cls.end_time
+  const heroDescription = interestOnly
+    ? cls.gender_policy === "female"
+      ? "הרשמה ללא תשלום וללא תאריך — בודקים כמה נרשמות לפני פתיחת החוג"
+      : "הרשמה ללא תשלום וללא תאריך — בודקים כמה נרשמים לפני פתיחת החוג"
+    : cls.description?.trim() ||
+      [scheduleLabel, formatTime(cls.start_time) !== "-" && cls.end_time
           ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
           : null, cls.instructor_name?.trim()]
           .filter(Boolean)
-          .join(" · "));
+          .join(" · ");
 
   return (
     <div className="bg-ink-50">
@@ -142,7 +143,47 @@ export default async function ClassDetailPage({
             <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
               <div className="grid grid-cols-2 gap-px sm:gap-4">
                 <DetailRow icon="👩‍🏫" label="מדריכה" value={cls.instructor_name} />
-                {!interestOnly && (
+                {interestOnly ? (
+                  <>
+                    <DetailRow
+                      icon="💳"
+                      label="תשלום"
+                      value="ללא תשלום בשלב זה"
+                    />
+                    <DetailRow
+                      icon="📅"
+                      label="מועד"
+                      value="ייקבע אם החוג ייפתח"
+                    />
+                    <DetailRow
+                      icon="✅"
+                      label="פתיחת החוג"
+                      value={minimumRegistrantsLabel(cls.gender_policy)}
+                    />
+                    <DetailRow
+                      icon="👥"
+                      label="מיועד ל"
+                      value={formatClassGenderPolicy(cls.gender_policy)}
+                    />
+                    <DetailRow
+                      icon="🎂"
+                      label={formatAudienceFieldLabel(cls.audience_type)}
+                      value={formatClassAudience(cls)}
+                    />
+                    {cls.level && (
+                      <DetailRow icon="🏅" label="רמה" value={cls.level} />
+                    )}
+                    <DetailRow
+                      icon="🎟️"
+                      label="תפוסה"
+                      value={
+                        unlimited
+                          ? "ללא הגבלת מקומות"
+                          : `${cls.capacity} מקומות`
+                      }
+                    />
+                  </>
+                ) : (
                   <>
                     <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
                     <DetailRow
@@ -156,26 +197,26 @@ export default async function ClassDetailPage({
                             : null
                       }
                     />
+                    <DetailRow
+                      icon="👥"
+                      label="מיועד ל"
+                      value={
+                        slots.length > 1 &&
+                        new Set(slots.map((slot) => slot.gender_policy)).size > 1
+                          ? "לפי המועד שנבחר"
+                          : formatClassGenderPolicy(
+                              slots[0]?.gender_policy ?? cls.gender_policy
+                            )
+                      }
+                    />
+                    {cls.audience_type !== "open" && (
+                      <DetailRow
+                        icon="🎂"
+                        label={formatAudienceFieldLabel(cls.audience_type)}
+                        value={formatClassAudience(cls)}
+                      />
+                    )}
                   </>
-                )}
-                <DetailRow
-                  icon="👥"
-                  label="מיועד ל"
-                  value={
-                    slots.length > 1 &&
-                    new Set(slots.map((slot) => slot.gender_policy)).size > 1
-                      ? "לפי המועד שנבחר"
-                      : formatClassGenderPolicy(
-                          slots[0]?.gender_policy ?? cls.gender_policy
-                        )
-                  }
-                />
-                {cls.audience_type !== "open" && (
-                <DetailRow
-                  icon="🎂"
-                  label={formatAudienceFieldLabel(cls.audience_type)}
-                  value={formatClassAudience(cls)}
-                />
                 )}
               </div>
               {!interestOnly &&
@@ -194,6 +235,18 @@ export default async function ClassDetailPage({
                 </div>
               )}
             </div>
+
+            {interestOnly && cls.description?.trim() && (
+              <div className="mt-4 rounded-2xl border border-ink-100 bg-white p-4 sm:mt-6 sm:p-6">
+                <p className="text-xs font-semibold text-ink-400">על החוג</p>
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink-700 sm:text-base">
+                  {cls.description.trim()}
+                </p>
+                <p className="mt-3 text-sm font-medium text-brand-800">
+                  {minimumRegistrantsLabel(cls.gender_policy)}.
+                </p>
+              </div>
+            )}
 
             {!interestOnly && cls.pick_one_slot && slots.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
@@ -267,6 +320,14 @@ export default async function ClassDetailPage({
       </div>
     </div>
   );
+}
+
+function minimumRegistrantsLabel(
+  genderPolicy: "male" | "female" | "mixed" | null | undefined
+) {
+  if (genderPolicy === "female") return "מותנה במינימום נרשמות";
+  if (genderPolicy === "male") return "מותנה במינימום נרשמים";
+  return "מותנה במינימום נרשמים";
 }
 
 function hasDetailValue(value: string | null | undefined) {

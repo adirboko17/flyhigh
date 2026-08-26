@@ -692,8 +692,13 @@ export function ClassEnrollmentActions({
         >
           <div className="space-y-4">
             <p className="text-sm leading-relaxed text-ink-600">
-              כרגע זו רק הרשמה, בלי תשלום ובלי מועד קבוע. כשהחוג ייפתח באמת
-              נעדכן אתכם לגבי התשלום.
+              ללא תשלום וללא מועד פתיחה, כשהחוג יפתח נעדכן לגבי התשלום.
+            </p>
+            <p className="text-sm font-medium text-ink-800">
+              {traineeGender === "female"
+                ? "מותנה במינימום נרשמות"
+                : "מותנה במינימום נרשמים"}
+              .
             </p>
             <div className="rounded-2xl bg-ink-50 px-4 py-3">
               <p className="text-xs font-semibold text-ink-500">נרשמים עכשיו</p>
