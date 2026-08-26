@@ -2,6 +2,7 @@
 
 import {
   childEligibilityError,
+  parentGenderError,
   type ClassAudienceFields,
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
@@ -331,6 +332,15 @@ export async function completeClassEnrollmentPayment(input: {
   const eligibilityError = childrenEligibilityError(cls, selectedChildren, slotGenders);
   if (eligibilityError) {
     return { success: false, error: eligibilityError };
+  }
+  if (includeSelf) {
+    const parentError = parentGenderError(
+      profile.full_name,
+      profile.gender,
+      cls.gender_policy,
+      slotGenders
+    );
+    if (parentError) return { success: false, error: parentError };
   }
 
   const alreadyEnrolled = new Set(
@@ -709,6 +719,15 @@ export async function joinClassWaitlist(input: {
   const eligibilityError = childrenEligibilityError(cls, selectedChildren, slotGenders);
   if (eligibilityError) {
     return { success: false, error: eligibilityError };
+  }
+  if (includeSelf) {
+    const parentError = parentGenderError(
+      profile.full_name,
+      profile.gender,
+      cls.gender_policy,
+      slotGenders
+    );
+    if (parentError) return { success: false, error: parentError };
   }
 
   const alreadyWaitlisted = new Set(

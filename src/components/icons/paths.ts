@@ -32,6 +32,7 @@ export const ICON_PATHS = {
   drop: "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z",
   wallet:
     "M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1H5M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3h-5a2 2 0 0 1 0-4h5",
+  bag: "M6 7h12l-1 13H7L6 7ZM9 7V5a3 3 0 0 1 6 0v2",
   hourglass:
     "M6 3h12M6 21h12M7 3c0 4 4 5 5 7-1 2-5 3-5 7M17 3c0 4-4 5-5 7 1 2 5 3 5 7",
   logout:

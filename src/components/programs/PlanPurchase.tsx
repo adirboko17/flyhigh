@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCart } from "@/components/cart/CartProvider";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import {
   BankTransferDetails,
   CardcomRedirectHint,
@@ -313,7 +314,10 @@ function PlanCheckoutDialog({
   const peopleCap = activityPeopleCap(priceTiers);
   const extraHalfHour = extraHalfHourLabel(extraHalfHourPrice);
 
-  const [step, setStep] = useState<"select" | "payment" | "success">("select");
+  const { addItem } = useCart();
+  const [step, setStep] = useState<"select" | "payment" | "added" | "success">(
+    "select"
+  );
   // בלי ילדים בחשבון הרכישה תמיד נרשמת על שם ההורה, ולכן היא מסומנת מראש.
   const [includeSelf, setIncludeSelf] = useState(!hasChildren);
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
@@ -428,6 +432,36 @@ function PlanCheckoutDialog({
     setCouponInput(result.coupon.code);
   }
 
+  function handleAddToCart() {
+    setError(null);
+    if (count === 0) {
+      setError("נא לבחור למי הרכישה.");
+      return;
+    }
+    if (invalidGroupCount) {
+      setError("מספר המשתתפים שנבחר אינו במחירון.");
+      return;
+    }
+    const result = addItem({
+      kind: planKind,
+      productId: planId,
+      title: planTitle,
+      listTotal,
+      childIds: selectedChildIds,
+      includeSelf,
+      participantNames: participants.map((participant) => participant.name),
+      quantity: effectiveQuantity,
+      programKind,
+      entriesCount,
+      extraHalfHourPrice,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep("added");
+  }
+
   async function handlePay() {
     setError(null);
 
@@ -476,18 +510,22 @@ function PlanCheckoutDialog({
           ? settledLater
             ? "הרכישה נקלטה"
             : "התשלום הושלם בהצלחה"
-          : step === "payment"
-            ? "אמצעי תשלום"
-            : purchaseTitle
+          : step === "added"
+            ? "נוסף לסל"
+            : step === "payment"
+              ? "אמצעי תשלום"
+              : purchaseTitle
       }
       description={
         step === "success"
           ? settledLater
             ? `ה${kindLabel} נרשם בחשבון. התשלום ייגבה מול המשרד.`
             : `ה${kindLabel} נרשם בחשבון וקיבלתם אישור תשלום.`
-          : step === "payment"
-            ? "בחרו כיצד תרצו לשלם."
-            : `בחרו למי מיועדת הרכישה של ${planTitle}.`
+          : step === "added"
+            ? "אפשר להמשיך לחוג או כרטיסייה נוספים, ולשלם פעם אחת בסל."
+            : step === "payment"
+              ? "בחרו כיצד תרצו לשלם."
+              : `בחרו למי מיועדת הרכישה של ${planTitle}.`
       }
     >
       {step === "select" && (
@@ -801,14 +839,46 @@ function PlanCheckoutDialog({
               type="button"
               className="sm:flex-1"
               disabled={count === 0 || invalidGroupCount}
-              onClick={() => setStep("payment")}
+              onClick={handleAddToCart}
             >
               {count === 0
                 ? "בחרו משתתפים"
                 : invalidGroupCount
                   ? "בחרו כמות מהמחירון"
-                  : "המשך לתשלום"}
+                  : "הוספה לסל"}
             </Button>
+          </div>
+          <button
+            type="button"
+            className="w-full text-center text-sm font-semibold text-ink-500 underline-offset-2 hover:text-brand-700 hover:underline disabled:opacity-40"
+            disabled={count === 0 || invalidGroupCount}
+            onClick={() => setStep("payment")}
+          >
+            תשלום מיידי לפריט הזה בלבד
+          </button>
+          {error && step === "select" && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {step === "added" && (
+        <div className="space-y-4 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-aqua-100 text-3xl">
+            ✓
+          </div>
+          <p className="font-semibold text-ink-900">
+            {planTitle} נוסף לסל
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="sm:flex-1" onClick={handleClose}>
+              המשך לקנות
+            </Button>
+            <ButtonLink href="/cart" className="sm:flex-1">
+              לעגלת הקניות
+            </ButtonLink>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import type { Viewport } from "next";
 import { Suspense } from "react";
+import { CartProvider } from "@/components/cart/CartProvider";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
@@ -37,6 +38,7 @@ export default async function PublicLayout({
     : null;
 
   return (
+    <CartProvider>
     <div className="flex min-h-screen flex-col bg-ink-50">
       {/* נחשף רק בניווט מקלדת, ומאפשר לדלג על התפריט ישר לתוכן. */}
       <a href="#main-content" className="a11y-skip-link">
@@ -53,5 +55,6 @@ export default async function PublicLayout({
       </main>
       <PublicFooter user={user} />
     </div>
+    </CartProvider>
   );
 }

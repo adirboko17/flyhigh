@@ -74,19 +74,58 @@ export function formatClassGenderPolicy(policy: ClassGenderPolicy): string {
   return CLASS_GENDER_POLICY[policy];
 }
 
+/** הודעה אם המגדר לא תואם חוג לבנים או לבנות בלבד. */
+export function genderMismatchError(
+  name: string,
+  childGender: Enums<"gender_type"> | null | undefined,
+  policy: ClassGenderPolicy
+): string | null {
+  if (policy === "mixed") return null;
+  const label = name.trim() || "הילד/ה";
+  const audience = policy === "male" ? "לבנים" : "לבנות";
+
+  if (!childGender) {
+    return `חסר מגדר עבור ${label}. עדכנו את הפרטים האישיים בהגדרות החשבון כדי להירשם לחוג ${audience} בלבד.`;
+  }
+
+  const feminine = childGender === "female";
+
+  if (policy === "male" && childGender !== "male") {
+    return feminine
+      ? `${label} אינה מתאימה לחוג לבנים בלבד.`
+      : `${label} אינו מתאים לחוג לבנים בלבד.`;
+  }
+  if (policy === "female" && childGender !== "female") {
+    return childGender === "male"
+      ? `${label} אינו מתאים לחוג לבנות בלבד.`
+      : `${label} אינה מתאימה לחוג לבנות בלבד.`;
+  }
+  return null;
+}
+
+/** בדיקת מגדר להורה מול מדיניות החוג או המועדים שנבחרו. */
+export function parentGenderError(
+  name: string,
+  gender: Enums<"gender_type"> | null | undefined,
+  classPolicy: ClassGenderPolicy,
+  slotGenders: ClassGenderPolicy[] = []
+): string | null {
+  const policies = slotGenders.length > 0 ? slotGenders : [classPolicy];
+  for (const policy of policies) {
+    const error = genderMismatchError(name, gender, policy);
+    if (error) return error;
+  }
+  return null;
+}
+
 /** מחזיר הודעת שגיאה בעברית אם הילד/ה לא מתאים/ה לחוג, אחרת null. */
 export function childEligibilityError(
   cls: ClassAudienceFields,
   child: ChildEligibilityInput,
 ): string | null {
   const name = child.full_name.trim() || "הילד/ה";
-
-  if (cls.gender_policy === "male" && child.gender !== "male") {
-    return `${name} אינו מתאים לחוג לבנים בלבד.`;
-  }
-  if (cls.gender_policy === "female" && child.gender !== "female") {
-    return `${name} אינה מתאימה לחוג לבנות בלבד.`;
-  }
+  const genderError = genderMismatchError(name, child.gender, cls.gender_policy);
+  if (genderError) return genderError;
 
   if (cls.audience_type === "open") {
     return null;
@@ -100,11 +139,16 @@ export function childEligibilityError(
     if (grade == null) {
       return `לא ניתן לרשום את ${name} — חסרת כיתה בחשבון.`;
     }
+    const range = formatGradeRange(cls.grade_min, cls.grade_max);
     if (cls.grade_min != null && grade < cls.grade_min) {
-      return `${name} בכיתה נמוכה מדי לחוג זה.`;
+      return range
+        ? `${name} בכיתה נמוכה מדי. החוג מיועד ל${range}.`
+        : `${name} בכיתה נמוכה מדי לחוג זה.`;
     }
     if (cls.grade_max != null && grade > cls.grade_max) {
-      return `${name} בכיתה גבוהה מדי לחוג זה.`;
+      return range
+        ? `${name} בכיתה גבוהה מדי. החוג מיועד ל${range}.`
+        : `${name} בכיתה גבוהה מדי לחוג זה.`;
     }
     return null;
   }

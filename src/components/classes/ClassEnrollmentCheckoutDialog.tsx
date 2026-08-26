@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCart } from "@/components/cart/CartProvider";
 import { Modal } from "@/components/ui/Modal";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import {
   BankTransferDetails,
   CardcomRedirectHint,
@@ -74,7 +75,10 @@ export function ClassEnrollmentCheckoutDialog({
   weeklySlotLabel,
 }: ClassEnrollmentCheckoutDialogProps) {
   const router = useRouter();
-  const [step, setStep] = useState<"summary" | "payment" | "success">("summary");
+  const { addItem } = useCart();
+  const [step, setStep] = useState<"summary" | "payment" | "added" | "success">(
+    "summary"
+  );
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +155,26 @@ export function ClassEnrollmentCheckoutDialog({
     setCouponError(null);
   }
 
+  function handleAddToCart() {
+    setError(null);
+    const result = addItem({
+      kind: "class",
+      productId: classId,
+      title: classTitle,
+      listTotal: order.total,
+      childIds,
+      includeSelf: selfSelected,
+      participantNames: selectedChildren.map((child) => child.full_name),
+      weeklySlotId,
+      weeklySlotLabel,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setStep("added");
+  }
+
   async function handlePay() {
     setError(null);
 
@@ -198,18 +222,22 @@ export function ClassEnrollmentCheckoutDialog({
           ? settledLater
             ? "ההרשמה נקלטה"
             : "התשלום הושלם בהצלחה"
-          : step === "payment"
-            ? "אמצעי תשלום"
-            : "סיכום הרשמה"
+          : step === "added"
+            ? "נוסף לסל"
+            : step === "payment"
+              ? "אמצעי תשלום"
+              : "סיכום הרשמה"
       }
       description={
         step === "success"
           ? settledLater
             ? "נרשמתם לחוג. התשלום ייגבה מול המשרד."
             : "נרשמתם לחוג וקיבלתם אישור תשלום."
-          : step === "payment"
-            ? "בחרו כיצד תרצו לשלם."
-            : `בדקו את פרטי ההרשמה ל${classTitle} לפני המעבר לתשלום.`
+          : step === "added"
+            ? "אפשר להמשיך לחוג או כרטיסייה נוספים, ולשלם פעם אחת בסל."
+            : step === "payment"
+              ? "בחרו כיצד תרצו לשלם."
+              : `בדקו את פרטי ההרשמה ל${classTitle} לפני ההוספה לסל.`
       }
     >
       {step === "summary" && (
@@ -366,10 +394,42 @@ export function ClassEnrollmentCheckoutDialog({
             <Button
               type="button"
               className="sm:flex-1"
-              onClick={() => setStep("payment")}
+              onClick={handleAddToCart}
             >
-              המשך לתשלום
+              הוספה לסל
             </Button>
+          </div>
+          <button
+            type="button"
+            className="w-full text-center text-sm font-semibold text-ink-500 underline-offset-2 hover:text-brand-700 hover:underline"
+            onClick={() => setStep("payment")}
+          >
+            תשלום מיידי לחוג הזה בלבד
+          </button>
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {step === "added" && (
+        <div className="space-y-4 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-aqua-100 text-3xl">
+            ✓
+          </div>
+          <p className="font-semibold text-ink-900">
+            {classTitle} נוסף לסל עבור {count}{" "}
+            {count === 1 ? "מתאמן/ת" : "מתאמנים"}
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="sm:flex-1" onClick={handleClose}>
+              המשך לקנות
+            </Button>
+            <ButtonLink href="/cart" className="sm:flex-1">
+              לעגלת הקניות
+            </ButtonLink>
           </div>
         </div>
       )}

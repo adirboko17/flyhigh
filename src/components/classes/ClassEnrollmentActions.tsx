@@ -12,8 +12,11 @@ import {
   WAITLIST_STATUS,
 } from "@/lib/constants";
 import {
+  childEligibilityError,
   displayGenderPolicy,
   formatClassGenderPolicy,
+  formatGradeRange,
+  genderMismatchError,
   pickOneSlotTraineeHint,
   pickOneSlotTraineeShort,
 } from "@/lib/class-audience";
@@ -25,10 +28,13 @@ import {
   hasAgeRestriction,
   type AgeEligibility,
 } from "@/lib/enrollment/ageValidation";
+import { useCart } from "@/components/cart/CartProvider";
 import { countFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
 import { PARENT_TRAINEE_ID } from "@/lib/enrollment/trainees";
-import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
-import { ClassEnrollmentCheckoutDialog } from "./ClassEnrollmentCheckoutDialog";
+import {
+  calculateOrderTotal,
+  type SiblingDiscountTier,
+} from "@/lib/finance/siblingDiscount";
 import { Modal } from "@/components/ui/Modal";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
@@ -39,12 +45,16 @@ type Child = {
   id: string;
   full_name: string;
   birth_date: string | null;
+  gender?: Enums<"gender_type"> | null;
+  school_grade?: number | null;
+  grade_school_year?: number | null;
   hasHealthDeclaration: boolean;
 };
 
 type ParentTrainee = {
   fullName: string;
   birthDate: string | null;
+  gender?: Enums<"gender_type"> | null;
 };
 
 type Trainee = Child & { kind: "parent" | "child" };
@@ -73,6 +83,9 @@ interface ClassEnrollmentActionsProps {
   billingMonths?: number | null;
   ageMin: number | null;
   ageMax: number | null;
+  audienceType?: Enums<"class_audience_type">;
+  gradeMin?: number | null;
+  gradeMax?: number | null;
   soldOut: boolean;
   ended?: boolean;
   availableSpots: number;
@@ -96,6 +109,9 @@ export function ClassEnrollmentActions({
   billingMonths,
   ageMin,
   ageMax,
+  audienceType = "age",
+  gradeMin = null,
+  gradeMax = null,
   soldOut,
   ended = false,
   availableSpots,
@@ -110,37 +126,12 @@ export function ClassEnrollmentActions({
   classGenderPolicy = "mixed",
 }: ClassEnrollmentActionsProps) {
   const router = useRouter();
+  const { addItem } = useCart();
   const traineeGender = displayGenderPolicy(
     classGenderPolicy,
     slots.map((slot) => slot.gender_policy)
   );
   const ageRestricted = hasAgeRestriction(ageMin, ageMax);
-  const eligibilityByChildId = useMemo(() => {
-    const map = new Map<string, AgeEligibility>();
-    map.set(
-      PARENT_TRAINEE_ID,
-      getAgeEligibility(parent.birthDate, ageMin, ageMax, parent.fullName)
-    );
-    for (const child of kids) {
-      map.set(
-        child.id,
-        child.hasHealthDeclaration
-          ? getAgeEligibility(
-              child.birth_date,
-              ageMin,
-              ageMax,
-              child.full_name
-            )
-          : {
-              eligible: false,
-              age: null,
-              ageLabel: null,
-              reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
-            }
-      );
-    }
-    return map;
-  }, [kids, parent.birthDate, parent.fullName, ageMin, ageMax]);
   const enrolledChildIds = useMemo(
     () =>
       new Set(
@@ -163,11 +154,109 @@ export function ClassEnrollmentActions({
       id: PARENT_TRAINEE_ID,
       full_name: parent.fullName,
       birth_date: parent.birthDate,
+      gender: parent.gender,
       hasHealthDeclaration: true,
       kind: "parent",
     }),
-    [parent.fullName, parent.birthDate]
+    [parent.fullName, parent.birthDate, parent.gender]
   );
+
+  const [weeklySlotId, setWeeklySlotId] = useState<string>(
+    () => (pickOneSlot && slots.length === 1 ? slots[0].id : "")
+  );
+  const selectedSlot = slots.find((slot) => slot.id === weeklySlotId) ?? null;
+  const effectiveGender = selectedSlot?.gender_policy ?? traineeGender;
+
+  const gradeRangeLabel = formatGradeRange(gradeMin, gradeMax);
+  const gradeRestricted = audienceType === "grade";
+
+  const eligibilityByChildId = useMemo(() => {
+    const audienceFields = {
+      gender_policy: effectiveGender,
+      audience_type: audienceType,
+      age_min: ageMin,
+      age_max: ageMax,
+      grade_min: gradeMin,
+      grade_max: gradeMax,
+    };
+    const map = new Map<string, AgeEligibility>();
+    const parentAge = getAgeEligibility(
+      parent.birthDate,
+      ageMin,
+      ageMax,
+      parent.fullName
+    );
+    const parentGenderError = genderMismatchError(
+      parent.fullName,
+      parent.gender,
+      effectiveGender
+    );
+    const parentReason =
+      parentGenderError ??
+      (gradeRestricted
+        ? `החוג מיועד ל${gradeRangeLabel ?? "כיתות מסוימות"}, ולא להורה.`
+        : null);
+    map.set(
+      PARENT_TRAINEE_ID,
+      parentReason
+        ? {
+            eligible: false,
+            age: parentAge.age,
+            ageLabel: parentAge.ageLabel,
+            reason: parentReason,
+          }
+        : parentAge
+    );
+    for (const child of kids) {
+      const age = getAgeEligibility(
+        child.birth_date,
+        ageMin,
+        ageMax,
+        child.full_name
+      );
+      if (!child.hasHealthDeclaration) {
+        map.set(child.id, {
+          eligible: false,
+          age: age.age,
+          ageLabel: age.ageLabel,
+          reason: `יש למלא הצהרת בריאות עבור ${child.full_name} באזור האישי לפני הרשמה לחוג.`,
+        });
+        continue;
+      }
+      const audienceError = childEligibilityError(audienceFields, {
+        full_name: child.full_name,
+        gender: child.gender ?? null,
+        birth_date: child.birth_date,
+        school_grade: child.school_grade ?? null,
+        grade_school_year: child.grade_school_year ?? null,
+      });
+      if (audienceError) {
+        map.set(child.id, {
+          eligible: false,
+          age: age.age,
+          ageLabel: age.ageLabel,
+          reason: audienceError,
+        });
+        continue;
+      }
+      map.set(child.id, age);
+    }
+    return map;
+  }, [
+    kids,
+    parent.birthDate,
+    parent.fullName,
+    parent.gender,
+    ageMin,
+    ageMax,
+    effectiveGender,
+    audienceType,
+    gradeMin,
+    gradeMax,
+    gradeRestricted,
+    gradeRangeLabel,
+  ]);
+
   const availableChildren = useMemo(
     () =>
       kids.filter(
@@ -208,11 +297,6 @@ export function ClassEnrollmentActions({
   );
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [weeklySlotId, setWeeklySlotId] = useState<string>(
-    () => (pickOneSlot && slots.length === 1 ? slots[0].id : "")
-  );
-
-  const selectedSlot = slots.find((slot) => slot.id === weeklySlotId) ?? null;
   const needsSlot = pickOneSlot && slots.length > 0 && !selectedSlot;
   const slotSpots = selectedSlot ? selectedSlot.available : availableSpots;
   const slotSoldOut = pickOneSlot
@@ -223,7 +307,6 @@ export function ClassEnrollmentActions({
     if (needsSlot || slotSoldOut) return availableTrainees.length;
     return Math.min(availableTrainees.length, Math.max(0, slotSpots));
   }, [availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
   const [enrollmentsExpanded, setEnrollmentsExpanded] = useState(false);
@@ -333,12 +416,49 @@ export function ClassEnrollmentActions({
       );
       return;
     }
+    const eligibilityError = selectedTrainees
+      .map((trainee) => eligibilityByChildId.get(trainee.id))
+      .find((row) => row && !row.eligible)?.reason;
+    if (eligibilityError) {
+      setError(eligibilityError);
+      return;
+    }
+
     setError(null);
     if (slotSoldOut) {
       void handleWaitlistJoin();
       return;
     }
-    setCheckoutOpen(true);
+
+    const order = calculateOrderTotal(
+      classPrice,
+      selectedIds.length,
+      siblingTiers,
+      enrolledSiblings + selectedIds.length
+    );
+    const result = addItem({
+      kind: "class",
+      productId: classId,
+      title: classTitle,
+      listTotal: order.total,
+      childIds: selectedChildIds,
+      includeSelf,
+      participantNames: selectedTrainees.map((trainee) => trainee.full_name),
+      weeklySlotId: weeklySlotId || null,
+      weeklySlotLabel: selectedSlot
+        ? formatWeeklySlotLabel(
+            selectedSlot.day_of_week,
+            selectedSlot.start_time,
+            selectedSlot.end_time,
+            selectedSlot.gender_policy
+          )
+        : null,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    router.push("/cart");
   }
 
   return (
@@ -430,6 +550,11 @@ export function ClassEnrollmentActions({
               </p>
             )}
 
+            {gradeRestricted && gradeRangeLabel && (
+              <p className="rounded-2xl border border-ink-200 bg-ink-50 px-3.5 py-2.5 text-sm text-ink-700">
+                החוג מיועד ל{gradeRangeLabel}.
+              </p>
+            )}
             {ageRestricted && (
               <p className="rounded-2xl border border-ink-200 bg-ink-50 px-3.5 py-2.5 text-sm text-ink-700">
                 החוג מיועד ל{formatAgeRange(ageMin, ageMax)}.
@@ -476,8 +601,8 @@ export function ClassEnrollmentActions({
                   : slotSoldOut
                     ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
                     : selectedIds.length > 1
-                      ? `המשך לתשלום (${selectedIds.length} מתאמנים)`
-                      : "המשך לתשלום"}
+                      ? `הוספה לסל (${selectedIds.length} מתאמנים)`
+                      : "הוספה לסל"}
             </Button>
           </div>
         ) : (
@@ -487,7 +612,7 @@ export function ClassEnrollmentActions({
               {ended
                 ? "לא ניתן להירשם לחוג שהסתיים."
                 : ineligibleTrainees.length > 0
-                  ? "אין מתאמן או מתאמנת בטווח הגילאים של החוג."
+                  ? "אין מתאמן או מתאמנת שמתאימים לחוג זה."
                   : "כל המתאמנים בחשבון כבר רשומים לחוג זה."}
             </p>
           )
@@ -560,7 +685,22 @@ export function ClassEnrollmentActions({
         description={
           availableTrainees.length === 0
             ? "אין מתאמנים מתאימים להרשמה לחוג זה."
-            : "סמנו מי נרשם לחוג — אפשר לבחור גם את ההורה."
+            : [
+                gradeRestricted && gradeRangeLabel
+                  ? `החוג מיועד ל${gradeRangeLabel}.`
+                  : null,
+                effectiveGender === "male"
+                  ? parentEligible
+                    ? "החוג לבנים בלבד. סמנו מי נרשם — אפשר לבחור גם את ההורה."
+                    : "החוג לבנים בלבד. סמנו מי נרשם."
+                  : effectiveGender === "female"
+                    ? parentEligible
+                      ? "החוג לבנות בלבד. סמנו מי נרשמת — אפשר לבחור גם את ההורה."
+                      : "החוג לבנות בלבד. סמנו מי נרשמת."
+                    : "סמנו מי נרשם לחוג — אפשר לבחור גם את ההורה.",
+              ]
+                .filter(Boolean)
+                .join(" ")
         }
       >
         <div className="space-y-3">
@@ -669,32 +809,6 @@ export function ClassEnrollmentActions({
         </div>
       </Modal>
 
-      {!slotSoldOut && !ended && (
-        <ClassEnrollmentCheckoutDialog
-          open={checkoutOpen}
-          onClose={() => setCheckoutOpen(false)}
-          classId={classId}
-          classTitle={classTitle}
-          unitPrice={classPrice}
-          proration={proration}
-          billingMonths={billingMonths}
-          selectedChildren={selectedTrainees}
-          includeSelf={includeSelf}
-          siblingTiers={siblingTiers}
-          enrolledSiblings={enrollments.filter((enrollment) => enrollment.child_id).length}
-          weeklySlotId={weeklySlotId || null}
-          weeklySlotLabel={
-            selectedSlot
-              ? formatWeeklySlotLabel(
-                  selectedSlot.day_of_week,
-                  selectedSlot.start_time,
-                  selectedSlot.end_time,
-                  selectedSlot.gender_policy
-                )
-              : null
-          }
-        />
-      )}
     </>
   );
 }

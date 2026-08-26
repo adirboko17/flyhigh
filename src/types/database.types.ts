@@ -1201,6 +1201,7 @@ export type Database = {
           created_at: string
           email: string | null
           full_name: string
+          gender: Database["public"]["Enums"]["gender_type"] | null
           id: string
           is_primary_admin: boolean
           phone: string | null
@@ -1215,6 +1216,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           full_name?: string
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           id: string
           is_primary_admin?: boolean
           phone?: string | null
@@ -1229,6 +1231,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           full_name?: string
+          gender?: Database["public"]["Enums"]["gender_type"] | null
           id?: string
           is_primary_admin?: boolean
           phone?: string | null

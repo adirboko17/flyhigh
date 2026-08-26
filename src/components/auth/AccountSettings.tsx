@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Field, Input } from "@/components/ui/Input";
+import { Field, Input, Select } from "@/components/ui/Input";
+import { updateOwnProfile } from "@/lib/auth/profileActions";
+import { GENDER, isGenderType, ROLE_LABEL } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
-import { ROLE_LABEL } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
 import { formatDate } from "@/utils/format";
 
@@ -18,6 +19,7 @@ interface AccountSettingsProps {
   email: string;
   fullName: string;
   phone: string | null;
+  gender?: Enums<"gender_type"> | null;
   role: Enums<"user_role">;
   createdAt: string;
   /** identity-only — רק כרטיס הזיהות, בלי טפסי עריכה (לעמוד הגדרות מנהל). */
@@ -29,6 +31,7 @@ export function AccountSettings({
   email,
   fullName,
   phone,
+  gender = null,
   role,
   createdAt,
   layout = "full",
@@ -48,7 +51,12 @@ export function AccountSettings({
               <CardTitle>פרטים אישיים</CardTitle>
             </CardHeader>
             <CardContent>
-              <ProfileSettingsForm id={id} fullName={fullName} phone={phone} />
+              <ProfileSettingsForm
+                id={id}
+                fullName={fullName}
+                phone={phone}
+                gender={gender}
+              />
             </CardContent>
           </Card>
           <Card>
@@ -128,23 +136,31 @@ export function ProfileSettingsForm({
   id,
   fullName,
   phone,
+  gender,
   onSuccess,
   onCancel,
 }: {
   id: string;
   fullName: string;
   phone: string | null;
+  gender?: Enums<"gender_type"> | null;
   onSuccess?: () => void;
   onCancel?: () => void;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState({ fullName, phone: phone ?? "" });
+  const [form, setForm] = useState({
+    fullName,
+    phone: phone ?? "",
+    gender: gender ?? "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const isDirty =
-    form.fullName !== fullName || form.phone !== (phone ?? "");
+    form.fullName !== fullName ||
+    form.phone !== (phone ?? "") ||
+    form.gender !== (gender ?? "");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -155,20 +171,21 @@ export function ProfileSettingsForm({
       setError("יש להזין שם מלא.");
       return;
     }
+    if (!isGenderType(form.gender)) {
+      setError("נא לבחור מגדר.");
+      return;
+    }
 
     setLoading(true);
-    const supabase = createClient();
-    const { error: dbError } = await supabase
-      .from("profiles")
-      .update({
-        full_name: form.fullName.trim(),
-        phone: form.phone.trim() || null,
-      })
-      .eq("id", id);
+    const result = await updateOwnProfile({
+      fullName: form.fullName,
+      phone: form.phone,
+      gender: form.gender,
+    });
     setLoading(false);
 
-    if (dbError) {
-      setError("אירעה שגיאה בשמירת הפרטים. נסו שוב.");
+    if (!result.success) {
+      setError(result.error);
       return;
     }
 
@@ -178,7 +195,7 @@ export function ProfileSettingsForm({
   }
 
   function handleCancel() {
-    setForm({ fullName, phone: phone ?? "" });
+    setForm({ fullName, phone: phone ?? "", gender: gender ?? "" });
     setError(null);
     onCancel?.();
   }
@@ -206,6 +223,23 @@ export function ProfileSettingsForm({
             }}
             placeholder="052-7654321"
           />
+        </Field>
+        <Field label="מגדר" required className="sm:col-span-2">
+          <Select
+            value={form.gender}
+            onChange={(e) => {
+              setSaved(false);
+              setForm((f) => ({ ...f, gender: e.target.value }));
+            }}
+            required
+          >
+            <option value="">בחרו...</option>
+            {(Object.keys(GENDER) as Enums<"gender_type">[]).map((value) => (
+              <option key={value} value={value}>
+                {GENDER[value]}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
 

@@ -38,6 +38,7 @@ export default async function AdminSettingsPage() {
         email={profile.email ?? ""}
         fullName={profile.full_name}
         phone={profile.phone}
+        gender={profile.gender}
         role={profile.role}
         createdAt={profile.created_at}
         layout="identity-only"
@@ -47,6 +48,7 @@ export default async function AdminSettingsPage() {
         email={profile.email ?? ""}
         fullName={profile.full_name}
         phone={profile.phone}
+        gender={profile.gender}
         admins={admins ?? []}
         currentUserId={profile.id}
         canRemoveAdmins={profile.is_primary_admin}

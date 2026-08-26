@@ -269,6 +269,12 @@ export const GENDER: Record<Enums<"gender_type">, string> = {
   other: "אחר",
 };
 
+export function isGenderType(
+  value: string | null | undefined
+): value is Enums<"gender_type"> {
+  return value === "male" || value === "female" || value === "other";
+}
+
 export const ROLE_LABEL: Record<Enums<"user_role">, string> = {
   admin: "מנהל",
   instructor: "מדריכה",

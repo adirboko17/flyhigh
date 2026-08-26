@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CartButton } from "@/components/cart/CartButton";
 import { Icon } from "@/components/icons/Icon";
 import { PUBLIC_NAV } from "@/lib/navigation";
 import { THEME_COLOR, refreshThemeColor } from "@/lib/theme-color";
@@ -120,6 +121,19 @@ export function PublicHeader({
       >
         האזור האישי
       </Link>
+      {user.home === "/parent/dashboard" && (
+        <Link
+          href="/parent/settings"
+          className={cn(
+            "ah-btn ah-btn--sm hidden whitespace-nowrap text-xs sm:inline-flex sm:text-sm",
+            glass
+              ? "bg-ink-50 text-ink-800 hover:bg-ink-100"
+              : "bg-white/15 text-white hover:bg-white/25"
+          )}
+        >
+          הגדרות
+        </Link>
+      )}
       <LogoutButton
         overlay={overlayHeader && !glass}
         className="hidden md:inline-flex"
@@ -204,7 +218,8 @@ export function PublicHeader({
             ))}
           </nav>
 
-          <div className="relative z-40 flex shrink-0 items-center gap-2">
+          <div className="relative z-40 flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <CartButton light={overlayHeader && !glass} />
             {authControls}
           </div>
         </div>
@@ -331,6 +346,14 @@ function MobileMenu({
           )}
           style={{ transitionDelay: stagger(PUBLIC_NAV.length) }}
         >
+          <Link
+            href="/cart"
+            onClick={onClose}
+            className="flex items-center justify-center gap-2 rounded-full border border-ink-200 bg-white py-3 font-semibold text-ink-800"
+          >
+            <Icon name="bag" size={18} />
+            עגלת קניות
+          </Link>
           {user ? (
             <>
               <Link
@@ -340,6 +363,15 @@ function MobileMenu({
               >
                 האזור האישי
               </Link>
+              {user.home === "/parent/dashboard" && (
+                <Link
+                  href="/parent/settings"
+                  onClick={onClose}
+                  className="ah-btn ah-btn--md ah-btn--block border border-ink-200 bg-white text-ink-800"
+                >
+                  הגדרות חשבון
+                </Link>
+              )}
               <LogoutButton className="w-full justify-center" />
             </>
           ) : (

@@ -293,6 +293,13 @@ export default async function ParentDashboard() {
           .join(", ") || "נעדכן כשיתפנה מקום",
       href: "#enrollments",
     },
+    !profile.gender && {
+      icon: "👤",
+      tone: "amber" as const,
+      title: "חסר מגדר בחשבון",
+      detail: "בלי מגדר אי אפשר להירשם לחוגים לבנים או לבנות בלבד",
+      href: "/parent/settings",
+    },
     allChildren.length === 0 && {
       icon: "🧒",
       tone: "aqua" as const,
@@ -376,6 +383,12 @@ export default async function ParentDashboard() {
               className="ah-btn ah-btn--md flex-1 bg-white/15 px-2 text-[11px] text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none sm:px-5 sm:text-sm"
             >
               הילדים שלי
+            </Link>
+            <Link
+              href="/parent/settings"
+              className="ah-btn ah-btn--md flex-1 bg-white/15 px-2 text-[11px] text-white ring-1 ring-inset ring-white/30 hover:bg-white/25 sm:flex-none sm:px-5 sm:text-sm"
+            >
+              הגדרות
             </Link>
           </div>
         </div>

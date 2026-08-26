@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { CartProvider } from "@/components/cart/CartProvider";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { requireRole, homeForRole } from "@/lib/auth";
@@ -10,6 +11,7 @@ export default function ParentLayout({
   children: React.ReactNode;
 }) {
   return (
+    <CartProvider>
     <div
       data-dashboard-layout
       data-theme-color={THEME_COLOR.transparent}
@@ -31,6 +33,7 @@ export default function ParentLayout({
         <ParentFooter />
       </Suspense>
     </div>
+    </CartProvider>
   );
 }
 

@@ -12,6 +12,7 @@ import { AdminUsersSettingsPanel } from "@/components/admin/AdminUsersSettings";
 import { SiblingDiscountForm } from "@/components/admin/SiblingDiscountSettings";
 import type { AdminUserRow } from "@/components/admin/AdminUsersSettings";
 import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
+import type { Enums } from "@/types/database.types";
 
 type OpenSection = "profile" | "password" | "admins" | "siblingDiscount" | null;
 
@@ -27,6 +28,7 @@ export function AdminSettingsHub({
   email,
   fullName,
   phone,
+  gender,
   admins,
   currentUserId,
   canRemoveAdmins,
@@ -36,6 +38,7 @@ export function AdminSettingsHub({
   email: string;
   fullName: string;
   phone: string | null;
+  gender?: Enums<"gender_type"> | null;
   admins: AdminUserRow[];
   currentUserId: string;
   canRemoveAdmins: boolean;
@@ -86,10 +89,11 @@ export function AdminSettingsHub({
         className="max-w-lg"
       >
         <ProfileSettingsForm
-          key={`profile-${fullName}-${phone ?? ""}`}
+          key={`profile-${fullName}-${phone ?? ""}-${gender ?? ""}`}
           id={profileId}
           fullName={fullName}
           phone={phone}
+          gender={gender}
           onSuccess={() => setOpen(null)}
           onCancel={() => setOpen(null)}
         />

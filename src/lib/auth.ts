@@ -14,7 +14,7 @@ export type Profile = Tables<"profiles">;
 
 /** עמודות שנדרשות לניווט והרשאות — בלי select("*") בכל מעבר עמוד. */
 const PROFILE_COLUMNS =
-  "id, full_name, role, email, phone, is_primary_admin, created_at, address, birth_date, city, receipt_id_number, receipt_name" as const;
+  "id, full_name, role, email, phone, is_primary_admin, created_at, address, birth_date, city, gender, receipt_id_number, receipt_name" as const;
 
 async function fetchProfileById(
   userId: string,

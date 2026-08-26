@@ -10,7 +10,7 @@ import {
   SCHOOL_GRADES,
   schoolGradeLabel,
 } from "@/lib/school-grade";
-import { GENDER } from "@/lib/constants";
+import { GENDER, isGenderType } from "@/lib/constants";
 import { BirthDateInput } from "@/components/ui/BirthDateInput";
 import { Badge } from "@/components/ui/Badge";
 import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
@@ -72,6 +72,7 @@ export function RegisterForm() {
     fullName: "",
     phone: "",
     birth: "",
+    gender: "",
     city: "",
     address: "",
     receiptName: "",
@@ -169,6 +170,7 @@ export function RegisterForm() {
       if (!details.fullName.trim()) return setError("נא למלא שם מלא.");
       if (!details.phone.trim()) return setError("נא למלא מספר טלפון.");
       if (!details.birth) return setError("נא למלא תאריך לידה.");
+      if (!isGenderType(details.gender)) return setError("נא לבחור מגדר.");
       const birthError = validateBirthDate(details.birth);
       if (birthError) return setError(birthError);
       if (!details.city.trim()) return setError("נא למלא עיר.");
@@ -212,6 +214,7 @@ export function RegisterForm() {
     await supabase
       .from("profiles")
       .update({
+        gender: isGenderType(details.gender) ? details.gender : null,
         receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
         receipt_id_number: wantsDifferentReceipt
           ? details.receiptIdNumber.trim() || null
@@ -278,6 +281,7 @@ export function RegisterForm() {
           full_name: details.fullName.trim(),
           phone: details.phone.trim(),
           birth_date: details.birth || null,
+          gender: details.gender || null,
           city: details.city.trim(),
           address: details.address.trim(),
           role: "parent",
@@ -476,6 +480,22 @@ export function RegisterForm() {
               />
             </Field>
           </div>
+          <Field label="מגדר" htmlFor="gender" required variant="ds">
+            <Select
+              id="gender"
+              variant="ds"
+              value={details.gender}
+              onChange={(e) =>
+                setDetails((current) => ({ ...current, gender: e.target.value }))
+              }
+              required
+            >
+              <option value="">בחרו...</option>
+              <option value="male">זכר</option>
+              <option value="female">נקבה</option>
+              <option value="other">אחר</option>
+            </Select>
+          </Field>
           <Field label="עיר" htmlFor="city" required variant="ds">
             <Input
               id="city"
