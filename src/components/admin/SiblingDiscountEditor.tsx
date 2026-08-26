@@ -33,7 +33,7 @@ export function SiblingDiscountEditor({
     <div className="space-y-3">
       {tiers.length === 0 && (
         <p className="rounded-xl border border-dashed border-ink-200 px-4 py-3 text-sm text-ink-400">
-          לא הוגדרו מדרגות — לא תינתן הנחת אחים.
+          לא הוגדרו מדרגות — לא תינתן הנחת בני משפחה.
         </p>
       )}
 
@@ -97,7 +97,7 @@ export function SiblingDiscountEditor({
 /** תצוגה בלבד של מדרגות פעילות, למצב "ברירת מחדל". */
 export function SiblingDiscountSummary({ tiers }: { tiers: SiblingDiscountTier[] }) {
   if (tiers.length === 0) {
-    return <p className="text-sm text-ink-400">לא הוגדרה הנחת אחים כברירת מחדל.</p>;
+    return <p className="text-sm text-ink-400">לא הוגדרה הנחת בני משפחה.</p>;
   }
 
   return (

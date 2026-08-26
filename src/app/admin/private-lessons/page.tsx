@@ -1,65 +1,33 @@
-import { ActivityBookingsBoard } from "@/components/admin/ActivityBookingsBoard";
-import { PrivateLessonsBoard } from "@/components/admin/PrivateLessonsBoard";
+import { ScheduleBoard, type AdminScheduleRow } from "@/components/admin/ScheduleBoard";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { activityDurationLabel } from "@/lib/programs";
 
-export const metadata = { title: "שיעורים פרטיים ופעילויות" };
+export const metadata = { title: "תיאום מועדים" };
 
 export default async function AdminPrivateLessonsPage() {
   const supabase = await createAdminDataClient();
-  const today = todayInIsrael();
 
-  const [
-    { data: awaitingRows },
-    { data: upcomingRows },
-    { data: awaitingActivities },
-    { data: upcomingActivities },
-  ] = await Promise.all([
+  const [{ data: lessonRows }, { data: activityRows }] = await Promise.all([
     supabase
       .from("private_lesson_slots")
       .select(
-        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
+        "id, status, session_date, start_time, created_at, enrollment_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
       )
-      .eq("status", "awaiting_schedule")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("private_lesson_slots")
-      .select(
-        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
-      )
-      .eq("status", "scheduled")
-      .gte("session_date", today)
-      .order("session_date")
-      .order("start_time")
-      .limit(50),
-    supabase
-      .from("activity_bookings")
-      .select(
-        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
-      )
-      .eq("status", "awaiting_schedule")
+      .in("status", ["awaiting_schedule", "scheduled"])
       .order("created_at", { ascending: false }),
     supabase
       .from("activity_bookings")
       .select(
-        "id, status, session_date, start_time, end_time, created_at, enrollment_id, child_id, people_count, profiles(full_name, phone), children(full_name), programs(title)"
+        "id, status, session_date, start_time, created_at, enrollment_id, people_count, profiles(full_name, phone), children(full_name), programs(title, duration_minutes)"
       )
-      .eq("status", "scheduled")
-      .gte("session_date", today)
-      .order("session_date")
-      .order("start_time")
-      .limit(50),
+      .in("status", ["awaiting_schedule", "scheduled"])
+      .order("created_at", { ascending: false }),
   ]);
 
   const enrollmentIds = [
     ...new Set(
-      [
-        ...(awaitingRows ?? []),
-        ...(upcomingRows ?? []),
-        ...(awaitingActivities ?? []),
-        ...(upcomingActivities ?? []),
-      ]
+      [...(lessonRows ?? []), ...(activityRows ?? [])]
         .map((row) => row.enrollment_id)
         .filter((id): id is string => Boolean(id))
     ),
@@ -83,56 +51,72 @@ export default async function AdminPrivateLessonsPage() {
     );
   }
 
-  function mapRow(row: NonNullable<typeof awaitingRows>[number]) {
-    return {
-      id: row.id,
-      status: row.status,
-      sessionDate: row.session_date,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      createdAt: row.created_at,
-      parentName: row.profiles?.full_name ?? "לקוח",
-      parentPhone: row.profiles?.phone ?? null,
-      childName: row.children?.full_name ?? null,
-      lessonTitle: row.private_lessons?.title ?? "שיעור פרטי",
-      durationMinutes: row.private_lessons?.duration_minutes ?? 45,
-      enrollmentId: row.enrollment_id,
-      amount: amountByEnrollment.get(row.enrollment_id) ?? null,
-    };
-  }
-
-  function mapActivity(row: NonNullable<typeof awaitingActivities>[number]) {
-    return {
-      id: row.id,
-      status: row.status,
-      sessionDate: row.session_date,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      createdAt: row.created_at,
-      parentName: row.profiles?.full_name ?? "לקוח",
-      parentPhone: row.profiles?.phone ?? null,
-      childName: row.children?.full_name ?? null,
-      title: row.programs?.title ?? "פעילות",
-      peopleCount: row.people_count,
-      enrollmentId: row.enrollment_id,
-      amount: amountByEnrollment.get(row.enrollment_id) ?? null,
-    };
-  }
+  const rows: AdminScheduleRow[] = [
+    ...(lessonRows ?? []).flatMap((row) => {
+      if (row.status !== "awaiting_schedule" && row.status !== "scheduled") {
+        return [];
+      }
+      const duration = row.private_lessons?.duration_minutes;
+      return [
+        {
+          id: row.id,
+          kind: "private_lesson" as const,
+          title: row.private_lessons?.title ?? "שיעור פרטי",
+          status: row.status,
+          sessionDate: row.session_date,
+          startTime: row.start_time,
+          createdAt: row.created_at,
+          parentName: row.profiles?.full_name ?? "לקוח",
+          parentPhone: row.profiles?.phone ?? null,
+          childName: row.children?.full_name ?? null,
+          detail: duration != null ? activityDurationLabel(duration) : null,
+          amount: amountByEnrollment.get(row.enrollment_id) ?? null,
+        },
+      ];
+    }),
+    ...(activityRows ?? []).flatMap((row) => {
+      if (row.status !== "awaiting_schedule" && row.status !== "scheduled") {
+        return [];
+      }
+      const duration = row.programs?.duration_minutes;
+      const people =
+        row.people_count === 1
+          ? "משתתף אחד"
+          : `${row.people_count} משתתפים`;
+      return [
+        {
+          id: row.id,
+          kind: "activity" as const,
+          title: row.programs?.title ?? "פעילות",
+          status: row.status,
+          sessionDate: row.session_date,
+          startTime: row.start_time,
+          createdAt: row.created_at,
+          parentName: row.profiles?.full_name ?? "לקוח",
+          parentPhone: row.profiles?.phone ?? null,
+          childName: row.children?.full_name ?? null,
+          detail: duration != null ? `${activityDurationLabel(duration)} · ${people}` : people,
+          amount: amountByEnrollment.get(row.enrollment_id) ?? null,
+        },
+      ];
+    }),
+  ].sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === "awaiting_schedule" ? -1 : 1;
+    }
+    if (a.status === "scheduled") {
+      return (b.sessionDate ?? "").localeCompare(a.sessionDate ?? "");
+    }
+    return b.createdAt.localeCompare(a.createdAt);
+  });
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <PageHeader
-        title="שיעורים פרטיים ופעילויות"
-        description="תיאום מועדים ללקוחות שרכשו שיעור פרטי או פעילות."
+        title="תיאום מועדים"
+        description="טבלה אחת לכל מי שרכש שיעור פרטי או פעילות. משנים סטטוס, בוחרים תאריך — והמועד נכנס ללוח השנה."
       />
-      <ActivityBookingsBoard
-        awaiting={(awaitingActivities ?? []).map(mapActivity)}
-        upcoming={(upcomingActivities ?? []).map(mapActivity)}
-      />
-      <PrivateLessonsBoard
-        awaiting={(awaitingRows ?? []).map(mapRow)}
-        upcoming={(upcomingRows ?? []).map(mapRow)}
-      />
+      <ScheduleBoard rows={rows} />
     </div>
   );
 }

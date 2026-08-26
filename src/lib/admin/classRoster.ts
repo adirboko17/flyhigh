@@ -44,7 +44,7 @@ export async function loadClassRoster(classId: string): Promise<{
 }
 
 const CLASS_SUMMARY_SELECT =
-  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, pick_one_slot, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)";
+  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)";
 
 /** מטא־דאטה + ספירות לחלון הקיצור (נרשמים ונוכחות נטענים בנפרד). */
 export async function loadAdminClassSummary(

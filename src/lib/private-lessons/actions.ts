@@ -49,12 +49,12 @@ export async function schedulePrivateLessonSlots(input: {
     .from("private_lesson_slots")
     .select("id, status, private_lessons(duration_minutes)")
     .in("id", ids)
-    .eq("status", "awaiting_schedule");
+    .in("status", ["awaiting_schedule", "scheduled"]);
 
   if (error || !rows || rows.length !== ids.length) {
     return {
       success: false,
-      error: "חלק מהשיעורים כבר תואמו או לא נמצאו. רעננו ונסו שוב.",
+      error: "חלק מהשיעורים לא נמצאו או כבר בוטלו. רעננו ונסו שוב.",
     };
   }
 
@@ -81,7 +81,7 @@ export async function schedulePrivateLessonSlots(input: {
         end_time: addMinutesToTime(startTime, duration),
       })
       .eq("id", slot.slotId)
-      .eq("status", "awaiting_schedule");
+      .in("status", ["awaiting_schedule", "scheduled"]);
 
     if (updateError) {
       return { success: false, error: "שמירת התיאום נכשלה. נסו שוב." };

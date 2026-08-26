@@ -2,7 +2,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { AccountSettings } from "@/components/auth/AccountSettings";
 import { AdminSettingsHub } from "@/components/admin/AdminSettingsHub";
 import { BusinessDocumentsPanel } from "@/components/admin/BusinessDocumentsPanel";
-import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
+import { getClassCategories } from "@/lib/admin/getClassCategories";
+import { getFamilyDiscountSettings } from "@/lib/admin/siblingDiscount";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
 
@@ -11,9 +12,10 @@ export const metadata = { title: "הגדרות" };
 export default async function AdminSettingsPage() {
   const profile = await requireRole("admin");
   const supabase = await createAdminDataClient();
-  const [defaultSiblingTiers, { data: admins }, { data: businessDocuments }] =
+  const [familyDiscount, classCategories, { data: admins }, { data: businessDocuments }] =
     await Promise.all([
-      getDefaultSiblingTiers(),
+      getFamilyDiscountSettings(),
+      getClassCategories(),
       supabase
         .from("profiles")
         .select("id, full_name, email, created_at, is_primary_admin")
@@ -52,7 +54,8 @@ export default async function AdminSettingsPage() {
         admins={admins ?? []}
         currentUserId={profile.id}
         canRemoveAdmins={profile.is_primary_admin}
-        siblingTiers={defaultSiblingTiers}
+        familyDiscount={familyDiscount}
+        classCategories={classCategories}
       />
       <BusinessDocumentsPanel documents={businessDocuments ?? []} />
     </div>

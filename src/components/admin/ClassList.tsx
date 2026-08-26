@@ -17,6 +17,7 @@ import {
 } from "@/components/admin/AssignToClassDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
 import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
+import { FeaturedClassesDialog } from "@/components/admin/FeaturedClassesDialog";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
@@ -142,6 +143,7 @@ export type AdminClassRow = {
   instructors: { full_name: string; gender: Enums<"gender_type"> | null } | null;
   instructor_id: string | null;
   interest_only: boolean;
+  planned_session_count?: number | null;
   registeredCount: number;
   waitlistCount: number;
   slots: AdminClassSlot[];
@@ -156,6 +158,7 @@ export type AttendanceMode = "mark" | "history" | "notes";
 interface ClassListProps {
   classes: AdminClassRow[];
   instructors: ClassInstructorOption[];
+  featuredClassIds: string[];
 }
 
 function normalizeSearch(value: string) {
@@ -197,7 +200,11 @@ function attendanceRate(item: AdminClassRow) {
 function adminClassPriceLabel(
   item: Pick<AdminClassRow, "price" | "billing_months" | "interest_only">
 ) {
-  if (item.interest_only) return "ללא תשלום";
+  if (item.interest_only) {
+    return item.price > 0
+      ? `${formatCurrency(item.price)} · מתוכנן`
+      : "ללא תשלום";
+  }
   const months = parseBillingMonths(item.billing_months);
   if (!months) return formatCurrency(item.price);
   return `${formatCurrency(item.price)} לחודש × ${months}`;
@@ -212,7 +219,11 @@ function audienceLabel(item: AdminClassRow) {
 }
 
 function scheduleLabel(item: AdminClassRow) {
-  if (item.interest_only) return "ללא מועד עדיין";
+  if (item.interest_only) {
+    return item.planned_session_count
+      ? `${item.planned_session_count} מפגשים מתוכננים`
+      : "ללא מועד עדיין";
+  }
   if (item.day_of_week === null && !item.start_time) return "לוח זמנים לא הוגדר";
   const day = item.day_of_week === null ? null : `יום ${dayLabel(item.day_of_week)}`;
   const hours = item.start_time
@@ -223,7 +234,11 @@ function scheduleLabel(item: AdminClassRow) {
   return [day, hours].filter(Boolean).join(" · ");
 }
 
-export function ClassList({ classes, instructors }: ClassListProps) {
+export function ClassList({
+  classes,
+  instructors,
+  featuredClassIds,
+}: ClassListProps) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<{
     cls: AdminClassRow;
@@ -234,6 +249,7 @@ export function ClassList({ classes, instructors }: ClassListProps) {
   const [previewed, setPreviewed] = useState<AdminClassRow | null>(null);
   const [manualAssign, setManualAssign] = useState<AdminClassRow | null>(null);
   const [quickEdit, setQuickEdit] = useState<AdminClassRow | null>(null);
+  const [featuredOpen, setFeaturedOpen] = useState(false);
 
   const filtered = useMemo(
     () => classes.filter((c) => matchesClass(c, query)),
@@ -257,6 +273,7 @@ export function ClassList({ classes, instructors }: ClassListProps) {
         onQueryChange={setQuery}
         resultCount={filtered.length}
         totalCount={classes.length}
+        onManageFeatured={() => setFeaturedOpen(true)}
       />
 
       {filtered.length === 0 ? (
@@ -270,6 +287,11 @@ export function ClassList({ classes, instructors }: ClassListProps) {
             <ClassCard
               key={cls.id}
               cls={cls}
+              featuredRank={
+                featuredClassIds.includes(cls.id)
+                  ? featuredClassIds.indexOf(cls.id) + 1
+                  : null
+              }
               onOpenPanel={(tab, attendanceMode, weeklySlotId) =>
                 setSelected({ cls, tab, attendanceMode, weeklySlotId })
               }
@@ -315,18 +337,28 @@ export function ClassList({ classes, instructors }: ClassListProps) {
           onClose={() => setQuickEdit(null)}
         />
       )}
+
+      {featuredOpen && (
+        <FeaturedClassesDialog
+          classes={classes}
+          initialIds={featuredClassIds}
+          onClose={() => setFeaturedOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
 function ClassCard({
   cls,
+  featuredRank,
   onOpenPanel,
   onPreview,
   onAssign,
   onQuickEdit,
 }: {
   cls: AdminClassRow;
+  featuredRank: number | null;
   onOpenPanel: (
     tab: PanelTab,
     attendanceMode?: AttendanceMode,
@@ -372,6 +404,11 @@ function ClassCard({
             {cls.interest_only && (
               <Badge tone="info" className="shadow-soft">
                 הרשמת עניין
+              </Badge>
+            )}
+            {featuredRank && (
+              <Badge tone="brand" className="shadow-soft">
+                מוביל {featuredRank}
               </Badge>
             )}
           </div>
@@ -1529,11 +1566,13 @@ function ClassSearchBar({
   onQueryChange,
   resultCount,
   totalCount,
+  onManageFeatured,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
   resultCount: number;
   totalCount: number;
+  onManageFeatured: () => void;
 }) {
   const isSearching = query.trim().length > 0;
 
@@ -1568,12 +1607,22 @@ function ClassSearchBar({
               </button>
             )}
           </div>
-          <ButtonLink
-            href="/admin/classes/new"
-            className="h-12 shrink-0 px-6 sm:w-auto"
-          >
-            + חוג חדש
-          </ButtonLink>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 px-5 sm:w-auto"
+              onClick={onManageFeatured}
+            >
+              חוגים מובילים
+            </Button>
+            <ButtonLink
+              href="/admin/classes/new"
+              className="h-12 px-6 sm:w-auto"
+            >
+              + חוג חדש
+            </ButtonLink>
+          </div>
         </div>
         {isSearching && (
           <p className="mt-3 text-sm text-ink-500">

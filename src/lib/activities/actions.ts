@@ -48,16 +48,29 @@ export async function scheduleActivityBookings(input: {
 
   const { data: rows, error } = await supabase
     .from("activity_bookings")
-    .select("id, status")
+    .select("id, status, programs(duration_minutes)")
     .in("id", ids)
-    .eq("status", "awaiting_schedule");
+    .in("status", ["awaiting_schedule", "scheduled"]);
 
   if (error || !rows || rows.length !== ids.length) {
     return {
       success: false,
-      error: "חלק מהפעילויות כבר תואמו או לא נמצאו. רעננו ונסו שוב.",
+      error: "חלק מהפעילויות לא נמצאו או כבר בוטלו. רעננו ונסו שוב.",
     };
   }
+
+  const durationById = new Map(
+    rows.map((row) => {
+      const program = row.programs as { duration_minutes: number | null } | null;
+      const minutes = Number(program?.duration_minutes);
+      return [
+        row.id,
+        Number.isFinite(minutes) && minutes >= 1
+          ? minutes
+          : ACTIVITY_DEFAULT_DURATION_MINUTES,
+      ] as const;
+    })
+  );
 
   for (const booking of bookings) {
     const startTime =
@@ -72,11 +85,12 @@ export async function scheduleActivityBookings(input: {
         start_time: startTime,
         end_time: addMinutesToTime(
           startTime,
-          ACTIVITY_DEFAULT_DURATION_MINUTES
+          durationById.get(booking.bookingId) ??
+            ACTIVITY_DEFAULT_DURATION_MINUTES
         ),
       })
       .eq("id", booking.bookingId)
-      .eq("status", "awaiting_schedule");
+      .in("status", ["awaiting_schedule", "scheduled"]);
 
     if (updateError) {
       return { success: false, error: "שמירת התיאום נכשלה. נסו שוב." };

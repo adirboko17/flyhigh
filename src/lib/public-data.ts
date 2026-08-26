@@ -1,4 +1,8 @@
 import { unstable_cache } from "next/cache";
+import {
+  HOME_FEATURED_SETTING_KEY,
+  parseFeaturedClassIds,
+} from "@/lib/home/featuredClasses";
 import { createPublicClient } from "@/lib/supabase/public";
 import type { PublicClass, PublicClassSlot, PoolPass, Program, PrivateLesson } from "@/types";
 
@@ -52,6 +56,25 @@ export const getPublicClasses = unstable_cache(
   }
 );
 
+export const getHomeFeaturedClassIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", HOME_FEATURED_SETTING_KEY)
+      .maybeSingle();
+
+    if (error) return [];
+    return parseFeaturedClassIds(data?.value);
+  },
+  ["home-featured-classes-v1"],
+  {
+    revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
+    tags: ["public-classes"],
+  }
+);
+
 export const getPublicPlans = unstable_cache(
   async (): Promise<{
     programs: Program[];
@@ -91,7 +114,7 @@ export const getPublicPlans = unstable_cache(
       privateLessons: privateLessons ?? [],
     };
   },
-  ["public-plans"],
+  ["public-plans-v2"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-plans"],

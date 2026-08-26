@@ -7,6 +7,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { listFamilyChildrenInCategory } from "@/lib/enrollment/categorySiblings";
 import {
+  loadFamilyDiscountSettings,
   parseSiblingTiers,
   siblingTiersForCheckout,
 } from "@/lib/finance/siblingDiscount";
@@ -44,12 +45,16 @@ export async function ClassEnrollmentPanel({
   const profile = await getSessionProfile();
 
   const supabase = await createClient();
-  const { data: tiersJson } = await supabase.rpc("class_sibling_discount_tiers", {
-    p_class_id: cls.id,
-  });
+  const [{ data: tiersJson }, familyDiscount] = await Promise.all([
+    supabase.rpc("class_sibling_discount_tiers", {
+      p_class_id: cls.id,
+    }),
+    loadFamilyDiscountSettings(supabase),
+  ]);
   const siblingTiers = siblingTiersForCheckout(
     cls.category,
-    parseSiblingTiers(tiersJson)
+    parseSiblingTiers(tiersJson),
+    familyDiscount.classCategories
   );
 
   let enrollmentContent = (
@@ -194,6 +199,9 @@ export async function ClassEnrollmentPanel({
             <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           )}
           {interestOnly && <Badge tone="info">הרשמת עניין</Badge>}
+          {interestOnly && cls.session_count > 0 && (
+            <Badge tone="neutral">{cls.session_count} מפגשים מתוכננים</Badge>
+          )}
           {!interestOnly && proration.billableCount > 0 && (
             <Badge tone="neutral">
               {proration.isLate

@@ -3,49 +3,67 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { SiblingDiscountEditor } from "@/components/admin/SiblingDiscountEditor";
 import { saveDefaultSiblingDiscount } from "@/lib/admin/settingsActions";
-import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
-
-export function SiblingDiscountSettings({
-  initialTiers,
-}: {
-  initialTiers: SiblingDiscountTier[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>הנחת אחים — ברירת מחדל</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <SiblingDiscountForm initialTiers={initialTiers} />
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  FAMILY_DISCOUNT_PRODUCT_TYPES,
+  resolveSelectedCategories,
+  type FamilyDiscountProductType,
+  type FamilyDiscountSettings,
+} from "@/lib/finance/siblingDiscount";
+import { cn } from "@/utils/cn";
 
 export function SiblingDiscountForm({
-  initialTiers,
+  initialSettings,
+  categories,
   onSuccess,
   onCancel,
 }: {
-  initialTiers: SiblingDiscountTier[];
+  initialSettings: FamilyDiscountSettings;
+  categories: string[];
   onSuccess?: () => void;
   onCancel?: () => void;
 }) {
   const router = useRouter();
-  const [tiers, setTiers] = useState(initialTiers);
+  const [tiers, setTiers] = useState(initialSettings.tiers);
+  const [classCategories, setClassCategories] = useState(() =>
+    resolveSelectedCategories(initialSettings.classCategories, categories)
+  );
+  const [productTypes, setProductTypes] = useState(
+    initialSettings.productTypes
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleCategory(name: string) {
+    setClassCategories((current) =>
+      current.includes(name)
+        ? current.filter((item) => item !== name)
+        : [...current, name]
+    );
+    setMessage(null);
+  }
+
+  function toggleProduct(id: FamilyDiscountProductType) {
+    setProductTypes((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    );
+    setMessage(null);
+  }
 
   async function handleSave() {
     setSaving(true);
     setError(null);
     setMessage(null);
 
-    const result = await saveDefaultSiblingDiscount(tiers);
+    const result = await saveDefaultSiblingDiscount({
+      tiers,
+      classCategories,
+      productTypes,
+    });
 
     setSaving(false);
 
@@ -60,7 +78,7 @@ export function SiblingDiscountForm({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <SiblingDiscountEditor
         tiers={tiers}
         onChange={(next) => {
@@ -69,6 +87,72 @@ export function SiblingDiscountForm({
         }}
         disabled={saving}
       />
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-semibold text-ink-800">
+          קטגוריות חוגים
+        </legend>
+        <p className="text-xs text-ink-500">
+          ההנחה תחול על כל החוגים בקטגוריות שנבחרו.
+        </p>
+        {categories.length === 0 ? (
+          <p className="text-sm text-ink-400">אין קטגוריות חוגים עדיין.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((name) => {
+              const selected = classCategories.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => toggleCategory(name)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+                    selected
+                      ? "border-brand-500 bg-brand-50 text-brand-800"
+                      : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                  )}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-semibold text-ink-800">
+          מוצרים נוספים
+        </legend>
+        <p className="text-xs text-ink-500">
+          בנוסף לחוגים, אפשר להחיל את אותה הנחה על כרטיסים, מנויים ושיעורים.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {FAMILY_DISCOUNT_PRODUCT_TYPES.map((item) => {
+            const selected = productTypes.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={saving}
+                onClick={() => toggleProduct(item.id)}
+                aria-pressed={selected}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+                  selected
+                    ? "border-brand-500 bg-brand-50 text-brand-800"
+                    : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
 
       {error && (
         <p className="text-sm font-medium text-red-600" role="alert">

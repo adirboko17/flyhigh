@@ -22,19 +22,10 @@ import { ClassImageUpload } from "@/components/admin/ClassImageUpload";
 import { ClassPreviewPanel } from "@/components/admin/ClassPreview";
 import { ClassScheduleEditor } from "@/components/admin/ClassScheduleEditor";
 import {
-  SiblingDiscountEditor,
-  SiblingDiscountSummary,
-} from "@/components/admin/SiblingDiscountEditor";
-import {
   DEFAULT_CLASS_INSTALLMENTS,
   classPeriodTotal,
   parseBillingMonths,
 } from "@/lib/finance/classPricing";
-import {
-  parseSiblingTiers,
-  serializeSiblingTiers,
-  type SiblingDiscountTier,
-} from "@/lib/finance/siblingDiscount";
 import {
   monthsToFormBound,
   parseAgeBoundInput,
@@ -72,6 +63,7 @@ export type ClassFormData = {
   price: number;
   billing_months: number | null;
   pick_one_slot: boolean;
+  planned_session_count?: number | null;
   instructor_id: string | null;
   status: "active" | "inactive" | "full";
   image_url: string | null;
@@ -86,8 +78,6 @@ interface Props {
   initialSchedule?: ClassScheduleState;
   /** מילוי מחוג קיים, אבל השמירה יוצרת חוג חדש. */
   duplicate?: boolean;
-  /** מדרגות ברירת המחדל של המערכת, מוצגות כשהחוג לא מגדיר מדרגות משלו. */
-  defaultSiblingTiers: SiblingDiscountTier[];
   categories: string[];
 }
 
@@ -119,6 +109,7 @@ const emptyForm = {
   capacity: "10",
   capacity_limited: true,
   price: "",
+  planned_session_count: "",
   pick_one_slot: true,
   price_mode: "period" as const,
   billing_months: "10",
@@ -149,7 +140,11 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
     grade_max: existing.grade_max?.toString() ?? "",
     capacity: existing.capacity != null ? existing.capacity.toString() : "10",
     capacity_limited: existing.capacity != null,
-    price: existing.price.toString(),
+    price: existing.price ? existing.price.toString() : "",
+    planned_session_count:
+      existing.planned_session_count != null
+        ? String(existing.planned_session_count)
+        : "",
     pick_one_slot: existing.pick_one_slot ?? true,
     price_mode: parseBillingMonths(existing.billing_months)
       ? ("monthly" as const)
@@ -165,8 +160,7 @@ function toPayload(
   form: ReturnType<typeof toFormState>,
   imageUrl: string | null,
   schedule: ClassScheduleState,
-  status: ClassFormData["status"],
-  siblingDiscountTiers: Json | null
+  status: ClassFormData["status"]
 ) {
   const audienceType = form.audience_type;
   const isGrade = audienceType === "grade";
@@ -179,7 +173,7 @@ function toPayload(
       : form.gender_policy;
 
   return {
-    sibling_discount_tiers: form.interest_only ? null : siblingDiscountTiers,
+    sibling_discount_tiers: null,
     title: form.title,
     description: form.description || null,
     category: form.category || null,
@@ -195,13 +189,16 @@ function toPayload(
     grade_min: isGrade ? parseSchoolGradeInput(form.grade_min) : null,
     grade_max: isGrade ? parseSchoolGradeInput(form.grade_max) : null,
     capacity: form.capacity_limited ? Number(form.capacity) || 0 : null,
-    price: form.interest_only ? 0 : Number(form.price) || 0,
+    price: Number(form.price) || 0,
     billing_months:
       form.interest_only
         ? null
         : form.price_mode === "monthly"
           ? parseBillingMonths(Number(form.billing_months))
           : null,
+    planned_session_count: form.interest_only
+      ? parseSessionCount(form.planned_session_count)
+      : null,
     instructor_id: form.instructor_id || null,
     pick_one_slot: form.interest_only ? false : form.pick_one_slot,
     status,
@@ -256,6 +253,17 @@ function validateAudience(
 
 function validateDetails(form: ReturnType<typeof toFormState>): string | null {
   if (!form.title.trim()) return "נא למלא את שם החוג.";
+  if (form.interest_only) {
+    if (form.price !== "" && Number(form.price) < 0) {
+      return "המחיר המתוכנן לא יכול להיות שלילי.";
+    }
+    if (
+      form.planned_session_count.trim() &&
+      !parseSessionCount(form.planned_session_count)
+    ) {
+      return "נא להזין כמות מפגשים תקינה, או להשאיר ריק.";
+    }
+  }
   return null;
 }
 
@@ -305,7 +313,7 @@ function validateSchedule(schedule: ClassScheduleState): string | null {
   if (active.length === 0) {
     return schedule.scheduleType === "custom"
       ? "הוסיפו לפחות מפגש אחד."
-      : "לחצו על «יצירת / עדכון רשימת מפגשים» לפני השמירה.";
+      : "הזינו תאריך התחלה ומספר מפגשים.";
   }
 
   for (const session of active) {
@@ -322,7 +330,6 @@ export function ClassForm({
   existing,
   initialSchedule,
   duplicate = false,
-  defaultSiblingTiers,
   categories,
 }: Props) {
   const router = useRouter();
@@ -331,14 +338,6 @@ export function ClassForm({
   const [form, setForm] = useState(() => toFormState(existing, categories));
   const [schedule, setSchedule] = useState(
     () => initialSchedule ?? emptyScheduleState()
-  );
-  const [usesDefaultDiscount, setUsesDefaultDiscount] = useState(
-    () => !Array.isArray(existing?.sibling_discount_tiers)
-  );
-  const [siblingTiers, setSiblingTiers] = useState<SiblingDiscountTier[]>(() =>
-    Array.isArray(existing?.sibling_discount_tiers)
-      ? parseSiblingTiers(existing.sibling_discount_tiers)
-      : defaultSiblingTiers
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -475,8 +474,7 @@ export function ClassForm({
       form,
       imageUrl,
       nextSchedule,
-      nextStatus,
-      usesDefaultDiscount ? null : serializeSiblingTiers(siblingTiers)
+      nextStatus
     );
 
     let classId = existing?.id;
@@ -529,6 +527,7 @@ export function ClassForm({
   return (
     <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
       <form
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           if (step < lastStep) goNext();
@@ -567,14 +566,14 @@ export function ClassForm({
                   setError(null);
                 }}
                 title="הרשמת עניין"
-                hint="בלי תאריך ובלי תשלום — בודקים כמה נרשמים"
+                hint="בלי תאריך ובלי חיוב עכשיו — אפשר לציין מחיר ומפגשים מתוכננים"
                 disabled={loading}
               />
             </div>
             {form.interest_only && (
               <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
-                הלקוחות נרשמים בחינם. אחרי שתראו מספיק נרשמים אפשר לפתוח חוג
-                משולם או לגבות בטלפון.
+                הלקוחות נרשמים בחינם. מחיר וכמות מפגשים מוצגים מראש, בלי תאריך
+                ובלי חיוב. אחרי שיהיה מספיק עניין אפשר לפתוח את החוג.
               </p>
             )}
             <Field label="שם החוג" required>
@@ -613,6 +612,37 @@ export function ClassForm({
                 />
               </Field>
             </div>
+            {form.interest_only && (
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="מחיר מתוכנן (₪)"
+                  hint="מוצג לנרשמים. אין חיוב בהרשמת עניין."
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={form.price}
+                    onChange={set("price")}
+                    placeholder="למשל: 450"
+                  />
+                </Field>
+                <Field
+                  label="כמות מפגשים"
+                  hint="בלי תאריכים — רק כמה מפגשים מתוכננים."
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                    max={80}
+                    step="1"
+                    value={form.planned_session_count}
+                    onChange={set("planned_session_count")}
+                    placeholder="למשל: 10"
+                  />
+                </Field>
+              </div>
+            )}
             <ClassImageUpload
               displayUrl={previewImageUrl}
               onFileSelect={handleImageSelect}
@@ -677,14 +707,9 @@ export function ClassForm({
               />
             </div>
 
-            {form.audience_type === "open" ? (
-              <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
-                כל הילדים יכולים להירשם. אם בחרתם מגדר בנים או בנות — ההגבלה
-                הזאת עדיין חלה.
-              </p>
-            ) : form.audience_type === "age" ? (
+            {form.audience_type === "age" ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 sm:gap-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <AgeBoundField
                     label="גיל מינימום"
                     value={form.age_min}
@@ -712,7 +737,7 @@ export function ClassForm({
                   לחוג פעוטות אפשר למשל מינימום 2 חודשים ומקסימום 3 שנים.
                 </p>
               </div>
-            ) : (
+            ) : form.audience_type === "grade" ? (
               <div className="grid grid-cols-2 gap-4 sm:gap-5">
                 <Field label="מכיתה" required>
                   <Select
@@ -741,7 +766,7 @@ export function ClassForm({
                   </Select>
                 </Field>
               </div>
-            )}
+            ) : null}
 
             <div className="space-y-2">
               <p className="text-sm font-semibold text-ink-800">
@@ -798,28 +823,16 @@ export function ClassForm({
           <CardContent className="space-y-5">
             <StepIntro
               title="מועדים"
-              hint="אם יש כמה שעות בשבוע — האם הילד בוחר אחת, או מגיע לכולן."
+              hint="יום, שעה, מתי מתחילים וכמה מפגשים."
             />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <AudienceModeOption
-                selected={form.pick_one_slot}
-                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: true }))}
-                title="בחירת מועד אחד"
-                hint="כל מועד הוא קבוצה נפרדת. הילד מגיע פעם בשבוע"
-                disabled={loading}
-              />
-              <AudienceModeOption
-                selected={!form.pick_one_slot}
-                onSelect={() => setForm((f) => ({ ...f, pick_one_slot: false }))}
-                title="כל המועדים יחד"
-                hint="הילד רשום לכל הימים והשעות של החוג"
-                disabled={loading}
-              />
-            </div>
             <ClassScheduleEditor
               value={schedule}
               onChange={setSchedule}
               disabled={loading}
+              pickOneSlot={form.pick_one_slot}
+              onPickOneSlotChange={(pickOneSlot) =>
+                setForm((f) => ({ ...f, pick_one_slot: pickOneSlot }))
+              }
             />
           </CardContent>
         </Card>
@@ -920,47 +933,6 @@ export function ClassForm({
                 ))}
               </Select>
             </Field>
-
-            <div>
-              <h3 className="font-display text-base font-bold text-ink-900">
-                הנחת אחים
-              </h3>
-              <p className="mt-0.5 text-sm text-ink-500">
-                כשמשפחה רושמת יותר מילד אחד לאותה קטגוריה.
-              </p>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              <DiscountModeOption
-                selected={usesDefaultDiscount}
-                onSelect={() => {
-                  setUsesDefaultDiscount(true);
-                  setSiblingTiers(defaultSiblingTiers);
-                }}
-                title="ברירת המחדל של המערכת"
-                hint="מתעדכן אוטומטית אם תשנו את ההגדרה הכללית"
-                disabled={loading}
-              />
-              <DiscountModeOption
-                selected={!usesDefaultDiscount}
-                onSelect={() => setUsesDefaultDiscount(false)}
-                title="הגדרה מיוחדת לחוג זה"
-                hint="מדרגות משלכם, בלי קשר להגדרה הכללית"
-                disabled={loading}
-              />
-            </div>
-
-            {usesDefaultDiscount ? (
-              <div className="rounded-xl bg-ink-50 px-4 py-3">
-                <SiblingDiscountSummary tiers={defaultSiblingTiers} />
-              </div>
-            ) : (
-              <SiblingDiscountEditor
-                tiers={siblingTiers}
-                onChange={setSiblingTiers}
-                disabled={loading}
-              />
-            )}
           </CardContent>
         </Card>
 
@@ -1101,72 +1073,53 @@ function AgeBoundField({
   disabled?: boolean;
 }) {
   return (
-    <Field label={label}>
-      <div className="flex gap-2">
-        <Input
+    <Field label={label} className="min-w-0">
+      <div
+        className={cn(
+          "flex min-w-0 overflow-hidden rounded-xl border border-ink-200 bg-white",
+          "focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200",
+          disabled && "bg-ink-50"
+        )}
+      >
+        <input
           type="number"
           min={0}
           step={1}
+          inputMode="numeric"
           value={value}
           onChange={onValueChange}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1"
+          aria-label={label}
+          className={cn(
+            "h-11 min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-ink-900 outline-none placeholder:text-ink-400",
+            "disabled:text-ink-400",
+            "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          )}
         />
-        <Select
-          value={unit}
-          onChange={(e) => onUnitChange(e.target.value as AgeUnit)}
-          disabled={disabled}
-          className="w-[7.25rem] shrink-0"
-        >
-          <option value="years">שנים</option>
-          <option value="months">חודשים</option>
-        </Select>
+        <div className="relative w-[7.5rem] shrink-0 border-s border-ink-200 bg-ink-50/80">
+          <select
+            value={unit}
+            onChange={(e) => onUnitChange(e.target.value as AgeUnit)}
+            disabled={disabled}
+            aria-label={`${label} — יחידת מידה`}
+            className="h-11 w-full cursor-pointer appearance-none bg-transparent pe-8 ps-3 text-sm text-ink-800 outline-none disabled:text-ink-400"
+          >
+            <option value="years">שנים</option>
+            <option value="months">חודשים</option>
+          </select>
+          <Icon
+            name="chevron"
+            size={16}
+            className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 -rotate-90 text-ink-400"
+          />
+        </div>
       </div>
     </Field>
   );
 }
 
 function AudienceModeOption({
-  selected,
-  onSelect,
-  title,
-  hint,
-  disabled,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  title: string;
-  hint: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={disabled}
-      aria-pressed={selected}
-      className={cn(
-        "rounded-xl border px-4 py-3 text-start transition-colors disabled:opacity-60",
-        selected
-          ? "border-brand-500 bg-brand-50"
-          : "border-ink-200 bg-white hover:border-ink-300"
-      )}
-    >
-      <span
-        className={cn(
-          "block text-sm font-semibold",
-          selected ? "text-brand-800" : "text-ink-800"
-        )}
-      >
-        {title}
-      </span>
-      <span className="mt-0.5 block text-xs text-ink-500">{hint}</span>
-    </button>
-  );
-}
-
-function DiscountModeOption({
   selected,
   onSelect,
   title,

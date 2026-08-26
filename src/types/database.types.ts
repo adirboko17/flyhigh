@@ -423,6 +423,7 @@ export type Database = {
           interest_only: boolean
           level: string | null
           pick_one_slot: boolean
+          planned_session_count: number | null
           price: number
           schedule_type: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers: Json | null
@@ -452,6 +453,7 @@ export type Database = {
           interest_only?: boolean
           level?: string | null
           pick_one_slot?: boolean
+          planned_session_count?: number | null
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers?: Json | null
@@ -481,6 +483,7 @@ export type Database = {
           interest_only?: boolean
           level?: string | null
           pick_one_slot?: boolean
+          planned_session_count?: number | null
           price?: number
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
           sibling_discount_tiers?: Json | null
@@ -1319,6 +1322,7 @@ export type Database = {
           capacity: number
           created_at: string
           description: string | null
+          duration_minutes: number | null
           duration_months: number
           extra_half_hour_price: number | null
           id: string
@@ -1332,6 +1336,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          duration_minutes?: number | null
           duration_months?: number
           extra_half_hour_price?: number | null
           id?: string
@@ -1345,6 +1350,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          duration_minutes?: number | null
           duration_months?: number
           extra_half_hour_price?: number | null
           id?: string

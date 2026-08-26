@@ -8,14 +8,17 @@ import {
   type PlanViewer,
 } from "@/components/programs/PlanPurchase";
 import { PlanTicketCard } from "@/components/programs/PlanTicketCard";
+import { TreatmentHighlightCard } from "@/components/programs/TreatmentHighlightCard";
 import {
-  ACTIVITY_CARD_TEMPLATE,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   activityCardPresentation,
+  activityVisualTemplate,
+  isHydrotherapyTitle,
   poolPassCardTemplate,
   programDurationLabel,
 } from "@/lib/program-cards";
+import type { FamilyDiscountSettings } from "@/lib/finance/siblingDiscount";
 import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
 import { isActivityProgram, type ProgramKind } from "@/lib/programs";
 import type { Json } from "@/types/database.types";
@@ -32,6 +35,7 @@ type Program = {
   kind: ProgramKind;
   price_tiers?: Json | null;
   extra_half_hour_price?: number | null;
+  duration_minutes?: number | null;
 };
 
 type PoolPass = {
@@ -55,14 +59,22 @@ export function HomePlansGrid({
   poolPasses,
   privateLessons,
   viewer,
+  familyDiscount,
 }: {
   programs: Program[];
   poolPasses: PoolPass[];
   privateLessons: PrivateLesson[];
   viewer: PlanViewer;
+  familyDiscount?: FamilyDiscountSettings;
 }) {
   const memberships = programs.filter((p) => !isActivityProgram(p.kind));
-  const activities = programs.filter((p) => isActivityProgram(p.kind));
+  const activities = programs
+    .filter((p) => isActivityProgram(p.kind))
+    .sort(
+      (a, b) =>
+        Number(isHydrotherapyTitle(b.title)) -
+        Number(isHydrotherapyTitle(a.title))
+    );
   const previewPrograms = memberships.slice(0, HOME_PREVIEW_LIMIT);
   const previewActivities = activities.slice(0, HOME_PREVIEW_LIMIT);
   const previewPasses = poolPasses.slice(0, HOME_PREVIEW_LIMIT);
@@ -70,6 +82,76 @@ export function HomePlansGrid({
 
   return (
     <div className="space-y-14">
+      {activities.length > 0 && (
+        <div>
+          <ScrollReveal>
+            <SectionHead
+              eyebrow="הפוגה"
+              title="פעילויות"
+              sub="משלמים, ואז מתאמים מועד מול המשרד"
+              accent="var(--logo-magenta)"
+            />
+          </ScrollReveal>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {previewActivities.map((p, index) => {
+              const card = activityCardPresentation(p);
+              const visual = activityVisualTemplate(p.title);
+              return (
+              <ScrollReveal
+                key={p.id}
+                delay={Math.min((index % 2) * 80, 80)}
+                className="h-full"
+              >
+                <PlanPurchaseTrigger
+                  planKind="program"
+                  planId={p.id}
+                  planTitle={p.title}
+                  price={p.price}
+                  programKind={p.kind}
+                  priceTiers={parseActivityPriceTiers(p.price_tiers)}
+                  extraHalfHourPrice={p.extra_half_hour_price}
+                  durationMinutes={p.duration_minutes}
+                  viewer={viewer}
+                  familyDiscount={familyDiscount}
+                  className="h-full hover:translate-y-0 hover:shadow-none"
+                >
+                  {visual.tone === "treatment" ? (
+                    <TreatmentHighlightCard
+                      compact
+                      name={p.title}
+                      desc={p.description}
+                      price={card.price}
+                      period={card.period}
+                    />
+                  ) : (
+                    <PlanTicketCard
+                      compact
+                      name={p.title}
+                      desc={p.description}
+                      price={card.price}
+                      period={card.period}
+                      pricePrefix={card.pricePrefix}
+                      priceRows={card.priceRows}
+                      extraLine={card.extraLine}
+                      stub={card.stub}
+                      features={card.features}
+                      icon={visual.icon}
+                      accent={visual.accent}
+                      featured={visual.featured}
+                      badge={visual.badge}
+                    />
+                  )}
+                </PlanPurchaseTrigger>
+              </ScrollReveal>
+              );
+            })}
+          </div>
+          {activities.length > HOME_PREVIEW_LIMIT && (
+            <SeeAllLink href="/programs#activities" />
+          )}
+        </div>
+      )}
+
       {memberships.length > 0 && (
         <div>
           <ScrollReveal>
@@ -98,6 +180,7 @@ export function HomePlansGrid({
                     price={p.price}
                     programKind={p.kind}
                     viewer={viewer}
+                  familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard
@@ -123,61 +206,6 @@ export function HomePlansGrid({
           </div>
           {memberships.length > HOME_PREVIEW_LIMIT && (
             <SeeAllLink href="/programs#memberships" />
-          )}
-        </div>
-      )}
-
-      {activities.length > 0 && (
-        <div>
-          <ScrollReveal>
-            <SectionHead
-              eyebrow="הפוגה"
-              title="פעילויות"
-              sub="בוחרים כמה אנשים, משלמים לפי המחירון, ומתאמים מועד"
-              accent="var(--logo-magenta)"
-            />
-          </ScrollReveal>
-          <div className="grid gap-5 sm:grid-cols-2">
-            {previewActivities.map((p, index) => {
-              const card = activityCardPresentation(p);
-              return (
-              <ScrollReveal
-                key={p.id}
-                delay={Math.min((index % 2) * 80, 80)}
-                className="h-full"
-              >
-                <PlanPurchaseTrigger
-                  planKind="program"
-                  planId={p.id}
-                  planTitle={p.title}
-                  price={p.price}
-                  programKind={p.kind}
-                  priceTiers={parseActivityPriceTiers(p.price_tiers)}
-                  extraHalfHourPrice={p.extra_half_hour_price}
-                  viewer={viewer}
-                  className="h-full hover:translate-y-0 hover:shadow-none"
-                >
-                  <PlanTicketCard
-                    compact
-                    name={p.title}
-                    desc={p.description}
-                    price={card.price}
-                    period={card.period}
-                    pricePrefix={card.pricePrefix}
-                    priceRows={card.priceRows}
-                    extraLine={card.extraLine}
-                    stub={card.stub}
-                    features={card.features}
-                    icon={ACTIVITY_CARD_TEMPLATE.icon}
-                    accent={ACTIVITY_CARD_TEMPLATE.accent}
-                  />
-                </PlanPurchaseTrigger>
-              </ScrollReveal>
-              );
-            })}
-          </div>
-          {activities.length > HOME_PREVIEW_LIMIT && (
-            <SeeAllLink href="/programs#activities" />
           )}
         </div>
       )}
@@ -209,6 +237,7 @@ export function HomePlansGrid({
                     price={p.price}
                     entriesCount={p.entries_count}
                     viewer={viewer}
+                  familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard
@@ -264,6 +293,7 @@ export function HomePlansGrid({
                     price={lesson.price}
                     durationMinutes={lesson.duration_minutes}
                     viewer={viewer}
+                  familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard

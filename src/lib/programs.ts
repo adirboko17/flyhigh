@@ -17,6 +17,25 @@ export function isActivityProgram(
   return kind === "activity";
 }
 
+/**
+ * פעילות מסוג טיפול/שיעור: שם, משך ומחיר קבוע.
+ * בלי מחירון קבוצה ובלי בחירת מספר משתתפים כמו בהשכרת בריכה.
+ */
+export function isSessionActivity(input: {
+  kind?: string | null;
+  durationMinutes?: number | null;
+  hasGroupPricing?: boolean;
+}): boolean {
+  if (!isActivityProgram(input.kind)) return false;
+  if (input.hasGroupPricing) return false;
+  const minutes = Number(input.durationMinutes);
+  return Number.isFinite(minutes) && minutes >= 1;
+}
+
+export function activityDurationLabel(minutes: number) {
+  return `${minutes} דק׳`;
+}
+
 /** כמות נפשות שמותר לבחור ברכישת פעילות, כולל מדרגת 16 ומעלה. */
 export const ACTIVITY_MAX_PEOPLE = 30;
 

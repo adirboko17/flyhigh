@@ -31,6 +31,7 @@ import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
+  loadFamilyDiscountSettings,
   parseSiblingTiers,
   siblingTiersForCheckout,
   type SiblingDiscountTier,
@@ -108,13 +109,20 @@ export function AssignToClassDialog({
     let active = true;
     const supabase = createClient();
 
-    supabase
-      .rpc("class_sibling_discount_tiers", { p_class_id: cls.id })
-      .then(({ data }) => {
-        if (active) {
-          setTiers(siblingTiersForCheckout(cls.category, parseSiblingTiers(data)));
-        }
-      });
+    Promise.all([
+      supabase.rpc("class_sibling_discount_tiers", { p_class_id: cls.id }),
+      loadFamilyDiscountSettings(supabase),
+    ]).then(([{ data }, settings]) => {
+      if (active) {
+        setTiers(
+          siblingTiersForCheckout(
+            cls.category,
+            parseSiblingTiers(data),
+            settings.classCategories
+          )
+        );
+      }
+    });
 
     supabase
       .from("class_sessions")
@@ -424,7 +432,7 @@ export function AssignToClassDialog({
 
         {!cls.interest_only && discountPercent > 0 && childIds.length > 0 && (
           <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
-            הנחת אחים של {discountPercent}% חלה על הילד השני ומעלה
+            הנחת בני משפחה של {discountPercent}% חלה על הילד השני ומעלה
             {orderPreview.fullPriceChildren > 0
               ? ` (${orderPreview.fullPriceChildren} במחיר מלא, ${orderPreview.discountedChildren} בהנחה)`
               : ` (כל ${orderPreview.discountedChildren} הילדים בהזמנה בהנחה)`}

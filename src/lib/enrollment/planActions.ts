@@ -8,7 +8,14 @@ import {
   isValidCouponCode,
   normalizeCouponCode,
 } from "@/lib/finance/coupon";
-import { splitAmount } from "@/lib/finance/siblingDiscount";
+import {
+  calculateOrderTotal,
+  familyDiscountAppliesToProduct,
+  familyDiscountProductForPlan,
+  loadFamilyDiscountSettings,
+  splitAmount,
+  splitSiblingAmounts,
+} from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
@@ -24,6 +31,7 @@ import {
 import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
+  isSessionActivity,
   type ProgramKind,
 } from "@/lib/programs";
 import { planInstallmentOptions } from "@/lib/finance/installments";
@@ -58,11 +66,20 @@ type PlanRecord = {
   title: string;
   price: number;
   durationMonths: number | null;
+  durationMinutes: number | null;
   programKind: ProgramKind | null;
   priceTiers: ActivityPriceTier[];
   entriesCount: number | null;
   extraHalfHourPrice: number | null;
 };
+
+function sessionActivity(plan: Pick<PlanRecord, "programKind" | "durationMinutes" | "priceTiers">) {
+  return isSessionActivity({
+    kind: plan.programKind,
+    durationMinutes: plan.durationMinutes,
+    hasGroupPricing: plan.priceTiers.length > 0,
+  });
+}
 
 async function rollbackPlanPurchase(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -77,7 +94,12 @@ async function rollbackPlanPurchase(
   await supabase.from("enrollments").delete().in("id", enrollmentIds);
 }
 
-function usesQuantity(kind: PlanKind, programKind: ProgramKind | null) {
+function usesQuantity(
+  kind: PlanKind,
+  programKind: ProgramKind | null,
+  session = false
+) {
+  if (session) return false;
   return kind === "private_lesson" || isActivityProgram(programKind);
 }
 
@@ -85,9 +107,10 @@ function normalizeQuantity(
   kind: PlanKind,
   programKind: ProgramKind | null,
   quantity?: number,
-  maxPeople = ACTIVITY_MAX_PEOPLE
+  maxPeople = ACTIVITY_MAX_PEOPLE,
+  session = false
 ) {
-  if (!usesQuantity(kind, programKind)) return 1;
+  if (!usesQuantity(kind, programKind, session)) return 1;
   const value = Math.floor(Number(quantity ?? 1));
   if (!Number.isFinite(value) || value < 1) return null;
   if (value > maxPeople) return null;
@@ -102,7 +125,7 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, kind, price_tiers, extra_half_hour_price")
+      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -112,6 +135,7 @@ async function loadActivePlan(
           title: data.title,
           price: Number(data.price),
           durationMonths: data.duration_months,
+          durationMinutes: data.duration_minutes,
           programKind: data.kind,
           priceTiers: parseActivityPriceTiers(data.price_tiers),
           entriesCount: null,
@@ -133,6 +157,7 @@ async function loadActivePlan(
           title: data.title,
           price: Number(data.price),
           durationMonths: null,
+          durationMinutes: null,
           programKind: null,
           priceTiers: [],
           entriesCount: data.entries_count,
@@ -153,6 +178,7 @@ async function loadActivePlan(
         title: data.title,
         price: Number(data.price),
         durationMonths: null,
+        durationMinutes: null,
         programKind: null,
         priceTiers: [],
         entriesCount: null,
@@ -169,11 +195,76 @@ function resolveParticipants(childIds: string[], includeSelf: boolean) {
   return { uniqueChildIds, participants };
 }
 
+async function countFamilyPlanParticipants(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parentId: string,
+  kind: PlanKind
+) {
+  const { data } = await supabase
+    .from("enrollments")
+    .select("child_id")
+    .eq("parent_id", parentId)
+    .eq("type", kind)
+    .neq("status", "cancelled");
+
+  const children = new Set<string>();
+  let hasSelf = false;
+  for (const row of data ?? []) {
+    if (row.child_id) children.add(row.child_id);
+    else hasSelf = true;
+  }
+  return children.size + (hasSelf ? 1 : 0);
+}
+
+async function applyPlanFamilyDiscount(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parentId: string,
+  kind: PlanKind,
+  programKind: ProgramKind | null,
+  listTotal: number,
+  participantCount: number,
+  skip: boolean
+) {
+  if (skip || participantCount <= 0 || listTotal <= 0) {
+    return { total: listTotal, percent: 0, alreadyEnrolled: 0 };
+  }
+
+  const settings = await loadFamilyDiscountSettings(supabase);
+  const product = familyDiscountProductForPlan(kind, programKind);
+  if (
+    !familyDiscountAppliesToProduct(product, settings.productTypes) ||
+    settings.tiers.length === 0
+  ) {
+    return { total: listTotal, percent: 0, alreadyEnrolled: 0 };
+  }
+
+  const alreadyEnrolled = await countFamilyPlanParticipants(
+    supabase,
+    parentId,
+    kind
+  );
+  const unit = Math.round((listTotal / participantCount) * 100) / 100;
+  const order = calculateOrderTotal(
+    unit,
+    participantCount,
+    settings.tiers,
+    alreadyEnrolled + participantCount
+  );
+  return {
+    total: order.total,
+    percent: order.percent,
+    alreadyEnrolled,
+  };
+}
+
 function planSubtotal(
   plan: PlanRecord,
   quantity: number,
   participantCount: number
 ): number | null {
+  if (sessionActivity(plan)) {
+    return Math.round(plan.price * participantCount * 100) / 100;
+  }
   if (isActivityProgram(plan.programKind)) {
     return quoteActivityPrice(quantity, plan.price, plan.priceTiers)?.amount ?? null;
   }
@@ -206,7 +297,7 @@ export async function previewPlanCoupon(input: {
   includeSelf: boolean;
   quantity?: number;
 }): Promise<CouponPreviewResult> {
-  await requireRole("parent");
+  const profile = await requireRole("parent");
   const code = normalizeCouponCode(input.code);
 
   if (!isValidCouponCode(code)) {
@@ -224,7 +315,8 @@ export async function previewPlanCoupon(input: {
     input.kind,
     plan.programKind,
     input.quantity,
-    activityPeopleCap(plan.priceTiers)
+    activityPeopleCap(plan.priceTiers),
+    sessionActivity(plan)
   );
   if (quantity === null) {
     return {
@@ -240,13 +332,26 @@ export async function previewPlanCoupon(input: {
     return { success: false, error: "נא לבחור למי הרכישה." };
   }
 
-  const subtotal = planSubtotal(plan, quantity, participants.length);
-  if (subtotal === null) {
+  const rawSubtotal = planSubtotal(plan, quantity, participants.length);
+  if (rawSubtotal === null) {
     return {
       success: false,
       error: "מספר המשתתפים שנבחר אינו במחירון. בחרו כמות מאחת המדרגות.",
     };
   }
+
+  const skipFamily =
+    isActivityProgram(plan.programKind) && !sessionActivity(plan);
+  const family = await applyPlanFamilyDiscount(
+    supabase,
+    profile.id,
+    input.kind,
+    plan.programKind,
+    rawSubtotal,
+    participants.length,
+    skipFamily
+  );
+  const subtotal = family.total;
 
   const { data, error } = await supabase.rpc("preview_coupon", {
     p_code: code,
@@ -313,11 +418,13 @@ export async function completePlanPurchase(input: {
   }
 
   const isActivity = isActivityProgram(plan.programKind);
+  const isSession = sessionActivity(plan);
   const quantity = normalizeQuantity(
     kind,
     plan.programKind,
     input.quantity,
-    activityPeopleCap(plan.priceTiers)
+    activityPeopleCap(plan.priceTiers),
+    isSession
   );
   if (quantity === null) {
     return {
@@ -370,13 +477,24 @@ export async function completePlanPurchase(input: {
   }
 
   const unitPrice = plan.price;
-  const listTotal = planSubtotal(plan, quantity, participants.length);
-  if (listTotal === null) {
+  const rawSubtotal = planSubtotal(plan, quantity, participants.length);
+  if (rawSubtotal === null) {
     return {
       success: false,
       error: "מספר המשתתפים שנבחר אינו במחירון. בחרו כמות מאחת המדרגות.",
     };
   }
+  const skipFamily = isActivity && !isSession;
+  const family = await applyPlanFamilyDiscount(
+    supabase,
+    profile.id,
+    kind,
+    plan.programKind,
+    rawSubtotal,
+    participants.length,
+    skipFamily
+  );
+  const listTotal = family.total;
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
   const requestedCode = input.couponCode
@@ -422,10 +540,16 @@ export async function completePlanPurchase(input: {
     Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
   const activityChildId =
     includeSelf || uniqueChildIds.length !== 1 ? null : uniqueChildIds[0];
-  const amounts = splitAmount(
-    totalAmount,
-    isActivity ? 1 : participants.length
-  );
+  const amounts =
+    !isActivity && family.percent > 0
+      ? splitSiblingAmounts(
+          rawSubtotal / participants.length,
+          participants.length,
+          family.percent,
+          family.alreadyEnrolled,
+          totalAmount
+        )
+      : splitAmount(totalAmount, isActivity ? 1 : participants.length);
   const amountByParticipant = new Map<string | null, number>(
     isActivity
       ? [[activityChildId, amounts[0]]]
@@ -441,9 +565,10 @@ export async function completePlanPurchase(input: {
     return { success: false, error: receiptLabel.error };
   }
 
+  const activityPeople = isSession ? participants.length : quantity;
   const chargeDescription = chargeDescriptionForCheckout({
     productTitle: plan.title,
-    participantCount: isActivity ? quantity : participants.length,
+    participantCount: isActivity ? activityPeople : participants.length,
     kind: "plan",
     customLabel: receiptLabel.description,
   });
@@ -474,7 +599,7 @@ export async function completePlanPurchase(input: {
             deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
           starts_on: null,
           ends_on: null,
-          people_count: quantity,
+          people_count: activityPeople,
         },
       ]
     : participants.map((childId) => ({
@@ -540,7 +665,7 @@ export async function completePlanPurchase(input: {
       parent_id: profile.id,
       child_id: enrollment.child_id,
       program_id: planId,
-      people_count: quantity,
+      people_count: activityPeople,
       status: "awaiting_schedule" as const,
     }));
 

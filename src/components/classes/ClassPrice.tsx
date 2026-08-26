@@ -8,7 +8,9 @@ export function classPriceLabel(
   billingMonths?: number | null,
   interestOnly?: boolean
 ): string {
-  if (interestOnly) return "הרשמה";
+  if (interestOnly) {
+    return proration.fullPrice > 0 ? "מחיר מתוכנן" : "הרשמה";
+  }
   if (proration.hasEnded) return "החוג הסתיים";
   if (proration.isLate) return "מחיר מעכשיו";
   if (parseBillingMonths(billingMonths)) return "מחיר לחודש";
@@ -40,7 +42,9 @@ export function ClassPriceAmount({
   if (interestOnly) {
     return (
       <p className={cn(amountClass, soldOut ? "text-ink-400" : "text-brand-700")}>
-        ללא תשלום
+        {proration.fullPrice > 0
+          ? formatCurrency(proration.fullPrice)
+          : "ללא תשלום"}
       </p>
     );
   }
@@ -104,9 +108,14 @@ export function ClassPriceNote({
   const months = parseBillingMonths(billingMonths);
 
   if (interestOnly) {
+    const sessions =
+      proration.billableCount > 0
+        ? `${proration.billableCount} מפגשים`
+        : null;
     return (
       <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
-        בלי תאריך ובלי חיוב — רק הרשמה
+        {sessions ? `${sessions} · ` : ""}
+        בלי תאריך ובלי חיוב עכשיו
       </p>
     );
   }

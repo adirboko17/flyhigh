@@ -154,7 +154,17 @@ export function PaymentMethodPicker({
   );
 }
 
+function bankTransferWhatsappHref(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const international = digits.startsWith("0")
+    ? `972${digits.slice(1)}`
+    : digits;
+  return `https://wa.me/${international}`;
+}
+
 export function BankTransferDetails({ className }: { className?: string }) {
+  const whatsapp = BANK_TRANSFER_ACCOUNT.proofWhatsapp;
+
   return (
     <div
       className={cn(
@@ -169,6 +179,18 @@ export function BankTransferDetails({ className }: { className?: string }) {
         <li>חשבון {BANK_TRANSFER_ACCOUNT.account}</li>
         <li>{BANK_TRANSFER_ACCOUNT.holder}</li>
       </ul>
+      <p className="mt-3 leading-relaxed">
+        יש לשלוח אסמכתא על ההעברה / הו״ק לווטסאפ{" "}
+        <a
+          href={bankTransferWhatsappHref(whatsapp)}
+          target="_blank"
+          rel="noreferrer"
+          dir="ltr"
+          className="font-semibold underline underline-offset-2"
+        >
+          {whatsapp}
+        </a>
+      </p>
     </div>
   );
 }

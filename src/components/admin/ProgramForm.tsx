@@ -15,7 +15,11 @@ import {
   validateActivityPriceTiers,
   type ActivityPriceTier,
 } from "@/lib/finance/activityPricing";
-import { isActivityProgram, type ProgramKind } from "@/lib/programs";
+import {
+  isActivityProgram,
+  isSessionActivity,
+  type ProgramKind,
+} from "@/lib/programs";
 import { createClient } from "@/lib/supabase/client";
 import type { Json } from "@/types/database.types";
 import { cn } from "@/utils/cn";
@@ -30,6 +34,7 @@ export type ProgramFormData = {
   status: "draft" | "active" | "inactive";
   price_tiers?: Json | null;
   extra_half_hour_price?: number | null;
+  duration_minutes?: number | null;
 };
 
 const emptyForm = {
@@ -80,13 +85,31 @@ export function ProgramForm({
       ? String(existing.extra_half_hour_price)
       : ""
   );
+  const [durationMinutes, setDurationMinutes] = useState(() =>
+    existing?.duration_minutes != null
+      ? String(existing.duration_minutes)
+      : "30"
+  );
+  const [activityShape, setActivityShape] = useState<"session" | "group">(() => {
+    if (!isActivityProgram(existing?.kind ?? defaultKind)) return "session";
+    return isSessionActivity({
+      kind: "activity",
+      durationMinutes: existing?.duration_minutes,
+      hasGroupPricing: parseActivityPriceTiers(existing?.price_tiers).length > 0,
+    })
+      ? "session"
+      : existing
+        ? "group"
+        : "session";
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kind: ProgramKind = isActivityProgram(form.kind)
     ? "activity"
     : "membership";
   const isActivity = kind === "activity";
-  const usesGroupPricing = isActivity && priceTiers.length > 0;
+  const isSession = isActivity && activityShape === "session";
+  const usesGroupPricing = isActivity && !isSession && priceTiers.length > 0;
   const tracksHash = isActivity ? "#activities" : "#programs";
 
   const set =
@@ -116,7 +139,19 @@ export function ProgramForm({
       return;
     }
 
-    const tiers = isActivity ? priceTiers : [];
+    const sessionDuration = isSession ? Math.floor(Number(durationMinutes)) : null;
+    if (
+      isSession &&
+      (sessionDuration == null ||
+        !Number.isFinite(sessionDuration) ||
+        sessionDuration < 1)
+    ) {
+      setError("נא להזין משך תקין בדקות.");
+      setLoading(false);
+      return;
+    }
+
+    const tiers = isActivity && !isSession ? priceTiers : [];
     const tiersError = validateActivityPriceTiers(tiers);
     if (tiersError) {
       setError(tiersError);
@@ -124,11 +159,12 @@ export function ProgramForm({
       return;
     }
 
-    const extraHalfHourPrice = isActivity
-      ? extraHalfHour.trim() === ""
-        ? null
-        : Number(extraHalfHour)
-      : null;
+    const extraHalfHourPrice =
+      isActivity && !isSession
+        ? extraHalfHour.trim() === ""
+          ? null
+          : Number(extraHalfHour)
+        : null;
     if (
       extraHalfHourPrice != null &&
       (!Number.isFinite(extraHalfHourPrice) || extraHalfHourPrice < 0)
@@ -144,6 +180,7 @@ export function ProgramForm({
       description: form.description || null,
       price: activityStartingPrice(tiers, unitPrice),
       duration_months: durationMonths,
+      duration_minutes: sessionDuration,
       kind,
       price_tiers: serializeActivityPriceTiers(tiers),
       extra_half_hour_price: extraHalfHourPrice,
@@ -188,7 +225,9 @@ export function ProgramForm({
           onChange={set("title")}
           placeholder={
             isActivity
-              ? "לדוגמה: פעילות הפוגה"
+              ? isSession
+                ? "לדוגמה: שיעור פרטי / טיפול הידרותרפיה"
+                : "לדוגמה: השכרת הבריכה"
               : "לדוגמה: מנוי חודשי — שחייה חופשית"
           }
           required
@@ -201,76 +240,131 @@ export function ProgramForm({
           onChange={set("description")}
           placeholder={
             isActivity
-              ? "פעילות חד־פעמית. הלקוח בוחר כמה משתתפים, משלם, ואז מתאמים מועד בטלפון."
+              ? isSession
+                ? "תיאור קצר — אפשר להשאיר ריק"
+                : "פעילות חד־פעמית. הלקוח בוחר כמה משתתפים, משלם, ואז מתאמים מועד בטלפון."
               : "תיאור קצר של המנוי..."
           }
         />
       </Field>
       {isActivity ? (
         <div className="space-y-4">
-          <Field label="איך מחשבים את המחיר">
+          <Field label="סוג הפעילות">
             <Select
-              value={usesGroupPricing ? "group" : "per_person"}
+              value={activityShape}
               onChange={(e) => {
-                if (e.target.value === "per_person") {
+                const next = e.target.value === "group" ? "group" : "session";
+                setActivityShape(next);
+                if (next === "session") {
                   setPriceTiers([]);
-                  return;
-                }
-                if (priceTiers.length === 0) {
-                  setPriceTiers([
-                    { minPeople: 2, maxPeople: 2, price: 250, note: null },
-                  ]);
+                  setExtraHalfHour("");
+                  if (!durationMinutes) setDurationMinutes("30");
                 }
               }}
             >
-              <option value="per_person">מחיר למשתתף × מספר האנשים</option>
-              <option value="group">מחיר לפי גודל קבוצה</option>
+              <option value="session">טיפול / שיעור — שם, משך ומחיר</option>
+              <option value="group">פעילות לקבוצה — מחירון לפי משתתפים</option>
             </Select>
           </Field>
 
-          {usesGroupPricing ? (
-            <Field label="מדרגות מחיר לקבוצה" required>
-              <ActivityPriceTierEditor
-                tiers={priceTiers}
-                onChange={setPriceTiers}
-                onFillHafuga={() =>
-                  setExtraHalfHour(String(HAFUGA_EXTRA_HALF_HOUR_PRICE))
-                }
-                disabled={loading}
-              />
-            </Field>
+          {isSession ? (
+            <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+              <Field label="משך (דקות)" required>
+                <Input
+                  type="number"
+                  min={1}
+                  value={durationMinutes}
+                  onChange={(e) => setDurationMinutes(e.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="מחיר (₪)" required>
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={form.price}
+                  onChange={set("price")}
+                  required
+                />
+              </Field>
+              {isEdit && (
+                <Field label="סטטוס">
+                  <Select value={form.status} onChange={set("status")}>
+                    <option value="draft">טיוטה</option>
+                    <option value="active">פעיל</option>
+                    <option value="inactive">לא פעיל</option>
+                  </Select>
+                </Field>
+              )}
+            </div>
           ) : (
-            <Field label="מחיר למשתתף (₪)" required>
-              <Input
-                type="number"
-                min={0}
-                step="1"
-                value={form.price}
-                onChange={set("price")}
-                required
-              />
-            </Field>
+            <>
+              <Field label="איך מחשבים את המחיר">
+                <Select
+                  value={usesGroupPricing ? "group" : "per_person"}
+                  onChange={(e) => {
+                    if (e.target.value === "per_person") {
+                      setPriceTiers([]);
+                      return;
+                    }
+                    if (priceTiers.length === 0) {
+                      setPriceTiers([
+                        { minPeople: 2, maxPeople: 2, price: 250, note: null },
+                      ]);
+                    }
+                  }}
+                >
+                  <option value="per_person">מחיר למשתתף × מספר האנשים</option>
+                  <option value="group">מחיר לפי גודל קבוצה</option>
+                </Select>
+              </Field>
+
+              {usesGroupPricing ? (
+                <Field label="מדרגות מחיר לקבוצה" required>
+                  <ActivityPriceTierEditor
+                    tiers={priceTiers}
+                    onChange={setPriceTiers}
+                    onFillHafuga={() =>
+                      setExtraHalfHour(String(HAFUGA_EXTRA_HALF_HOUR_PRICE))
+                    }
+                    disabled={loading}
+                  />
+                </Field>
+              ) : (
+                <Field label="מחיר למשתתף (₪)" required>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={form.price}
+                    onChange={set("price")}
+                    required
+                  />
+                </Field>
+              )}
+
+              <Field
+                label="תוספת חצי שעה (₪)"
+                hint="מוצג ללקוח בלבד. התוספת מתווספת בתיאום הטלפוני, לא בתשלום הראשוני."
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={extraHalfHour}
+                  onChange={(e) => setExtraHalfHour(e.target.value)}
+                  placeholder="לדוגמה: 100"
+                />
+              </Field>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {usesGroupPricing
+                  ? "הלקוח בוחר כמה משתתפים ומשלם את מחיר המדרגה המתאימה לקבוצה. אחרי התשלום הבקשה מופיעה בתיאום מועדים."
+                  : "הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה בתיאום מועדים כדי לחייג ולתאם מועד."}
+              </div>
+            </>
           )}
-
-          <Field
-            label="תוספת חצי שעה (₪)"
-            hint="מוצג ללקוח בלבד. התוספת מתווספת בתיאום הטלפוני, לא בתשלום הראשוני."
-          >
-            <Input
-              type="number"
-              min={0}
-              step="1"
-              value={extraHalfHour}
-              onChange={(e) => setExtraHalfHour(e.target.value)}
-              placeholder="לדוגמה: 100"
-            />
-          </Field>
-
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {usesGroupPricing
-              ? "הלקוח בוחר כמה משתתפים ומשלם את מחיר המדרגה המתאימה לקבוצה. אחרי התשלום הבקשה מופיעה בתיאום מועדים."
-              : "הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה בתיאום מועדים כדי לחייג ולתאם מועד."}
-          </div>
         </div>
       ) : (
         <div className={cn("grid gap-5", isEdit ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
@@ -307,7 +401,7 @@ export function ProgramForm({
           )}
         </div>
       )}
-      {isActivity && isEdit && (
+      {isActivity && isEdit && !isSession && (
         <Field label="סטטוס">
           <Select value={form.status} onChange={set("status")}>
             <option value="draft">טיוטה</option>

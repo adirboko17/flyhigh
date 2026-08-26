@@ -261,6 +261,7 @@ export const BANK_TRANSFER_ACCOUNT = {
   branch: "489",
   account: "450892",
   holder: "מורית שפירא",
+  proofWhatsapp: "058-4990364",
 } as const;
 
 export function isDeferredPaymentMethod(

@@ -34,6 +34,8 @@ interface PlanTicketCardProps {
   icon: IconName;
   accent: string;
   featured?: boolean;
+  /** מראה טיפול/ספא — נפרד מכרטיס המנוי הכחול. */
+  tone?: "treatment";
   badge?: string;
   cta?: React.ReactNode;
   /** מחירון מדרגות בטבלה קומפקטית, בלי להאריך את כרטיס הכרטיסייה. */
@@ -57,6 +59,7 @@ export function PlanTicketCard({
   icon,
   accent,
   featured = false,
+  tone,
   badge,
   cta,
   priceRows = [],
@@ -92,22 +95,29 @@ export function PlanTicketCard({
               compactValue: true,
             };
 
+  const dark = featured && tone !== "treatment";
+  const spa = tone === "treatment";
+
   return (
     <article
       className={cn(
         "plan-ticket-shadow group relative h-full",
-        compact
-          ? "plan-ticket-shadow--compact hover:-translate-y-0.5"
-          : "hover:-translate-y-1"
+        spa
+          ? "plan-ticket-shadow--treatment hover:-translate-y-0.5"
+          : compact
+            ? "plan-ticket-shadow--compact hover:-translate-y-0.5"
+            : "hover:-translate-y-1"
       )}
     >
       <div
         className={cn(
           "plan-ticket relative flex h-full flex-col overflow-hidden sm:flex-row",
           compact ? "plan-ticket--compact" : "min-h-[300px]",
-          featured
+          dark
             ? "bg-[linear-gradient(148deg,#073552_0%,#0a5f96_52%,#0ea0c4_100%)] text-white"
-            : "border border-ink-100 bg-[#fbfcfe] text-ink-900"
+            : spa
+              ? "border-2 border-[rgba(232,80,160,0.28)] bg-[linear-gradient(155deg,#fff8fb_0%,#f7fcff_48%,#eef8f6_100%)] text-ink-900"
+              : "border border-ink-100 bg-[#fbfcfe] text-ink-900"
         )}
       >
         <div
@@ -116,7 +126,7 @@ export function PlanTicketCard({
             compact ? "p-4 sm:p-5" : "p-5 sm:p-6"
           )}
         >
-          {featured && (
+          {dark && (
             <>
               <div
                 aria-hidden
@@ -128,15 +138,31 @@ export function PlanTicketCard({
               />
             </>
           )}
+          {spa && (
+            <>
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -end-10 -top-16 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(232,80,160,0.18),transparent_68%)]"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -bottom-20 start-0 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(14,160,196,0.16),transparent_70%)]"
+              />
+            </>
+          )}
 
           <div className="relative flex items-start justify-between gap-3">
             <div
               className={cn(
                 "flex items-center justify-center rounded-xl text-white",
                 compact ? "h-9 w-9" : "h-11 w-11",
-                featured ? "bg-white/15 ring-1 ring-white/25" : "shadow-soft"
+                dark
+                  ? "bg-white/15 ring-1 ring-white/25"
+                  : spa
+                    ? "bg-[var(--logo-magenta)] shadow-soft"
+                    : "shadow-soft"
               )}
-              style={featured ? undefined : { background: accent }}
+              style={dark || spa ? undefined : { background: accent }}
             >
               <Icon name={icon} size={compact ? 17 : 20} />
             </div>
@@ -145,9 +171,11 @@ export function PlanTicketCard({
               <span
                 className={cn(
                   "rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-wide",
-                  featured
+                  dark
                     ? "bg-[var(--logo-orange)] text-[#3a2400]"
-                    : "bg-amber-100 text-amber-800"
+                    : spa
+                      ? "bg-[var(--logo-magenta)] text-white"
+                      : "bg-amber-100 text-amber-800"
                 )}
               >
                 {badge}
@@ -161,7 +189,7 @@ export function PlanTicketCard({
               compact
                 ? "mt-3 text-[17px] sm:text-[19px]"
                 : "mt-4 text-[20px] sm:text-[22px]",
-              featured ? "text-white" : "text-ink-900"
+              dark ? "text-white" : "text-ink-900"
             )}
           >
             {name}
@@ -172,7 +200,7 @@ export function PlanTicketCard({
               className={cn(
                 "relative mt-1.5 leading-relaxed",
                 compact ? "line-clamp-2 text-[13px] sm:text-sm" : "text-sm",
-                featured ? "text-white/80" : "text-ink-500"
+                dark ? "text-white/80" : "text-ink-500"
               )}
             >
               {desc}
@@ -181,11 +209,11 @@ export function PlanTicketCard({
 
           {priceRows.length > 0 &&
             (compact ? (
-              <CollapsiblePriceRows featured={featured} compact>
+              <CollapsiblePriceRows featured={dark} compact>
                 <PriceRowsTable
                   rows={priceRows}
                   extraLine={extraLine}
-                  featured={featured}
+                  featured={dark}
                   compact
                 />
               </CollapsiblePriceRows>
@@ -194,7 +222,7 @@ export function PlanTicketCard({
                 <PriceRowsTable
                   rows={priceRows}
                   extraLine={extraLine}
-                  featured={featured}
+                  featured={dark}
                 />
               </div>
             ))}
@@ -210,7 +238,7 @@ export function PlanTicketCard({
                 <span
                   className={cn(
                     "text-sm font-semibold",
-                    featured ? "text-white/75" : "text-ink-400"
+                    dark ? "text-white/75" : "text-ink-400"
                   )}
                 >
                   {pricePrefix}
@@ -222,7 +250,11 @@ export function PlanTicketCard({
                   compact
                     ? "text-[26px] sm:text-[28px]"
                     : "text-[34px] sm:text-[38px]",
-                  featured ? "text-white" : "text-brand-700"
+                  dark
+                    ? "text-white"
+                    : spa
+                      ? "text-[var(--logo-magenta)]"
+                      : "text-brand-700"
                 )}
               >
                 {price}
@@ -231,7 +263,7 @@ export function PlanTicketCard({
                 <span
                   className={cn(
                     "text-sm font-semibold",
-                    featured ? "text-white/75" : "text-ink-400"
+                    dark ? "text-white/75" : "text-ink-400"
                   )}
                 >
                   {period}
@@ -243,9 +275,11 @@ export function PlanTicketCard({
               <span
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-bold tracking-wide transition-colors",
-                  featured
+                  dark
                     ? "bg-white/15 text-white ring-1 ring-white/30 group-hover:bg-white/25"
-                    : "bg-ink-50 text-brand-700 ring-1 ring-ink-100 group-hover:bg-brand-50 group-hover:ring-brand-200"
+                    : spa
+                      ? "bg-[var(--logo-magenta)] text-white ring-1 ring-[var(--logo-magenta)] group-hover:brightness-105"
+                      : "bg-ink-50 text-brand-700 ring-1 ring-ink-100 group-hover:bg-brand-50 group-hover:ring-brand-200"
                 )}
               >
                 לחץ כאן
@@ -261,13 +295,13 @@ export function PlanTicketCard({
                   key={feature}
                   className={cn(
                     "flex items-start gap-2 text-[13.5px] leading-snug sm:text-sm",
-                    featured ? "text-white/90" : "text-ink-700"
+                    dark ? "text-white/90" : "text-ink-700"
                   )}
                 >
                   <span
                     className="mt-0.5 shrink-0"
                     style={{
-                      color: featured ? "rgba(255,255,255,0.95)" : accent,
+                      color: dark ? "rgba(255,255,255,0.95)" : accent,
                     }}
                   >
                     <Icon name="check" size={16} />
@@ -285,7 +319,7 @@ export function PlanTicketCard({
           )}
         </div>
 
-        <WavePerforation featured={featured} compact={compact} />
+        <WavePerforation featured={dark} spa={spa} compact={compact} />
 
         <div
           className={cn(
@@ -293,21 +327,25 @@ export function PlanTicketCard({
             compact
               ? "h-[4.25rem] px-4 sm:h-auto sm:w-[5.75rem] sm:flex-col sm:justify-between sm:px-2.5 sm:py-4"
               : "h-[5.5rem] px-5 sm:h-auto sm:w-[7.5rem] sm:flex-col sm:justify-between sm:px-3 sm:py-6",
-            featured ? "bg-black/20" : "bg-[#d7eef6]"
+            dark
+              ? "bg-black/20"
+              : spa
+                ? "bg-[linear-gradient(180deg,#c43d7a_0%,#0ea0c4_100%)]"
+                : "bg-[#d7eef6]"
           )}
         >
           <div className="plan-ticket-stub-waves pointer-events-none absolute inset-0 hidden sm:block">
-            <StubWaves featured={featured} />
+            <StubWaves featured={dark} spa={spa} />
           </div>
 
           <p
             className={cn(
               "relative font-bold",
               compact ? "text-[10px]" : "text-[11px]",
-              featured ? "text-white/60" : "text-ink-500"
+              dark || spa ? "text-white/70" : "text-ink-500"
             )}
           >
-            בריכה
+            {spa ? "טיפול" : "בריכה"}
           </p>
 
           <div className="relative text-center">
@@ -315,7 +353,7 @@ export function PlanTicketCard({
               className={cn(
                 "font-bold",
                 compact ? "text-[10px]" : "text-[11px]",
-                featured ? "text-white/60" : "text-ink-500"
+                dark || spa ? "text-white/70" : "text-ink-500"
               )}
             >
               {stubMeta.eyebrow}
@@ -331,9 +369,9 @@ export function PlanTicketCard({
                   : stubMeta.compactValue
                     ? "text-4xl sm:text-[44px]"
                     : "text-xl sm:text-2xl",
-                featured ? "text-white" : ""
+                dark || spa ? "text-white" : ""
               )}
-              style={!featured ? { color: accent } : undefined}
+              style={dark || spa ? undefined : { color: accent }}
             >
               {stubMeta.value}
             </p>
@@ -342,7 +380,7 @@ export function PlanTicketCard({
                 className={cn(
                   "mt-0.5 font-bold",
                   compact ? "text-[10px]" : "text-[11px]",
-                  featured ? "text-white/70" : "text-ink-500"
+                  dark || spa ? "text-white/70" : "text-ink-500"
                 )}
               >
                 {stubMeta.unit}
@@ -362,7 +400,7 @@ export function PlanTicketCard({
                 key={i}
                 className={cn(
                   "rounded-[1px]",
-                  featured ? "bg-white/50" : "bg-ink-400/65"
+                  dark || spa ? "bg-white/55" : "bg-ink-400/65"
                 )}
                 style={{
                   flex: `${w} 1 0`,
@@ -451,12 +489,18 @@ function PriceRowsTable({
 
 function WavePerforation({
   featured,
+  spa,
   compact,
 }: {
   featured: boolean;
+  spa?: boolean;
   compact: boolean;
 }) {
-  const stroke = featured ? "rgba(255,255,255,0.45)" : "rgba(15, 40, 70, 0.28)";
+  const stroke = featured
+    ? "rgba(255,255,255,0.45)"
+    : spa
+      ? "rgba(196, 61, 122, 0.35)"
+      : "rgba(15, 40, 70, 0.28)";
 
   return (
     <div
@@ -494,7 +538,13 @@ function WavePerforation({
   );
 }
 
-function StubWaves({ featured }: { featured: boolean }) {
+function StubWaves({
+  featured,
+  spa,
+}: {
+  featured: boolean;
+  spa?: boolean;
+}) {
   return (
     <svg
       aria-hidden
@@ -504,11 +554,19 @@ function StubWaves({ featured }: { featured: boolean }) {
     >
       <path
         d="M0 40c20-8 40-8 60 0s40 8 60 0v20c-20 8-40 8-60 0s-40-8-60 0Z"
-        fill={featured ? "rgba(255,255,255,0.16)" : "rgba(14,160,196,0.22)"}
+        fill={
+          featured || spa
+            ? "rgba(255,255,255,0.16)"
+            : "rgba(14,160,196,0.22)"
+        }
       />
       <path
         d="M0 150c20-8 40-8 60 0s40 8 60 0v16c-20 8-40 8-60 0s-40-8-60 0Z"
-        fill={featured ? "rgba(255,255,255,0.1)" : "rgba(14,160,196,0.16)"}
+        fill={
+          featured || spa
+            ? "rgba(255,255,255,0.1)"
+            : "rgba(14,160,196,0.16)"
+        }
       />
     </svg>
   );

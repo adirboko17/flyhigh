@@ -48,7 +48,7 @@ export async function loadCustomerRegistrations(
     supabase
       .from("enrollments")
       .select(
-        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes)"
+        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes)"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),
@@ -110,10 +110,14 @@ export async function loadCustomerRegistrations(
     } else if (kind === "private_lesson") {
       const duration = row.private_lessons?.duration_minutes;
       if (duration != null) details.push(`${duration} דק׳`);
-    } else if (kind === "activity" && row.people_count != null) {
-      details.push(
-        row.people_count === 1 ? "משתתף אחד" : `${row.people_count} משתתפים`
-      );
+    } else if (kind === "activity") {
+      const duration = row.programs?.duration_minutes;
+      if (duration != null) details.push(`${duration} דק׳`);
+      if (row.people_count != null) {
+        details.push(
+          row.people_count === 1 ? "משתתף אחד" : `${row.people_count} משתתפים`
+        );
+      }
     }
 
     const status = ENROLLMENT_STATUS[row.status];

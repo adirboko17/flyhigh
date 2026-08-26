@@ -105,7 +105,7 @@ export function ClassPreviewDialog({
       title={cls.title}
       description={
         cls.interest_only
-          ? "הרשמת עניין · ללא תשלום וללא מועד"
+          ? "הרשמת עניין · ללא מועד וללא חיוב עכשיו"
           : `${scheduleLabel} · ${hoursLabel}`
       }
       className="max-w-2xl"
@@ -170,7 +170,9 @@ export function ClassPreviewDialog({
             label="מחיר"
             value={
               cls.interest_only
-                ? "ללא תשלום"
+                ? cls.price > 0
+                  ? `${formatCurrency(cls.price)} · מתוכנן`
+                  : "ללא תשלום"
                 : parseBillingMonths(cls.billing_months)
                   ? `${formatCurrency(cls.price)} לחודש × ${parseBillingMonths(cls.billing_months)} · סה״כ ${formatCurrency(classPeriodTotal(cls.price, cls.billing_months))}`
                   : formatCurrency(cls.price)
@@ -188,6 +190,13 @@ export function ClassPreviewDialog({
                   : "אין מקומות פנויים"
             }
           />
+          {cls.interest_only && cls.planned_session_count != null && (
+            <DetailBox
+              icon="🗓️"
+              label="מפגשים מתוכננים"
+              value={`${cls.planned_session_count}`}
+            />
+          )}
           {!cls.interest_only && (
             <>
               <DetailBox
@@ -206,15 +215,15 @@ export function ClassPreviewDialog({
 
         {cls.interest_only && (
           <p className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
-            זו הרשמת עניין: הלקוחות נרשמים בלי תשלום. אחרי שיהיו מספיק נרשמים
-            אפשר לפתוח חוג משולם או לגבות בטלפון.
+            זו הרשמת עניין: הלקוחות נרשמים בלי חיוב. המחיר ומספר המפגשים
+            מוצגים מראש, בלי תאריך. אחרי שיהיו מספיק נרשמים אפשר לפתוח את החוג.
           </p>
         )}
 
         {!cls.interest_only && (
         <section>
           <h3 className="font-display text-base font-bold text-ink-900">
-            הנחת אחים
+            הנחת בני משפחה
           </h3>
           {tiers.length > 0 ? (
             <ul className="mt-2 flex flex-wrap gap-1.5">

@@ -17,7 +17,12 @@ import {
   parseActivityPriceTiers,
   usesGroupPricing,
 } from "@/lib/finance/activityPricing";
-import { isActivityProgram, type ProgramKind } from "@/lib/programs";
+import {
+  activityDurationLabel,
+  isActivityProgram,
+  isSessionActivity,
+  type ProgramKind,
+} from "@/lib/programs";
 import type { Json } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 
@@ -31,6 +36,7 @@ export type AdminProgramRow = {
   status: keyof typeof LISTING_STATUS;
   price_tiers?: Json | null;
   extra_half_hour_price?: number | null;
+  duration_minutes?: number | null;
 };
 
 const SECTION = {
@@ -53,15 +59,15 @@ const SECTION = {
     icon: "🎯",
     title: "פעילויות",
     newLabel: "+ פעילות חדשה",
-    empty: "אין פעילויות עדיין — הוסיפו פעילות עם מחיר למשתתף או מדרגות לפי גודל קבוצה.",
+    empty: "אין פעילויות עדיין — הוסיפו טיפול או שיעור (שם, משך ומחיר) או פעילות לקבוצה.",
     noMatch: "לא נמצאו פעילויות התואמות לחיפוש.",
     nameCol: "שם הפעילות",
     priceCol: "מחיר",
-    extraCol: "אחרי הרכישה",
+    extraCol: "משך / אחרי הרכישה",
     modalNew: "פעילות חדשה",
     modalEdit: "עריכת פעילות",
     modalNewDesc:
-      "אפשר מחיר למשתתף או מחירון לפי גודל קבוצה. אחרי התשלום הבקשה נכנסת לתיאום מועדים כדי לתאם מועד בטלפון.",
+      "טיפול או שיעור עם שם, משך ומחיר — או פעילות לקבוצה עם מחירון. אחרי התשלום מתאמים מועד בטלפון.",
   },
 } as const;
 
@@ -77,6 +83,11 @@ function normalizeSearch(value: string) {
 
 function activityPriceLabel(item: AdminProgramRow) {
   const tiers = parseActivityPriceTiers(item.price_tiers);
+  const session = isSessionActivity({
+    kind: item.kind,
+    durationMinutes: item.duration_minutes,
+    hasGroupPricing: usesGroupPricing(tiers),
+  });
   if (isActivityProgram(item.kind) && usesGroupPricing(tiers)) {
     return {
       amount: formatCurrency(activityStartingPrice(tiers, item.price)),
@@ -85,8 +96,23 @@ function activityPriceLabel(item: AdminProgramRow) {
   }
   return {
     amount: formatCurrency(item.price),
-    hint: isActivityProgram(item.kind) ? "למשתתף" : null,
+    hint: isActivityProgram(item.kind) && !session ? "למשתתף" : null,
   };
+}
+
+function activityExtraLabel(item: AdminProgramRow) {
+  const tiers = parseActivityPriceTiers(item.price_tiers);
+  if (
+    isSessionActivity({
+      kind: item.kind,
+      durationMinutes: item.duration_minutes,
+      hasGroupPricing: usesGroupPricing(tiers),
+    }) &&
+    item.duration_minutes
+  ) {
+    return activityDurationLabel(item.duration_minutes);
+  }
+  return "תיאום מועדים";
 }
 
 function matchesProgram(item: AdminProgramRow, query: string) {
@@ -159,7 +185,7 @@ export function ProgramList({
                   </TD>
                   <TD className="whitespace-nowrap text-ink-600">
                     {isActivityProgram(p.kind)
-                      ? "תיאום מועדים"
+                      ? activityExtraLabel(p)
                       : p.duration_months === 1
                         ? "חודש"
                         : `${p.duration_months} חודשים`}

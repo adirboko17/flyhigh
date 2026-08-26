@@ -11,16 +11,27 @@ import { SettingsSectionRow } from "@/components/admin/SettingsSectionRow";
 import { AdminUsersSettingsPanel } from "@/components/admin/AdminUsersSettings";
 import { SiblingDiscountForm } from "@/components/admin/SiblingDiscountSettings";
 import type { AdminUserRow } from "@/components/admin/AdminUsersSettings";
-import type { SiblingDiscountTier } from "@/lib/finance/siblingDiscount";
+import {
+  FAMILY_DISCOUNT_LABEL,
+  FAMILY_DISCOUNT_PRODUCT_TYPES,
+  type FamilyDiscountSettings,
+} from "@/lib/finance/siblingDiscount";
 import type { Enums } from "@/types/database.types";
 
 type OpenSection = "profile" | "password" | "admins" | "siblingDiscount" | null;
 
-function formatSiblingDiscountSummary(tiers: SiblingDiscountTier[]): string {
-  if (tiers.length === 0) return "לא הוגדרה הנחה";
-  return tiers
-    .map((t) => `${t.minChildren}+ ילדים: ${t.percent}% מהשני ומעלה`)
+function formatFamilyDiscountSummary(settings: FamilyDiscountSettings): string {
+  if (settings.tiers.length === 0) return "לא הוגדרה הנחה";
+  const tiers = settings.tiers
+    .map((t) => `${t.minChildren}+ ילדים: ${t.percent}%`)
     .join(" · ");
+  const scope = [
+    ...settings.classCategories,
+    ...FAMILY_DISCOUNT_PRODUCT_TYPES.filter((item) =>
+      settings.productTypes.includes(item.id)
+    ).map((item) => item.label),
+  ];
+  return scope.length > 0 ? `${tiers} · ${scope.join(", ")}` : tiers;
 }
 
 export function AdminSettingsHub({
@@ -32,7 +43,8 @@ export function AdminSettingsHub({
   admins,
   currentUserId,
   canRemoveAdmins,
-  siblingTiers,
+  familyDiscount,
+  classCategories,
 }: {
   profileId: string;
   email: string;
@@ -42,14 +54,15 @@ export function AdminSettingsHub({
   admins: AdminUserRow[];
   currentUserId: string;
   canRemoveAdmins: boolean;
-  siblingTiers: SiblingDiscountTier[];
+  familyDiscount: FamilyDiscountSettings;
+  classCategories: string[];
 }) {
   const [open, setOpen] = useState<OpenSection>(null);
 
   const profileDescription = [fullName, phone].filter(Boolean).join(" · ");
   const adminsDescription =
     admins.length === 1 ? "מנהל/ת אחד/ת" : `${admins.length} מנהלים/ות`;
-  const siblingDescription = formatSiblingDiscountSummary(siblingTiers);
+  const siblingDescription = formatFamilyDiscountSummary(familyDiscount);
 
   return (
     <>
@@ -75,7 +88,7 @@ export function AdminSettingsHub({
             onAction={() => setOpen("admins")}
           />
           <SettingsSectionRow
-            title="הנחת אחים — ברירת מחדל"
+            title={FAMILY_DISCOUNT_LABEL}
             description={siblingDescription}
             onAction={() => setOpen("siblingDiscount")}
           />
@@ -130,13 +143,18 @@ export function AdminSettingsHub({
       <Modal
         open={open === "siblingDiscount"}
         onClose={() => setOpen(null)}
-        title="הנחת אחים — ברירת מחדל"
-        description="ההנחה חלה על הילד השני ומעלה באותה קטגוריה — גם אם נרשמו לחוגים שונים. חוג יכול להגדיר מדרגות משלו ולעקוף את ברירת המחדל."
-        className="max-w-lg"
+        title={FAMILY_DISCOUNT_LABEL}
+        description="ההנחה חלה על הילד השני ומעלה, רק בקטגוריות ובמוצרים שתבחרו כאן."
+        className="max-w-xl"
       >
         <SiblingDiscountForm
-          key={open === "siblingDiscount" ? siblingTiers.map((t) => `${t.minChildren}-${t.percent}`).join(",") : "closed"}
-          initialTiers={siblingTiers}
+          key={
+            open === "siblingDiscount"
+              ? `${familyDiscount.tiers.map((t) => `${t.minChildren}-${t.percent}`).join(",")}-${familyDiscount.classCategories.join(",")}-${familyDiscount.productTypes.join(",")}`
+              : "closed"
+          }
+          initialSettings={familyDiscount}
+          categories={classCategories}
           onSuccess={() => setOpen(null)}
         />
       </Modal>

@@ -158,26 +158,37 @@ export function generateWeeklySessions(
   );
 }
 
-export function ensureWeeklySessions(
+export function refreshWeeklySessions(
   schedule: ClassScheduleState
 ): ClassScheduleState {
   if (schedule.scheduleType !== "weekly") return schedule;
-  const hasActive = schedule.sessions.some((session) => session.status !== "cancelled");
-  if (hasActive) return schedule;
 
+  const count = parseSessionCount(schedule.sessionCount);
   const generated = generateWeeklySessions(
     schedule.weeklySlots,
     schedule.rangeStart,
     schedule.rangeEnd,
-    parseSessionCount(schedule.sessionCount)
+    count
   );
-  if (generated.length === 0) return schedule;
+
+  if (generated.length === 0) {
+    return count ? schedule : { ...schedule, sessions: [] };
+  }
 
   return {
     ...schedule,
     sessions: mergeGeneratedSessions(schedule.sessions, generated),
     rangeEnd: lastSessionDate(generated) || schedule.rangeEnd,
   };
+}
+
+export function ensureWeeklySessions(
+  schedule: ClassScheduleState
+): ClassScheduleState {
+  if (schedule.scheduleType !== "weekly") return schedule;
+  const hasActive = schedule.sessions.some((session) => session.status !== "cancelled");
+  if (hasActive) return schedule;
+  return refreshWeeklySessions(schedule);
 }
 
 export function mergeGeneratedSessions(
@@ -461,6 +472,7 @@ export function formToPreviewClass(
     capacity_limited?: boolean;
     price: string;
     billing_months?: string;
+    planned_session_count?: string;
     price_mode?: "period" | "monthly";
     pick_one_slot?: boolean;
     interest_only?: boolean;
@@ -487,8 +499,11 @@ export function formToPreviewClass(
     : form.price_mode === "monthly"
       ? parseBillingMonths(Number(form.billing_months))
       : null;
+  const plannedSessions = interestOnly
+    ? parseSessionCount(form.planned_session_count)
+    : null;
   const proration = interestOnly
-    ? prorateClassPrice(0, [], todayInIsrael())
+    ? prorateClassPrice(Number(form.price) || 0, [], todayInIsrael())
     : prorateClassPrice(
         classPeriodTotal(Number(form.price) || 0, billingMonths),
         schedule.sessions.map((session) => ({
@@ -525,7 +540,7 @@ export function formToPreviewClass(
     capacity,
     billing_months: billingMonths,
     pick_one_slot: interestOnly ? false : form.pick_one_slot ?? true,
-    price: interestOnly ? 0 : Number(form.price) || 0,
+    price: Number(form.price) || 0,
     start_date: interestOnly ? "" : legacy.start_date ?? "",
     end_date: interestOnly ? "" : legacy.end_date ?? "",
     day_of_week: interestOnly ? 0 : legacy.day_of_week ?? 0,
@@ -545,9 +560,13 @@ export function formToPreviewClass(
       : schedule.scheduleType === "custom"
         ? ""
         : formatWeeklyDays(schedule.weeklySlots.map((s) => s.dayOfWeek)) || "",
-    session_count: activeSessions.length,
-    billable_session_count: proration.billableCount,
-    remaining_session_count: proration.remainingCount,
+    session_count: interestOnly ? plannedSessions ?? 0 : activeSessions.length,
+    billable_session_count: interestOnly
+      ? plannedSessions ?? 0
+      : proration.billableCount,
+    remaining_session_count: interestOnly
+      ? plannedSessions ?? 0
+      : proration.remainingCount,
     interest_only: interestOnly,
     weekly_slots: interestOnly
       ? []

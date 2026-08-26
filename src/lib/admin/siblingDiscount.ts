@@ -1,21 +1,20 @@
+import { createAdminDataClient } from "@/lib/admin/dataClient";
 import {
-  parseSiblingTiers,
+  FAMILY_DISCOUNT_SETTING_KEY,
+  loadFamilyDiscountSettings,
+  type FamilyDiscountSettings,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
-import { createAdminDataClient } from "@/lib/admin/dataClient";
-import type { Json } from "@/types/database.types";
 
-export const SIBLING_DISCOUNT_SETTING_KEY = "sibling_discount";
+export const SIBLING_DISCOUNT_SETTING_KEY = FAMILY_DISCOUNT_SETTING_KEY;
 
-/** מדרגות הנחת האחים שחלות על כל חוג שלא הגדיר מדרגות משלו. */
-export async function getDefaultSiblingTiers(): Promise<SiblingDiscountTier[]> {
+export async function getFamilyDiscountSettings(): Promise<FamilyDiscountSettings> {
   const supabase = await createAdminDataClient();
-  const { data } = await supabase
-    .from("system_settings")
-    .select("value")
-    .eq("key", SIBLING_DISCOUNT_SETTING_KEY)
-    .maybeSingle();
+  return loadFamilyDiscountSettings(supabase);
+}
 
-  const value = data?.value as { tiers?: Json } | null;
-  return parseSiblingTiers(value?.tiers ?? null);
+/** מדרגות הנחת בני המשפחה שחלות כברירת מחדל. */
+export async function getDefaultSiblingTiers(): Promise<SiblingDiscountTier[]> {
+  const settings = await getFamilyDiscountSettings();
+  return settings.tiers;
 }

@@ -2,7 +2,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassForm } from "@/components/admin/ClassForm";
 import { getClassCategories } from "@/lib/admin/getClassCategories";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
-import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
 import { buildInitialSchedule } from "@/lib/scheduling/classSchedule";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { notFound } from "next/navigation";
@@ -22,7 +21,6 @@ export default async function EditClassPage({
     instructors,
     { data: slots },
     { data: sessions },
-    defaultSiblingTiers,
     categories,
   ] = await Promise.all([
     supabase.from("classes").select("*").eq("id", id).single(),
@@ -33,7 +31,6 @@ export default async function EditClassPage({
       .select("*")
       .eq("class_id", id)
       .order("session_date"),
-    getDefaultSiblingTiers(),
     getClassCategories(),
   ]);
 
@@ -52,7 +49,6 @@ export default async function EditClassPage({
         instructors={instructors}
         existing={classItem}
         initialSchedule={initialSchedule}
-        defaultSiblingTiers={defaultSiblingTiers}
         categories={categories}
       />
     </div>

@@ -2,7 +2,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ClassForm } from "@/components/admin/ClassForm";
 import { getClassCategories } from "@/lib/admin/getClassCategories";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
-import { getDefaultSiblingTiers } from "@/lib/admin/siblingDiscount";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import {
   buildInitialSchedule,
@@ -24,10 +23,9 @@ export default async function NewClassPage({
   const { from } = await searchParams;
   const fromId = from?.trim() || null;
 
-  const [instructors, defaultSiblingTiers, categories, source] =
+  const [instructors, categories, source] =
     await Promise.all([
       getClassInstructorOptions(),
-      getDefaultSiblingTiers(),
       getClassCategories(),
       fromId ? loadClassSource(fromId) : Promise.resolve(null),
     ]);
@@ -46,7 +44,6 @@ export default async function NewClassPage({
       />
       <ClassForm
         instructors={instructors}
-        defaultSiblingTiers={defaultSiblingTiers}
         categories={categories}
         duplicate={duplicating}
         existing={

@@ -11,7 +11,7 @@ export default async function AdminTracksPage() {
       supabase
         .from("programs")
         .select(
-          "id, title, description, price, duration_months, kind, status, price_tiers, extra_half_hour_price"
+          "id, title, description, price, duration_months, duration_minutes, kind, status, price_tiers, extra_half_hour_price"
         )
         .order("created_at", { ascending: false }),
       supabase

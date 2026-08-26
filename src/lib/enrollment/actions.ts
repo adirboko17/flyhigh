@@ -32,6 +32,7 @@ import {
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
+  loadFamilyDiscountSettings,
   parseSiblingTiers,
   siblingTiersForCheckout,
   splitSiblingAmounts,
@@ -196,7 +197,7 @@ async function classSubtotal(
   includeSelf: boolean,
   weeklySlotId?: string | null
 ): Promise<number | null> {
-  const [{ data: cls }, { data: tiersJson }] = await Promise.all([
+  const [{ data: cls }, { data: tiersJson }, familyDiscount] = await Promise.all([
     supabase
       .from("classes")
       .select("price, category, billing_months, pick_one_slot")
@@ -204,6 +205,7 @@ async function classSubtotal(
       .in("status", ["active", "full"])
       .maybeSingle(),
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
+    loadFamilyDiscountSettings(supabase),
   ]);
 
   if (!cls) return null;
@@ -228,7 +230,11 @@ async function classSubtotal(
   return calculateOrderTotal(
     proration.unitPrice,
     participants.length,
-    siblingTiersForCheckout(cls.category, parseSiblingTiers(tiersJson)),
+    siblingTiersForCheckout(
+      cls.category,
+      parseSiblingTiers(tiersJson),
+      familyDiscount.classCategories
+    ),
     alreadyInCategory + participants.length
   ).total;
 }
@@ -388,7 +394,7 @@ export async function completeClassEnrollmentPayment(input: {
 
   // הנחת אחים נקבעת לפי אחים רשומים לאותה קטגוריה — גם בחוג אחר —
   // וחלה רק על הילד השני ומעלה (לא על הילד הראשון במשפחה).
-  const [{ data: tiersJson }, categorySiblingIds] = await Promise.all([
+  const [{ data: tiersJson }, categorySiblingIds, familyDiscount] = await Promise.all([
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
     listFamilyChildrenInCategory(
       supabase,
@@ -396,6 +402,7 @@ export async function completeClassEnrollmentPayment(input: {
       classId,
       cls.category
     ),
+    loadFamilyDiscountSettings(supabase),
   ]);
 
   const proration = await loadClassUnitPrice(
@@ -416,7 +423,11 @@ export async function completeClassEnrollmentPayment(input: {
   const order = calculateOrderTotal(
     unitPrice,
     participants.length,
-    siblingTiersForCheckout(cls.category, parseSiblingTiers(tiersJson)),
+    siblingTiersForCheckout(
+      cls.category,
+      parseSiblingTiers(tiersJson),
+      familyDiscount.classCategories
+    ),
     alreadyEnrolledCount + participants.length
   );
 

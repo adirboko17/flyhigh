@@ -20,6 +20,7 @@ import { planInstallmentsMax } from "@/lib/finance/installments";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
+  loadFamilyDiscountSettings,
   parseSiblingTiers,
   siblingTiersForCheckout,
   splitAmount,
@@ -34,6 +35,7 @@ import {
 import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
+  isSessionActivity,
   type ProgramKind,
 } from "@/lib/programs";
 import { chargeDescriptionForCheckout } from "@/lib/enrollment/receiptLabel";
@@ -121,9 +123,12 @@ function normalizeQuantity(
   kind: PlanKind,
   programKind: ProgramKind | null,
   quantity: number | undefined,
-  maxPeople = ACTIVITY_MAX_PEOPLE
+  maxPeople = ACTIVITY_MAX_PEOPLE,
+  session = false
 ) {
-  if (kind !== "private_lesson" && !isActivityProgram(programKind)) return 1;
+  if (session || (kind !== "private_lesson" && !isActivityProgram(programKind))) {
+    return 1;
+  }
   const value = Math.floor(Number(quantity ?? 1));
   if (!Number.isFinite(value) || value < 1 || value > maxPeople) return null;
   return value;
@@ -295,9 +300,10 @@ async function prepareClassLine(
     }
   }
 
-  const [{ data: tiersJson }, categorySiblingIds] = await Promise.all([
+  const [{ data: tiersJson }, categorySiblingIds, familyDiscount] = await Promise.all([
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
     listFamilyChildrenInCategory(supabase, profile.id, classId, cls.category),
+    loadFamilyDiscountSettings(supabase),
   ]);
 
   let sessionsQuery = supabase
@@ -324,7 +330,11 @@ async function prepareClassLine(
   const order = calculateOrderTotal(
     proration.unitPrice,
     participants.length,
-    siblingTiersForCheckout(cls.category, parseSiblingTiers(tiersJson)),
+    siblingTiersForCheckout(
+      cls.category,
+      parseSiblingTiers(tiersJson),
+      familyDiscount.classCategories
+    ),
     alreadyEnrolledCount + participants.length
   );
   const childAmounts = splitSiblingAmounts(
@@ -406,11 +416,12 @@ async function preparePlanLine(
   let priceTiers: ActivityPriceTier[] = [];
   let extraHalfHourPrice: number | null = item.extraHalfHourPrice ?? null;
   let entriesCount: number | null = item.entriesCount ?? null;
+  let durationMinutes: number | null = null;
 
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, kind, price_tiers, extra_half_hour_price")
+      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -421,6 +432,7 @@ async function preparePlanLine(
     programKind = data.kind;
     priceTiers = parseActivityPriceTiers(data.price_tiers);
     extraHalfHourPrice = data.extra_half_hour_price;
+    durationMinutes = data.duration_minutes;
   } else if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
@@ -445,11 +457,17 @@ async function preparePlanLine(
   }
 
   const isActivity = isActivityProgram(programKind);
+  const isSession = isSessionActivity({
+    kind: programKind,
+    durationMinutes,
+    hasGroupPricing: priceTiers.length > 0,
+  });
   const quantity = normalizeQuantity(
     kind,
     programKind,
     item.quantity,
-    activityPeopleCap(priceTiers)
+    activityPeopleCap(priceTiers),
+    isSession
   );
   if (quantity === null) {
     return { success: false, error: `הכמות שנבחרה ל${title} אינה תקינה.` };
@@ -486,9 +504,11 @@ async function preparePlanLine(
     }
   }
 
-  const listTotal = isActivity
-    ? quoteActivityPrice(quantity, price, priceTiers)?.amount ?? null
-    : Math.round(price * quantity * participants.length * 100) / 100;
+  const listTotal = isSession
+    ? Math.round(price * participants.length * 100) / 100
+    : isActivity
+      ? quoteActivityPrice(quantity, price, priceTiers)?.amount ?? null
+      : Math.round(price * quantity * participants.length * 100) / 100;
   if (listTotal === null) {
     return { success: false, error: `מספר המשתתפים ב${title} אינו במחירון.` };
   }
@@ -516,7 +536,7 @@ async function preparePlanLine(
           status: "active" as const,
           starts_on: null,
           ends_on: null,
-          people_count: quantity,
+          people_count: isSession ? participants.length : quantity,
         },
       ]
     : participants.map((childId) => ({
@@ -555,7 +575,11 @@ async function preparePlanLine(
       }),
       chargeDescription: chargeDescriptionForCheckout({
         productTitle: title,
-        participantCount: isActivity ? quantity : participants.length,
+        participantCount: isActivity
+          ? isSession
+            ? participants.length
+            : quantity
+          : participants.length,
         kind: "plan",
         customLabel: null,
       }),
@@ -563,7 +587,11 @@ async function preparePlanLine(
       paymentChildIds: isActivity ? [activityChildId] : participants,
       paymentAmounts: amounts,
       privateLessonQuantity: kind === "private_lesson" ? quantity : null,
-      activityQuantity: isActivity ? quantity : null,
+      activityQuantity: isActivity
+        ? isSession
+          ? participants.length
+          : quantity
+        : null,
       planId,
     },
   };

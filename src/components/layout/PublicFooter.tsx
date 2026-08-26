@@ -18,11 +18,6 @@ const NAV_LINKS = [
   { href: "/classes", label: "חוגים" },
   { href: "/programs", label: "הבריכה" },
   { href: "/contact", label: "צור קשר" },
-] as const;
-
-/** קישורים משפטיים בשורה התחתונה. */
-const LEGAL_LINKS = [
-  { href: "/accessibility", label: "הצהרת נגישות" },
   { href: "/terms", label: "תקנון" },
 ] as const;
 
@@ -239,26 +234,12 @@ export function PublicFooter({ user = null }: PublicFooterProps) {
           <p>
             © {year} {BRAND.name}. כל הזכויות שמורות.
           </p>
-          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:justify-end lg:gap-x-4">
-            {LEGAL_LINKS.map((link, index) => (
-              <span
-                key={link.href}
-                className="flex items-center gap-x-3 lg:gap-x-4"
-              >
-                {index > 0 && (
-                  <span aria-hidden className="text-white/30">
-                    /
-                  </span>
-                )}
-                <Link
-                  href={link.href}
-                  className="transition-colors hover:text-white active:text-white"
-                >
-                  {link.label}
-                </Link>
-              </span>
-            ))}
-          </p>
+          <Link
+            href="/accessibility"
+            className="transition-colors hover:text-white active:text-white"
+          >
+            הצהרת נגישות
+          </Link>
         </div>
       </div>
     </footer>

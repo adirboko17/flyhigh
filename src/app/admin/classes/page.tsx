@@ -5,6 +5,7 @@
 } from "@/components/admin/ClassList";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { getHomeFeaturedClassIds } from "@/lib/admin/featuredClasses";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 
 export const metadata = { title: "ניהול חוגים" };
@@ -19,12 +20,13 @@ export default async function AdminClassesPage() {
     { data: waitlistCounts },
     { data: slotRows },
     instructors,
+    featuredClassIds,
   ] =
     await Promise.all([
       supabase
         .from("classes")
         .select(
-          "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, pick_one_slot, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)"
+          "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)"
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -45,6 +47,7 @@ export default async function AdminClassesPage() {
         .order("day_of_week")
         .order("start_time"),
       getClassInstructorOptions(),
+      getHomeFeaturedClassIds(),
     ]);
 
   const registeredByClass = new Map<string, number>();
@@ -104,5 +107,11 @@ export default async function AdminClassesPage() {
     attendance: [] as AdminClassAttendance[],
   }));
 
-  return <ClassList classes={rows} instructors={instructors} />;
+  return (
+    <ClassList
+      classes={rows}
+      instructors={instructors}
+      featuredClassIds={featuredClassIds}
+    />
+  );
 }

@@ -1,15 +1,34 @@
-import type { Json } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/types/database.types";
 
 /**
- * הנחת אחים: בקופה חלה רק על חוגי שחייה ונינג'ה. כשמשפחה רושמת יותר מילד
- * אחד לאותה קטגוריה, ההנחה חלה רק על הילד השני ומעלה — הילד הראשון משלם
- * מחיר מלא. חוגים בקטגוריות אחרות (או חוגים בלי קטגוריה מתאימה) לא מקבלים
- * הנחת אחים. המדרגות נשמרות כמערך JSON על החוג, ואם לא הוגדרו — נלקחת
- * ברירת המחדל הגלובלית (הפונקציה class_sibling_discount_tiers במסד הנתונים).
+ * הנחת בני משפחה: בקופה חלה על קטגוריות החוגים ועל סוגי המוצרים
+ * שנבחרו בהגדרות. כשמשפחה רושמת יותר מילד אחד, ההנחה חלה רק על הילד
+ * השני ומעלה. המדרגות נשמרות ב־system_settings, ואם לחוג אין מדרגות
+ * משלו — נלקחת ברירת המחדל (class_sibling_discount_tiers).
  */
 
-/** קטגוריות שעליהן חלה הנחת אחים בקופה. גרשיים בשם נינג'ה מתעלמים בהשוואה. */
-const SIBLING_DISCOUNT_CATEGORY_KEYS = new Set(["שחייה", "נינגה"]);
+export const FAMILY_DISCOUNT_LABEL = "הנחת בני משפחה";
+export const FAMILY_DISCOUNT_SETTING_KEY = "sibling_discount";
+
+export const FAMILY_DISCOUNT_PRODUCT_TYPES = [
+  { id: "program", label: "מנויים" },
+  { id: "activity", label: "פעילויות" },
+  { id: "pool_pass", label: "כרטיסים" },
+  { id: "private_lesson", label: "שיעורים פרטיים" },
+] as const;
+
+export type FamilyDiscountProductType =
+  (typeof FAMILY_DISCOUNT_PRODUCT_TYPES)[number]["id"];
+
+export type FamilyDiscountSettings = {
+  tiers: SiblingDiscountTier[];
+  classCategories: string[];
+  productTypes: FamilyDiscountProductType[];
+};
+
+/** קטגוריות ברירת מחדל לפני שהמנהל הגדיר היקף. גרשיים בנינג'ה מתעלמים בהשוואה. */
+const DEFAULT_FAMILY_DISCOUNT_CATEGORIES = ["שחייה", "נינג'ה"];
 
 function categoryKey(category: string | null | undefined): string {
   return (category ?? "")
@@ -19,18 +38,99 @@ function categoryKey(category: string | null | undefined): string {
     .toLowerCase();
 }
 
-export function siblingDiscountAppliesToCategory(
-  category: string | null | undefined
-): boolean {
-  return SIBLING_DISCOUNT_CATEGORY_KEYS.has(categoryKey(category));
+export function resolveSelectedCategories(
+  stored: readonly string[],
+  available: readonly string[]
+): string[] {
+  const keys = new Set(stored.map(categoryKey).filter(Boolean));
+  return available.filter((name) => keys.has(categoryKey(name)));
 }
 
-/** מחזיר את מדרגות ההנחה לקופה — ריק לכל קטגוריה שאינה שחייה או נינג'ה. */
+export function siblingDiscountAppliesToCategory(
+  category: string | null | undefined,
+  allowedCategories: readonly string[]
+): boolean {
+  if (!categoryKey(category) || allowedCategories.length === 0) return false;
+  const allowed = new Set(allowedCategories.map(categoryKey));
+  return allowed.has(categoryKey(category));
+}
+
+export function familyDiscountAppliesToProduct(
+  productType: FamilyDiscountProductType,
+  allowedTypes: readonly FamilyDiscountProductType[]
+): boolean {
+  return allowedTypes.includes(productType);
+}
+
+/** מחזיר את מדרגות ההנחה לקופת חוג — ריק אם הקטגוריה לא נכללה בהגדרות. */
 export function siblingTiersForCheckout(
   category: string | null | undefined,
-  tiers: SiblingDiscountTier[]
+  tiers: SiblingDiscountTier[],
+  allowedCategories: readonly string[]
 ): SiblingDiscountTier[] {
-  return siblingDiscountAppliesToCategory(category) ? tiers : [];
+  return siblingDiscountAppliesToCategory(category, allowedCategories)
+    ? tiers
+    : [];
+}
+
+export function parseFamilyDiscountProductTypes(
+  value: unknown
+): FamilyDiscountProductType[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set(
+    FAMILY_DISCOUNT_PRODUCT_TYPES.map((item) => item.id)
+  );
+  const unique: FamilyDiscountProductType[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !allowed.has(item as FamilyDiscountProductType)) {
+      continue;
+    }
+    const id = item as FamilyDiscountProductType;
+    if (!unique.includes(id)) unique.push(id);
+  }
+  return unique;
+}
+
+export function parseFamilyDiscountSettings(
+  value: unknown
+): FamilyDiscountSettings {
+  const raw =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const classCategories = Array.isArray(raw.class_categories)
+    ? raw.class_categories
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [...DEFAULT_FAMILY_DISCOUNT_CATEGORIES];
+
+  return {
+    tiers: parseSiblingTiers((raw.tiers as Json) ?? null),
+    classCategories,
+    productTypes: parseFamilyDiscountProductTypes(raw.product_types),
+  };
+}
+
+export async function loadFamilyDiscountSettings(
+  supabase: SupabaseClient<Database>
+): Promise<FamilyDiscountSettings> {
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", FAMILY_DISCOUNT_SETTING_KEY)
+    .maybeSingle();
+
+  return parseFamilyDiscountSettings(data?.value);
+}
+
+export function familyDiscountProductForPlan(
+  kind: "program" | "pool_pass" | "private_lesson",
+  programKind?: string | null
+): FamilyDiscountProductType {
+  if (kind === "program" && programKind === "activity") return "activity";
+  return kind === "program" ? "program" : kind;
 }
 
 export type SiblingDiscountTier = {

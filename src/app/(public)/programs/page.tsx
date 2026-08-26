@@ -1,6 +1,7 @@
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { SectionHead } from "@/components/home/SectionHead";
 import { PlanTicketCard } from "@/components/programs/PlanTicketCard";
+import { TreatmentHighlightCard } from "@/components/programs/TreatmentHighlightCard";
 import {
   PlanPurchaseTrigger,
   type PlanViewer,
@@ -8,15 +9,16 @@ import {
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
 import {
-  ACTIVITY_CARD_TEMPLATE,
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
   activityCardPresentation,
+  activityVisualTemplate,
   poolPassCardTemplate,
   programDurationLabel,
 } from "@/lib/program-cards";
 import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
 import { isActivityProgram } from "@/lib/programs";
+import { loadFamilyDiscountSettings } from "@/lib/finance/siblingDiscount";
 import { getPublicPlans } from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/utils/format";
@@ -27,10 +29,13 @@ export const metadata = {
 };
 
 export default async function ProgramsPage() {
-  const [{ programs, poolPasses, privateLessons }, profile] = await Promise.all([
-    getPublicPlans(),
-    getSessionProfile(),
-  ]);
+  const supabase = await createClient();
+  const [{ programs, poolPasses, privateLessons }, profile, familyDiscount] =
+    await Promise.all([
+      getPublicPlans(),
+      getSessionProfile(),
+      loadFamilyDiscountSettings(supabase),
+    ]);
 
   // הורה מחובר רוכש ישירות מהעמוד; אורח מופנה להתחברות, ומנהל/מדריכה לאזור שלהם.
   let viewer: PlanViewer = { kind: "guest" };
@@ -100,6 +105,7 @@ export default async function ProgramsPage() {
                       price={program.price}
                       programKind={program.kind}
                       viewer={viewer}
+                      familyDiscount={familyDiscount}
                       className="h-full hover:translate-y-0 hover:shadow-none"
                     >
                       <PlanTicketCard
@@ -139,7 +145,7 @@ export default async function ProgramsPage() {
             <SectionHead
               eyebrow="הפוגה"
               title="פעילויות"
-              sub="בוחרים כמה אנשים, משלמים לפי המחירון, ומתאמים מועד"
+              sub="משלמים, ואז מתאמים מועד מול המשרד"
               accent="var(--logo-magenta)"
             />
           </ScrollReveal>
@@ -147,6 +153,7 @@ export default async function ProgramsPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             {activities.map((program, index) => {
                 const card = activityCardPresentation(program);
+                const visual = activityVisualTemplate(program.title);
                 return (
                 <ScrollReveal
                   key={program.id}
@@ -161,23 +168,37 @@ export default async function ProgramsPage() {
                     programKind={program.kind}
                     priceTiers={parseActivityPriceTiers(program.price_tiers)}
                     extraHalfHourPrice={program.extra_half_hour_price}
+                    durationMinutes={program.duration_minutes}
                     viewer={viewer}
+                    familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
-                    <PlanTicketCard
-                      compact
-                      name={program.title}
-                      desc={program.description || card.hint}
-                      price={card.price}
-                      period={card.period}
-                      pricePrefix={card.pricePrefix}
-                      priceRows={card.priceRows}
-                      extraLine={card.extraLine}
-                      stub={card.stub}
-                      features={card.features}
-                      icon={ACTIVITY_CARD_TEMPLATE.icon}
-                      accent={ACTIVITY_CARD_TEMPLATE.accent}
-                    />
+                    {visual.tone === "treatment" ? (
+                      <TreatmentHighlightCard
+                        compact
+                        name={program.title}
+                        desc={program.description || card.hint}
+                        price={card.price}
+                        period={card.period}
+                      />
+                    ) : (
+                      <PlanTicketCard
+                        compact
+                        name={program.title}
+                        desc={program.description || card.hint}
+                        price={card.price}
+                        period={card.period}
+                        pricePrefix={card.pricePrefix}
+                        priceRows={card.priceRows}
+                        extraLine={card.extraLine}
+                        stub={card.stub}
+                        features={card.features}
+                        icon={visual.icon}
+                        accent={visual.accent}
+                        featured={visual.featured}
+                        badge={visual.badge}
+                      />
+                    )}
                   </PlanPurchaseTrigger>
                 </ScrollReveal>
                 );
@@ -217,6 +238,7 @@ export default async function ProgramsPage() {
                     price={pass.price}
                     entriesCount={pass.entries_count}
                     viewer={viewer}
+                    familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard
@@ -277,6 +299,7 @@ export default async function ProgramsPage() {
                     price={lesson.price}
                     durationMinutes={lesson.duration_minutes}
                     viewer={viewer}
+                    familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
                   >
                     <PlanTicketCard

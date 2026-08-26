@@ -6,18 +6,27 @@ import { SectionHead } from "@/components/home/SectionHead";
 import type { PlanViewer } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { getSessionProfile, homeForRole } from "@/lib/auth";
-import { getPublicClasses, getPublicPlans } from "@/lib/public-data";
+import { pickFeaturedClasses } from "@/lib/home/featuredClasses";
+import { loadFamilyDiscountSettings } from "@/lib/finance/siblingDiscount";
+import {
+  getHomeFeaturedClassIds,
+  getPublicClasses,
+  getPublicPlans,
+} from "@/lib/public-data";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function HomePage() {
-  const [classes, { programs, poolPasses, privateLessons }, profile] =
+  const supabase = await createClient();
+  const [classes, featuredIds, { programs, poolPasses, privateLessons }, profile, familyDiscount] =
     await Promise.all([
       getPublicClasses(),
+      getHomeFeaturedClassIds(),
       getPublicPlans(),
       getSessionProfile(),
+      loadFamilyDiscountSettings(supabase),
     ]);
 
-  const featured = classes.slice(0, 3);
+  const featured = pickFeaturedClasses(classes, featuredIds);
   const hasPlans =
     programs.length + poolPasses.length + privateLessons.length > 0;
 
@@ -26,7 +35,6 @@ export default async function HomePage() {
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
   } else if (profile) {
-    const supabase = await createClient();
     const { data: kids } = await supabase
       .from("children")
       .select("id, full_name")
@@ -80,6 +88,7 @@ export default async function HomePage() {
             poolPasses={poolPasses}
             privateLessons={privateLessons}
             viewer={viewer}
+            familyDiscount={familyDiscount}
           />
         ) : (
           <EmptyMini text="אין מסלולים, כניסות או שיעורים פרטיים פעילים כרגע" />

@@ -349,7 +349,7 @@ export function ClassEnrollmentCheckoutDialog({
             {order.percent > 0 && (
               <div className="flex justify-between gap-3 font-semibold text-aqua-700">
                 <span className="min-w-0">
-                  הנחת אחים {order.percent}% על הילד השני ומעלה
+                  הנחת בני משפחה {order.percent}% על הילד השני ומעלה
                   {order.discountedChildren > 0 && (
                     <span className="ms-1 text-xs font-normal text-ink-400">
                       ({order.discountedChildren} ילדים בהנחה
@@ -446,7 +446,7 @@ export function ClassEnrollmentCheckoutDialog({
               {proration.isLate &&
                 ` · ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount}`}
               {order.percent > 0 &&
-                ` · כולל ${order.percent}% הנחת אחים על הילד השני ומעלה`}
+                ` · כולל ${order.percent}% הנחת בני משפחה על הילד השני ומעלה`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
             </p>
           </div>

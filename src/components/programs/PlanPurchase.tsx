@@ -37,6 +37,7 @@ import {
 import {
   ACTIVITY_MAX_PEOPLE,
   isActivityProgram,
+  isSessionActivity,
   peopleCountLabel,
   type ProgramKind,
 } from "@/lib/programs";
@@ -46,6 +47,13 @@ import {
 } from "@/lib/receipt-labels";
 import { cn } from "@/utils/cn";
 import { planInstallmentsMax } from "@/lib/finance/installments";
+import {
+  calculateOrderTotal,
+  familyDiscountAppliesToProduct,
+  familyDiscountProductForPlan,
+  FAMILY_DISCOUNT_LABEL,
+  type FamilyDiscountSettings,
+} from "@/lib/finance/siblingDiscount";
 import { formatCurrency } from "@/utils/format";
 
 type Child = { id: string; full_name: string };
@@ -72,6 +80,7 @@ interface PlanPurchaseButtonProps {
   extraHalfHourPrice?: number | null;
   featured?: boolean;
   viewer: PlanViewer;
+  familyDiscount?: FamilyDiscountSettings;
 }
 
 export function PlanPurchaseButton({
@@ -86,6 +95,7 @@ export function PlanPurchaseButton({
   extraHalfHourPrice = null,
   featured = false,
   viewer,
+  familyDiscount,
 }: PlanPurchaseButtonProps) {
   const [open, setOpen] = useState(false);
 
@@ -173,6 +183,7 @@ export function PlanPurchaseButton({
         extraHalfHourPrice={extraHalfHourPrice}
         parentName={viewer.parentName}
         kids={viewer.children}
+        familyDiscount={familyDiscount}
       />
     </>
   );
@@ -191,6 +202,7 @@ interface PlanPurchaseTriggerProps {
   viewer: PlanViewer;
   children: ReactNode;
   className?: string;
+  familyDiscount?: FamilyDiscountSettings;
 }
 
 /** עוטף כרטיס לחיץ שפותח את אותו דיאלוג רכישה כמו PlanPurchaseButton. */
@@ -207,6 +219,7 @@ export function PlanPurchaseTrigger({
   viewer,
   children,
   className,
+  familyDiscount,
 }: PlanPurchaseTriggerProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -268,6 +281,7 @@ export function PlanPurchaseTrigger({
           extraHalfHourPrice={extraHalfHourPrice}
           parentName={viewer.parentName}
           kids={viewer.children}
+          familyDiscount={familyDiscount}
         />
       )}
     </>
@@ -288,6 +302,7 @@ interface PlanCheckoutDialogProps {
   extraHalfHourPrice?: number | null;
   parentName: string;
   kids: Child[];
+  familyDiscount?: FamilyDiscountSettings;
 }
 
 function PlanCheckoutDialog({
@@ -304,13 +319,19 @@ function PlanCheckoutDialog({
   extraHalfHourPrice = null,
   parentName,
   kids,
+  familyDiscount,
 }: PlanCheckoutDialogProps) {
   const router = useRouter();
   const hasChildren = kids.length > 0;
   const isPrivateLesson = planKind === "private_lesson";
   const isActivity = isActivityProgram(programKind);
-  const usesQuantity = isPrivateLesson || isActivity;
   const groupPricing = isActivity && usesGroupPricing(priceTiers);
+  const sessionActivity = isSessionActivity({
+    kind: programKind,
+    durationMinutes,
+    hasGroupPricing: groupPricing,
+  });
+  const usesQuantity = isPrivateLesson || (isActivity && !sessionActivity);
   const peopleCap = activityPeopleCap(priceTiers);
   const extraHalfHour = extraHalfHourLabel(extraHalfHourPrice);
 
@@ -349,9 +370,30 @@ function PlanCheckoutDialog({
   const activityQuote = isActivity
     ? quoteActivityPrice(effectiveQuantity, price, priceTiers)
     : null;
-  const listTotal = isActivity
-    ? activityQuote?.amount ?? 0
-    : Math.round(price * effectiveQuantity * count * 100) / 100;
+  const rawListTotal = sessionActivity
+    ? Math.round(price * count * 100) / 100
+    : isActivity
+      ? activityQuote?.amount ?? 0
+      : Math.round(price * effectiveQuantity * count * 100) / 100;
+  const familyProduct = familyDiscountProductForPlan(planKind, programKind);
+  const familyEnabled =
+    Boolean(familyDiscount) &&
+    familyDiscountAppliesToProduct(
+      familyProduct,
+      familyDiscount?.productTypes ?? []
+    ) &&
+    !groupPricing &&
+    count > 0 &&
+    (familyDiscount?.tiers.length ?? 0) > 0;
+  const familyOrder = familyEnabled
+    ? calculateOrderTotal(
+        rawListTotal / count,
+        count,
+        familyDiscount!.tiers,
+        count
+      )
+    : null;
+  const listTotal = familyOrder?.total ?? rawListTotal;
   const invalidGroupCount = isActivity && activityQuote === null;
   const couponDiscount = coupon?.discountAmount ?? 0;
   const total = Math.max(Math.round((listTotal - couponDiscount) * 100) / 100, 0);
@@ -547,9 +589,10 @@ function PlanCheckoutDialog({
                   ? "כניסה אחת לכל משתתף"
                   : `${entriesCount} כניסות לכל משתתף`}
               </p>
-            ) : isPrivateLesson && durationMinutes ? (
+            ) : (isPrivateLesson || sessionActivity) && durationMinutes ? (
               <p className="mt-0.5 text-sm text-ink-500">
-                {durationMinutes} דקות לשיעור · מחיר לשיעור למשתתף
+                {durationMinutes} דקות
+                {isPrivateLesson ? " לשיעור · מחיר לשיעור למשתתף" : " · מחיר למשתתף"}
               </p>
             ) : isActivity ? (
               <p className="mt-0.5 text-sm text-ink-500">
@@ -564,9 +607,11 @@ function PlanCheckoutDialog({
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">לפני הרכישה חשוב לדעת</p>
               <p className="mt-1">
-                {isActivity
-                  ? "בחרו כמה משתתפים יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
-                  : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
+                {sessionActivity
+                  ? "אחרי הרכישה ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
+                  : isActivity
+                    ? "בחרו כמה משתתפים יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
+                    : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
               </p>
             </div>
           )}
@@ -789,16 +834,26 @@ function PlanCheckoutDialog({
                 <span className="shrink-0">{quantity}</span>
               </div>
             )}
-            {isActivity && (
+            {isActivity && !sessionActivity && (
               <div className="flex justify-between gap-3 text-ink-600">
                 <span>משתתפים</span>
                 <span className="shrink-0">{quantity}</span>
               </div>
             )}
-            {!isActivity && (
+            {(!isActivity || sessionActivity) && (
               <div className="flex justify-between gap-3 text-ink-600">
                 <span>משתתפים</span>
                 <span className="shrink-0">{count}</span>
+              </div>
+            )}
+            {familyOrder && familyOrder.discountAmount > 0 && (
+              <div className="flex justify-between gap-3 font-semibold text-aqua-700">
+                <span>
+                  {FAMILY_DISCOUNT_LABEL} {familyOrder.percent}%
+                </span>
+                <span className="shrink-0">
+                  -{formatCurrency(familyOrder.discountAmount)}
+                </span>
               </div>
             )}
             {couponDiscount > 0 && (
@@ -892,9 +947,12 @@ function PlanCheckoutDialog({
             </div>
             <p className="mt-1 break-words text-brand-700">
               {planTitle}
-              {isActivity
+              {isActivity && !sessionActivity
                 ? ` · ${peopleCountLabel(quantity)}`
                 : ` · ${count} ${count === 1 ? "משתתף/ת" : "משתתפים"}`}
+              {sessionActivity && durationMinutes
+                ? ` · ${durationMinutes} דקות`
+                : ""}
               {isPrivateLesson &&
                 ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
@@ -986,11 +1044,14 @@ function PlanCheckoutDialog({
               {planTitle} נוסף לחשבון שלכם
             </p>
             <p className="mt-1 text-sm text-ink-500">
-              {isActivity
+              {isActivity && !sessionActivity
                 ? peopleCountLabel(quantity)
                 : count === 1
                   ? `על שם ${participants[0]?.name}`
                   : `עבור ${count} משתתפים`}
+              {sessionActivity && durationMinutes
+                ? ` · ${durationMinutes} דקות`
+                : ""}
               {isPrivateLesson &&
                 ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
             </p>
