@@ -23,6 +23,7 @@ import {
   listFamilyChildrenInCategory,
 } from "@/lib/enrollment/categorySiblings";
 import {
+  classInstallmentsMax,
   classPeriodTotal,
   parseBillingMonths,
 } from "@/lib/finance/classPricing";
@@ -320,11 +321,16 @@ export function AssignToClassDialog({
               <span className="line-through">{formatCurrency(periodTotal)}</span>
             </div>
           )}
-          {parseBillingMonths(cls.billing_months) && (
+          {parseBillingMonths(cls.billing_months) ? (
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
               {formatCurrency(cls.price)} לחודש ×{" "}
               {parseBillingMonths(cls.billing_months)} חודשים. בדף הסליקה אפשר
-              לפרוס לתשלומים.
+              לפרוס עד {classInstallmentsMax(cls.billing_months)} תשלומים.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs leading-relaxed text-ink-500">
+              בדף הסליקה אפשר לפרוס עד {classInstallmentsMax(cls.billing_months)}{" "}
+              תשלומים.
             </p>
           )}
           {prorationNote && (
@@ -442,7 +448,7 @@ export function AssignToClassDialog({
           <>
             {isCreditCard && (
               <CardcomRedirectHint
-                installmentsMax={parseBillingMonths(cls.billing_months)}
+                installmentsMax={classInstallmentsMax(cls.billing_months)}
               />
             )}
 

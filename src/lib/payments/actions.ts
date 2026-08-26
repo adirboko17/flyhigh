@@ -2,8 +2,14 @@
 
 import { requireRole } from "@/lib/auth";
 import { classInstallmentOptions } from "@/lib/finance/classPricing";
+import { planInstallmentOptions } from "@/lib/finance/installments";
 import { startCardcomCheckout } from "@/lib/payments/cardcomCheckout";
 import { createClient } from "@/lib/supabase/server";
+
+function firstRelated<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
 export type PayOpenChargeResult =
   | { success: true; checkoutUrl: string }
@@ -57,14 +63,34 @@ export async function payOpenCreditCharge(
   if (enrollmentId) {
     const { data: enrollment } = await supabase
       .from("enrollments")
-      .select("classes(billing_months)")
+      .select(
+        "type, classes(billing_months), programs(kind, title, extra_half_hour_price), pool_passes(entries_count, title), private_lessons(id)"
+      )
       .eq("id", enrollmentId)
       .maybeSingle();
-    const relatedClass = enrollment?.classes;
-    const billingMonths = Array.isArray(relatedClass)
-      ? relatedClass[0]?.billing_months
-      : relatedClass?.billing_months;
-    installments = classInstallmentOptions(billingMonths);
+
+    if (enrollment?.type === "class") {
+      installments = classInstallmentOptions(
+        firstRelated(enrollment.classes)?.billing_months
+      );
+    } else if (enrollment?.type === "program") {
+      const program = firstRelated(enrollment.programs);
+      installments = planInstallmentOptions({
+        kind: "program",
+        programKind: program?.kind,
+        title: program?.title,
+        extraHalfHourPrice: program?.extra_half_hour_price,
+      });
+    } else if (enrollment?.type === "pool_pass") {
+      const pass = firstRelated(enrollment.pool_passes);
+      installments = planInstallmentOptions({
+        kind: "pool_pass",
+        title: pass?.title,
+        entriesCount: pass?.entries_count,
+      });
+    } else if (enrollment?.type === "private_lesson") {
+      installments = planInstallmentOptions({ kind: "private_lesson" });
+    }
   }
 
   const checkout = await startCardcomCheckout({

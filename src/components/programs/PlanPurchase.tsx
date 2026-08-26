@@ -44,6 +44,7 @@ import {
   type ReceiptLabelChoice,
 } from "@/lib/receipt-labels";
 import { cn } from "@/utils/cn";
+import { planInstallmentsMax } from "@/lib/finance/installments";
 import { formatCurrency } from "@/utils/format";
 
 type Child = { id: string; full_name: string };
@@ -860,7 +861,15 @@ function PlanCheckoutDialog({
               <p className="mt-1">הקופון מכסה את מלוא הסכום, ולכן לא יבוצע חיוב.</p>
             </div>
           ) : (
-            <CardcomRedirectHint />
+            <CardcomRedirectHint
+              installmentsMax={planInstallmentsMax({
+                kind: planKind,
+                programKind,
+                title: planTitle,
+                entriesCount,
+                extraHalfHourPrice,
+              })}
+            />
           )}
 
           {error && (

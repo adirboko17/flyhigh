@@ -25,7 +25,10 @@ import {
   EMPTY_RECEIPT_LABEL_CHOICE,
   type ReceiptLabelChoice,
 } from "@/lib/receipt-labels";
-import { parseBillingMonths } from "@/lib/finance/classPricing";
+import {
+  classInstallmentsMax,
+  parseBillingMonths,
+} from "@/lib/finance/classPricing";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { PARENT_TRAINEE_ID } from "@/lib/enrollment/trainees";
 import { formatCurrency, formatDate } from "@/utils/format";
@@ -86,6 +89,7 @@ export function ClassEnrollmentCheckoutDialog({
   );
 
   const months = parseBillingMonths(billingMonths);
+  const installmentsMax = classInstallmentsMax(billingMonths);
   const childIds = selectedChildren
     .map((child) => child.id)
     .filter((id) => id !== PARENT_TRAINEE_ID);
@@ -412,7 +416,7 @@ export function ClassEnrollmentCheckoutDialog({
               </p>
             </div>
           ) : (
-            <CardcomRedirectHint installmentsMax={months} />
+            <CardcomRedirectHint installmentsMax={installmentsMax} />
           )}
 
           {error && (

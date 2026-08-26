@@ -97,17 +97,25 @@ export function ClassPriceNote({
     );
   }
 
-  if (months && !proration.isLate) {
-    return (
-      <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
-        {compact
-          ? `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)}`
-          : `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)} · ניתן לפרוס בתשלומים`}
-      </p>
-    );
+  if (!proration.isLate) {
+    if (months) {
+      return (
+        <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
+          {compact
+            ? `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)}`
+            : `× ${months} חודשים · סה״כ ${formatCurrency(proration.fullPrice)} · ניתן לפרוס בתשלומים`}
+        </p>
+      );
+    }
+    if (!compact) {
+      return (
+        <p className="text-sm text-ink-500">ניתן לפרוס בתשלומים באשראי</p>
+      );
+    }
+    return null;
   }
 
-  if (!proration.isLate || proration.billableCount === 0) return null;
+  if (proration.billableCount === 0) return null;
 
   return (
     <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>

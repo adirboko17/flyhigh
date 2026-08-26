@@ -26,6 +26,7 @@ import {
   isActivityProgram,
   type ProgramKind,
 } from "@/lib/programs";
+import { planInstallmentOptions } from "@/lib/finance/installments";
 import type { CheckoutPaymentMethod, CouponPreviewResult } from "./actions";
 
 /** רכישה של מסלול, כרטיסייה או שיעור פרטי. */
@@ -59,6 +60,8 @@ type PlanRecord = {
   durationMonths: number | null;
   programKind: ProgramKind | null;
   priceTiers: ActivityPriceTier[];
+  entriesCount: number | null;
+  extraHalfHourPrice: number | null;
 };
 
 async function rollbackPlanPurchase(
@@ -99,7 +102,7 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, kind, price_tiers")
+      .select("id, title, price, duration_months, kind, price_tiers, extra_half_hour_price")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -111,6 +114,8 @@ async function loadActivePlan(
           durationMonths: data.duration_months,
           programKind: data.kind,
           priceTiers: parseActivityPriceTiers(data.price_tiers),
+          entriesCount: null,
+          extraHalfHourPrice: data.extra_half_hour_price,
         }
       : null;
   }
@@ -118,7 +123,7 @@ async function loadActivePlan(
   if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
-      .select("id, title, price")
+      .select("id, title, price, entries_count")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -130,6 +135,8 @@ async function loadActivePlan(
           durationMonths: null,
           programKind: null,
           priceTiers: [],
+          entriesCount: data.entries_count,
+          extraHalfHourPrice: null,
         }
       : null;
   }
@@ -148,6 +155,8 @@ async function loadActivePlan(
         durationMonths: null,
         programKind: null,
         priceTiers: [],
+        entriesCount: null,
+        extraHalfHourPrice: null,
       }
       : null;
 }
@@ -610,6 +619,13 @@ export async function completePlanPurchase(input: {
         includeSelf: input.includeSelf,
         quantity,
       },
+      installments: planInstallmentOptions({
+        kind,
+        programKind: plan.programKind,
+        title: plan.title,
+        entriesCount: plan.entriesCount,
+        extraHalfHourPrice: plan.extraHalfHourPrice,
+      }),
     });
 
     if (!charge.success || !charge.redirectUrl) {

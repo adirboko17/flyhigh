@@ -26,6 +26,7 @@ import {
   SiblingDiscountSummary,
 } from "@/components/admin/SiblingDiscountEditor";
 import {
+  DEFAULT_CLASS_INSTALLMENTS,
   classPeriodTotal,
   parseBillingMonths,
 } from "@/lib/finance/classPricing";
@@ -793,6 +794,12 @@ export function ClassForm({
                 הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
                 {parseBillingMonths(Number(form.billing_months)) ?? "—"} תשלומים
                 בקארדקום.
+              </p>
+            )}
+            {form.price_mode === "period" && Number(form.price) > 0 && (
+              <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+                הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
+                {DEFAULT_CLASS_INSTALLMENTS} תשלומים בקארדקום.
               </p>
             )}
             <Field label="מדריכה">
