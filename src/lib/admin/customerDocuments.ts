@@ -43,9 +43,10 @@ export async function loadCustomerDocuments(
       .order("created_at", { ascending: false }),
   ]);
 
-  const refundByKey = new Map<string, (typeof refunds)[number]>();
-  const refundByPayment = new Map<string, (typeof refunds)[number][]>();
-  for (const refund of refunds ?? []) {
+  const refundRows = refunds ?? [];
+  const refundByKey = new Map<string, (typeof refundRows)[number]>();
+  const refundByPayment = new Map<string, (typeof refundRows)[number][]>();
+  for (const refund of refundRows) {
     const key = documentKey(refund.document_number, refund.document_url);
     if (key) refundByKey.set(key, refund);
     if (refund.payment_id) {
@@ -98,7 +99,7 @@ export async function loadCustomerDocuments(
     });
   }
 
-  for (const refund of refunds ?? []) {
+  for (const refund of refundRows) {
     if (usedRefundIds.has(refund.id)) continue;
     documents.push({
       id: `refund-${refund.id}`,
