@@ -16,6 +16,10 @@ import {
   missingHealthDeclarationChildren,
 } from "@/lib/health-declaration";
 import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
+import {
+  chargeDescriptionForCheckout,
+  resolveReceiptLabelForCheckout,
+} from "@/lib/enrollment/receiptLabel";
 import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,6 +46,7 @@ type AssignCore = {
   method: AssignChargeMethod;
   markPaid: boolean;
   weeklySlotId?: string | null;
+  receiptLabelId?: string | null;
 };
 
 function isAllowedMethod(value: string): value is AssignChargeMethod {
@@ -73,6 +78,7 @@ export async function assignWaitlistEntry(input: {
   amount: number;
   method: AssignChargeMethod;
   markPaid: boolean;
+  receiptLabelId?: string | null;
 }): Promise<AssignResult> {
   await requireRole("admin");
 
@@ -100,6 +106,7 @@ export async function assignWaitlistEntry(input: {
     method: input.method,
     markPaid: input.markPaid,
     weeklySlotId: entry.weekly_slot_id,
+    receiptLabelId: input.receiptLabelId,
   });
 }
 
@@ -224,6 +231,20 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   const takenBefore = await countHeldSeats(supabase, input.classId);
 
+  const receiptLabel = await resolveReceiptLabelForCheckout(
+    supabase,
+    input.receiptLabelId
+  );
+  if (!receiptLabel.ok) {
+    return { success: false, error: receiptLabel.error };
+  }
+  const chargeDescription = chargeDescriptionForCheckout({
+    productTitle: cls.title,
+    participantCount: participants.length,
+    kind: "class",
+    customLabel: receiptLabel.description,
+  });
+
   const isCreditCard = !cls.interest_only && input.method === "credit_card";
   const awaitingCardcom = isCreditCard && total > 0;
   const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
@@ -268,6 +289,8 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
           payment_method: input.method as Exclude<AssignChargeMethod, "none">,
           status: settledNow ? ("paid" as const) : ("pending" as const),
           paid_at: paidAt,
+          receipt_label_id: receiptLabel.labelId,
+          receipt_description: receiptLabel.description ?? chargeDescription,
         }))
       )
       .select("id");
@@ -286,7 +309,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     if (awaitingCardcom) {
       const charge = await getPaymentProvider().createCharge({
         amount: total,
-        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "משתתף/ת" : "משתתפים"})`,
+        description: chargeDescription,
         parentId: input.parentId,
         method: "credit_card",
         paymentIds: createdPayments.map((payment) => payment.id),

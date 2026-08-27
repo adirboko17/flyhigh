@@ -12,6 +12,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CardcomRedirectHint } from "@/components/checkout/CheckoutFields";
+import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
 import {
   assignChildrenToClass,
   assignWaitlistEntry,
@@ -36,6 +37,10 @@ import {
   siblingTiersForCheckout,
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
+import {
+  EMPTY_RECEIPT_LABEL_CHOICE,
+  type ReceiptLabelChoice,
+} from "@/lib/receipt-labels";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
@@ -123,6 +128,9 @@ export function AssignToClassDialog({
   const [amountTouched, setAmountTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [receiptLabel, setReceiptLabel] = useState<ReceiptLabelChoice>(
+    EMPTY_RECEIPT_LABEL_CHOICE
+  );
 
   useEffect(() => {
     let active = true;
@@ -295,9 +303,23 @@ export function AssignToClassDialog({
       setError("נא לבחור מועד לשיבוץ.");
       return;
     }
+    if (
+      !cls.interest_only &&
+      method !== "none" &&
+      receiptLabel.enabled &&
+      !receiptLabel.labelId
+    ) {
+      setError("נא לבחור מה לרשום על הקבלה, או לבטל את הבקשה לפרטים שונים.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
+
+    const receiptLabelId =
+      !cls.interest_only && method !== "none" && receiptLabel.enabled
+        ? receiptLabel.labelId
+        : null;
 
     const payload = cls.interest_only
       ? { amount: 0, method: "none" as const, markPaid: false }
@@ -305,6 +327,7 @@ export function AssignToClassDialog({
           amount: Number(amount || 0),
           method,
           markPaid,
+          receiptLabelId,
         };
 
     const result = isWaitlist
@@ -554,6 +577,13 @@ export function AssignToClassDialog({
                 התשלום כבר התקבל — לסמן כשולם
               </label>
             )}
+
+            <ReceiptLabelField
+              productTitle={cls.title}
+              value={receiptLabel}
+              onChange={setReceiptLabel}
+              disabled={saving}
+            />
           </>
         )}
           </>
