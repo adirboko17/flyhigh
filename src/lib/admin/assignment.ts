@@ -16,6 +16,7 @@ import {
   missingHealthDeclarationChildren,
 } from "@/lib/health-declaration";
 import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
+import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 import { createClient } from "@/lib/supabase/server";
 
 /** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — דף סליקה של קארדקום. */
@@ -34,7 +35,9 @@ type AssignCore = {
   classId: string;
   parentId: string;
   childIds: string[];
-  /** סכום כולל לכל הילדים שנבחרו. */
+  /** שיבוץ ההורה עצמו כמתאמן/ת, בלי רשומת ילד. */
+  includeSelf?: boolean;
+  /** סכום כולל לכל המתאמנים שנבחרו. */
   amount: number;
   method: AssignChargeMethod;
   markPaid: boolean;
@@ -54,8 +57,8 @@ function round2(value: number) {
 }
 
 /**
- * שיבוץ ידני של ילדים לחוג מממשק הניהול. מותר גם מעבר לתפוסה — המנהל רואה
- * אזהרה מראש, והטריגר במסד הנתונים מסמן את החוג כמלא.
+ * שיבוץ ידני לחוג מממשק הניהול — ילדים, הורה, או שניהם. בלי בדיקת גיל/מגדר.
+ * מותר גם מעבר לתפוסה: המנהל רואה אזהרה, והטריגר במסד מסמן את החוג כמלא.
  */
 export async function assignChildrenToClass(
   input: AssignCore
@@ -84,18 +87,15 @@ export async function assignWaitlistEntry(input: {
     return { success: false, error: "רשומת ההמתנה לא נמצאה." };
   }
 
-  if (!entry.child_id) {
-    return { success: false, error: "לרשומת ההמתנה לא משויך ילד/ה." };
-  }
-
   if (entry.status === "joined") {
-    return { success: false, error: "הילד/ה כבר שובץ/ה לחוג הזה." };
+    return { success: false, error: "המתאמן/ת כבר שובץ/ה לחוג הזה." };
   }
 
   return runAssignment({
     classId: entry.class_id,
     parentId: entry.parent_id,
-    childIds: [entry.child_id],
+    childIds: entry.child_id ? [entry.child_id] : [],
+    includeSelf: !entry.child_id,
     amount: input.amount,
     method: input.method,
     markPaid: input.markPaid,
@@ -108,35 +108,42 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     return { success: false, error: "אמצעי תשלום לא נתמך." };
   }
 
-  const childIds = [...new Set(input.childIds.filter(Boolean))];
-  if (childIds.length === 0) {
-    return { success: false, error: "נא לבחור לפחות ילד/ה אחד/ת." };
+  const { uniqueChildIds: childIds, participants, includeSelf } =
+    resolveClassParticipants(input.childIds, Boolean(input.includeSelf));
+  if (participants.length === 0) {
+    return { success: false, error: "נא לבחור לפחות מתאמן או מתאמנת." };
   }
 
   const total = round2(Math.max(0, Number(input.amount) || 0));
   const supabase = await createClient();
 
-  const [{ data: cls }, { data: children }, { data: existing }] =
+  const [{ data: cls }, { data: children }, { data: existing }, { data: parent }] =
     await Promise.all([
       supabase
         .from("classes")
         .select("id, capacity, title, billing_months, pick_one_slot, interest_only")
         .eq("id", input.classId)
         .maybeSingle(),
-      // אימות שהילדים באמת שייכים ללקוח שנבחר, ולא נשלחו מהדפדפן.
-      supabase
-        .from("children")
-        .select("id, full_name")
-        .eq("parent_id", input.parentId)
-        .in("id", childIds),
+      childIds.length > 0
+        ? supabase
+            .from("children")
+            .select("id, full_name")
+            .eq("parent_id", input.parentId)
+            .in("id", childIds)
+        : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
       supabase
         .from("enrollments")
         .select(
           "child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference)"
         )
         .eq("class_id", input.classId)
-        .in("child_id", childIds)
+        .eq("parent_id", input.parentId)
         .neq("status", "cancelled"),
+      supabase
+        .from("profiles")
+        .select("full_name, email, phone")
+        .eq("id", input.parentId)
+        .maybeSingle(),
     ]);
 
   if (!cls) {
@@ -164,42 +171,54 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     weeklySlotId = null;
   }
 
-  if (!children || children.length !== childIds.length) {
+  if (!parent) {
+    return { success: false, error: "הלקוח לא נמצא." };
+  }
+
+  if (childIds.length > 0 && (!children || children.length !== childIds.length)) {
     return { success: false, error: "חלק מהילדים אינם משויכים ללקוח שנבחר." };
   }
 
-  const { data: declarations } = await supabase
-    .from("health_declarations")
-    .select("child_id")
-    .eq("parent_id", input.parentId)
-    .eq("school_year", declarationSchoolYear())
-    .in("child_id", childIds);
-  const missingHealth = missingHealthDeclarationChildren(
-    children,
-    (declarations ?? []).map((row) => row.child_id)
-  );
-  if (missingHealth.length > 0) {
-    return {
-      success: false,
-      error: healthDeclarationErrorFor(
-        missingHealth.map((child) => child.full_name)
-      ),
-    };
+  if (childIds.length > 0) {
+    const { data: declarations } = await supabase
+      .from("health_declarations")
+      .select("child_id")
+      .eq("parent_id", input.parentId)
+      .eq("school_year", declarationSchoolYear())
+      .in("child_id", childIds);
+    const missingHealth = missingHealthDeclarationChildren(
+      children ?? [],
+      (declarations ?? []).map((row) => row.child_id)
+    );
+    if (missingHealth.length > 0) {
+      return {
+        success: false,
+        error: healthDeclarationErrorFor(
+          missingHealth.map((child) => child.full_name)
+        ),
+      };
+    }
   }
 
-  const holdingExisting = (existing ?? []).filter((row) =>
-    enrollmentHoldsSeat(row)
-  );
+  const holdingExisting = (existing ?? []).filter((row) => {
+    if (!enrollmentHoldsSeat(row)) return false;
+    if (row.child_id) return childIds.includes(row.child_id);
+    return includeSelf;
+  });
   if (holdingExisting.length > 0) {
     const names = holdingExisting
-      .map((row) => row.children?.full_name)
+      .map((row) =>
+        row.child_id
+          ? row.children?.full_name
+          : parent.full_name
+      )
       .filter(Boolean)
       .join(", ");
     return {
       success: false,
       error: names
         ? `${names} כבר רשומים לחוג הזה.`
-        : "חלק מהילדים כבר רשומים לחוג הזה.",
+        : "חלק מהמתאמנים כבר רשומים לחוג הזה.",
     };
   }
 
@@ -212,7 +231,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   const { data: created, error: enrollmentError } = await supabase
     .from("enrollments")
     .insert(
-      childIds.map((childId) => ({
+      participants.map((childId) => ({
         parent_id: input.parentId,
         child_id: childId,
         class_id: input.classId,
@@ -267,13 +286,14 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     if (awaitingCardcom) {
       const charge = await getPaymentProvider().createCharge({
         amount: total,
-        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "ילד/ה" : "ילדים"})`,
+        description: `שיבוץ ל${cls.title} (${created.length} ${created.length === 1 ? "משתתף/ת" : "משתתפים"})`,
         parentId: input.parentId,
         method: "credit_card",
         paymentIds: createdPayments.map((payment) => payment.id),
         metadata: {
           classId: input.classId,
           childIds,
+          includeSelf,
           adminAssigned: true,
         },
         installments: classInstallmentOptions(cls.billing_months),
@@ -305,12 +325,23 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   }
 
   // מי שהיה ברשימת ההמתנה לחוג כבר לא ממתין.
-  await supabase
-    .from("waitlist")
-    .update({ status: "joined" })
-    .eq("class_id", input.classId)
-    .in("child_id", childIds)
-    .in("status", ["waiting", "offered"]);
+  if (childIds.length > 0) {
+    await supabase
+      .from("waitlist")
+      .update({ status: "joined" })
+      .eq("class_id", input.classId)
+      .in("child_id", childIds)
+      .in("status", ["waiting", "offered"]);
+  }
+  if (includeSelf) {
+    await supabase
+      .from("waitlist")
+      .update({ status: "joined" })
+      .eq("class_id", input.classId)
+      .eq("parent_id", input.parentId)
+      .is("child_id", null)
+      .in("status", ["waiting", "offered"]);
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/classes");
@@ -325,21 +356,18 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     !settledNow &&
     total > 0
   ) {
-    const { data: parent } = await supabase
-      .from("profiles")
-      .select("full_name, email, phone")
-      .eq("id", input.parentId)
-      .maybeSingle();
-
     await notifyAdminPayment({
       paid: false,
-      parentName: parent?.full_name || "לקוח",
-      phone: parent?.phone,
-      email: parent?.email,
+      parentName: parent.full_name || "לקוח",
+      phone: parent.phone,
+      email: parent.email,
       product: `שיבוץ ל${cls.title}`,
       amount: total,
       paymentMethod: input.method,
-      participants: children.map((child) => child.full_name),
+      participants: [
+        ...(children ?? []).map((child) => child.full_name),
+        ...(includeSelf ? [parent.full_name || "הורה"] : []),
+      ],
     });
   }
 

@@ -41,6 +41,22 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
 import { calcAge, formatCurrency } from "@/utils/format";
 
+function participantCountOf(childIds: string[], includeSelf: boolean) {
+  return childIds.length + (includeSelf ? 1 : 0);
+}
+
+function assignSubmitLabel(
+  count: number,
+  includeSelf: boolean,
+  paying: boolean
+) {
+  const noun = count <= 1 ? null : includeSelf ? "משתתפים" : "ילדים";
+  if (paying) {
+    return noun ? `שיבוץ ותשלום (${count} ${noun})` : "שיבוץ ותשלום";
+  }
+  return noun ? `שיבוץ ${count} ${noun}` : "שיבוץ לחוג";
+}
+
 type CustomerOption = {
   id: string;
   full_name: string;
@@ -85,6 +101,9 @@ export function AssignToClassDialog({
   );
   const [childIds, setChildIds] = useState<string[]>(
     isWaitlist && mode.entry.child_id ? [mode.entry.child_id] : []
+  );
+  const [includeSelf, setIncludeSelf] = useState(
+    isWaitlist && !mode.entry.child_id
   );
   const [weeklySlotId, setWeeklySlotId] = useState(
     isWaitlist ? mode.entry.weekly_slot_id ?? "" : ""
@@ -202,6 +221,14 @@ export function AssignToClassDialog({
       .map((enrollment) => enrollment.child_id)
       .filter((id): id is string => Boolean(id))
   );
+  const parentAlreadyEnrolled = Boolean(
+    parentId &&
+      activeEnrollments.some(
+        (enrollment) =>
+          enrollment.parent_id === parentId && enrollment.child_id == null
+      )
+  );
+  const participantCount = participantCountOf(childIds, includeSelf);
 
   const selectedCustomer = customers?.find(
     (customer) => customer.id === parentId
@@ -213,9 +240,9 @@ export function AssignToClassDialog({
 
   const orderPreview = calculateOrderTotal(
     unitPrice,
-    childIds.length,
+    participantCount,
     tiers,
-    siblingsInCategory + childIds.length,
+    siblingsInCategory + participantCount,
   );
   const discountPercent = orderPreview.percent;
   const listTotal = orderPreview.listTotal;
@@ -224,8 +251,8 @@ export function AssignToClassDialog({
   // הסכום מתעדכן לפי הבחירה, אלא אם המנהל כבר שינה אותו ידנית.
   useEffect(() => {
     if (amountTouched) return;
-    setAmount(childIds.length > 0 ? String(suggestedTotal) : "");
-  }, [amountTouched, childIds.length, suggestedTotal]);
+    setAmount(participantCount > 0 ? String(suggestedTotal) : "");
+  }, [amountTouched, participantCount, suggestedTotal]);
 
   const filteredCustomers = useMemo(() => {
     if (!customers) return [];
@@ -242,7 +269,7 @@ export function AssignToClassDialog({
   const available =
     cls.capacity == null ? Number.POSITIVE_INFINITY : cls.capacity - registered;
   const overCapacity =
-    cls.capacity != null && childIds.length > 0 && childIds.length > available;
+    cls.capacity != null && participantCount > 0 && participantCount > available;
   const isCreditCard = method === "credit_card";
 
   function handleMethodChange(next: AssignChargeMethod) {
@@ -260,8 +287,8 @@ export function AssignToClassDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!parentId || childIds.length === 0) {
-      setError("נא לבחור לקוח ולפחות ילד/ה אחד/ת.");
+    if (!parentId || participantCount === 0) {
+      setError("נא לבחור לקוח ולפחות מתאמן או מתאמנת.");
       return;
     }
     if (!cls.interest_only && cls.pick_one_slot && !weeklySlotId) {
@@ -286,6 +313,7 @@ export function AssignToClassDialog({
           classId: cls.id,
           parentId,
           childIds,
+          includeSelf,
           weeklySlotId: weeklySlotId || null,
           ...payload,
         });
@@ -331,7 +359,7 @@ export function AssignToClassDialog({
           </div>
           <div className="mt-1.5 flex justify-between gap-3">
             <span className="text-ink-500">
-              {cls.interest_only ? "תשלום" : "מחיר לילד/ה"}
+              {cls.interest_only ? "תשלום" : "מחיר למשתתף/ת"}
             </span>
             <span className="font-semibold text-ink-900">
               {cls.interest_only ? "ללא תשלום" : formatCurrency(unitPrice)}
@@ -407,18 +435,28 @@ export function AssignToClassDialog({
             onSearchChange={setSearch}
             selected={selectedCustomer ?? null}
             onSelect={(customer) => {
+              const alreadySelf = activeEnrollments.some(
+                (enrollment) =>
+                  enrollment.parent_id === customer.id &&
+                  enrollment.child_id == null
+              );
               setParentId(customer.id);
               setChildIds([]);
+              setIncludeSelf(customer.children.length === 0 && !alreadySelf);
               setAmountTouched(false);
             }}
             onClear={() => {
               setParentId(null);
               setChildIds([]);
+              setIncludeSelf(false);
               setAmountTouched(false);
             }}
             childIds={childIds}
             onToggleChild={toggleChild}
+            includeSelf={includeSelf}
+            onToggleSelf={() => setIncludeSelf((current) => !current)}
             enrolledChildIds={enrolledChildIds}
+            parentAlreadyEnrolled={parentAlreadyEnrolled}
           />
         )}
 
@@ -430,12 +468,12 @@ export function AssignToClassDialog({
           </p>
         )}
 
-        {!cls.interest_only && discountPercent > 0 && childIds.length > 0 && (
+        {!cls.interest_only && discountPercent > 0 && participantCount > 0 && (
           <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
-            הנחת בני משפחה של {discountPercent}% חלה על הילד השני ומעלה
+            הנחת בני משפחה של {discountPercent}% חלה על המשתתף השני ומעלה
             {orderPreview.fullPriceChildren > 0
               ? ` (${orderPreview.fullPriceChildren} במחיר מלא, ${orderPreview.discountedChildren} בהנחה)`
-              : ` (כל ${orderPreview.discountedChildren} הילדים בהזמנה בהנחה)`}
+              : ` (כל ${orderPreview.discountedChildren} המשתתפים בהזמנה בהנחה)`}
             {siblingsInCategory > 0
               ? ` · למשפחה כבר ${siblingsInCategory} ילדים באותה קטגוריה`
               : ""}
@@ -485,8 +523,8 @@ export function AssignToClassDialog({
               label="סכום לחיוב"
               htmlFor="assign-amount"
               hint={
-                childIds.length > 1
-                  ? `הסכום יתחלק בין ${childIds.length} הילדים שנבחרו.`
+                participantCount > 1
+                  ? `הסכום יתחלק בין ${participantCount} המשתתפים שנבחרו.`
                   : undefined
               }
               required
@@ -531,18 +569,16 @@ export function AssignToClassDialog({
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             ביטול
           </Button>
-          <Button type="submit" disabled={saving || childIds.length === 0}>
+          <Button type="submit" disabled={saving || participantCount === 0}>
             {saving
               ? isCreditCard
                 ? "מעבד תשלום..."
                 : "משבץ..."
-              : isCreditCard && Number(amount || 0) > 0
-                ? childIds.length > 1
-                  ? `שיבוץ ותשלום (${childIds.length} ילדים)`
-                  : "שיבוץ ותשלום"
-                : childIds.length > 1
-                  ? `שיבוץ ${childIds.length} ילדים`
-                  : "שיבוץ לחוג"}
+              : assignSubmitLabel(
+                  participantCount,
+                  includeSelf,
+                  isCreditCard && Number(amount || 0) > 0
+                )}
           </Button>
         </div>
       </form>
@@ -560,7 +596,10 @@ function CustomerPicker({
   onClear,
   childIds,
   onToggleChild,
+  includeSelf,
+  onToggleSelf,
   enrolledChildIds,
+  parentAlreadyEnrolled,
 }: {
   customers: CustomerOption[] | null;
   filtered: CustomerOption[];
@@ -571,7 +610,10 @@ function CustomerPicker({
   onClear: () => void;
   childIds: string[];
   onToggleChild: (id: string) => void;
+  includeSelf: boolean;
+  onToggleSelf: () => void;
   enrolledChildIds: Set<string>;
+  parentAlreadyEnrolled: boolean;
 }) {
   if (customers === null) {
     return (
@@ -646,55 +688,78 @@ function CustomerPicker({
         </Button>
       </div>
 
-      {selected.children.length === 0 ? (
-        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          ללקוח הזה אין ילדים רשומים במערכת. יש להוסיף ילד/ה בעמוד הלקוחות.
+      <fieldset>
+        <legend className="mb-1.5 block text-sm font-semibold text-ink-800">
+          מי לשבץ לחוג
+        </legend>
+        <p className="mb-2 text-xs leading-relaxed text-ink-500">
+          אפשר לשבץ את ההורה או כל ילד/ה — גם אם הגיל או המגדר לא תואמים לחוג.
         </p>
-      ) : (
-        <fieldset>
-          <legend className="mb-1.5 block text-sm font-semibold text-ink-800">
-            בחירת ילדים
-          </legend>
-          <ul className="space-y-1.5">
-            {selected.children.map((child) => {
-              const alreadyEnrolled = enrolledChildIds.has(child.id);
-              const checked = childIds.includes(child.id);
-              const age = calcAge(child.birth_date);
+        <ul className="space-y-1.5">
+          <li>
+            <label
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors",
+                includeSelf
+                  ? "border-brand-300 bg-brand-50"
+                  : "border-ink-100 hover:bg-ink-50",
+                parentAlreadyEnrolled && "cursor-not-allowed opacity-60"
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={includeSelf}
+                disabled={parentAlreadyEnrolled}
+                onChange={onToggleSelf}
+                className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
+              />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900">
+                {selected.full_name}
+                <span className="mr-1.5 text-xs font-normal text-ink-400">
+                  הורה
+                </span>
+              </span>
+              {parentAlreadyEnrolled && <Badge tone="neutral">כבר רשום/ה</Badge>}
+            </label>
+          </li>
+          {selected.children.map((child) => {
+            const alreadyEnrolled = enrolledChildIds.has(child.id);
+            const checked = childIds.includes(child.id);
+            const age = calcAge(child.birth_date);
 
-              return (
-                <li key={child.id}>
-                  <label
-                    className={cn(
-                      "flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors",
-                      checked
-                        ? "border-brand-300 bg-brand-50"
-                        : "border-ink-100 hover:bg-ink-50",
-                      alreadyEnrolled && "cursor-not-allowed opacity-60"
+            return (
+              <li key={child.id}>
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors",
+                    checked
+                      ? "border-brand-300 bg-brand-50"
+                      : "border-ink-100 hover:bg-ink-50",
+                    alreadyEnrolled && "cursor-not-allowed opacity-60"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={alreadyEnrolled}
+                    onChange={() => onToggleChild(child.id)}
+                    className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900">
+                    {child.full_name}
+                    {age !== null && (
+                      <span className="mr-1.5 text-xs font-normal text-ink-400">
+                        גיל {age}
+                      </span>
                     )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={alreadyEnrolled}
-                      onChange={() => onToggleChild(child.id)}
-                      className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900">
-                      {child.full_name}
-                      {age !== null && (
-                        <span className="mr-1.5 text-xs font-normal text-ink-400">
-                          גיל {age}
-                        </span>
-                      )}
-                    </span>
-                    {alreadyEnrolled && <Badge tone="neutral">כבר רשום/ה</Badge>}
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </fieldset>
-      )}
+                  </span>
+                  {alreadyEnrolled && <Badge tone="neutral">כבר רשום/ה</Badge>}
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      </fieldset>
     </div>
   );
 }
