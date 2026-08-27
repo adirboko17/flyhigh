@@ -391,16 +391,42 @@ export function nextWeeklySessionDate(
   return formatLocalDate(firstOnOrAfter(parseLocalDate(rangeStart), slot.dayOfWeek));
 }
 
-function inferSessionCount(slots: WeeklySlot[], sessions: ClassSessionDraft[]): string {
-  const first = slots[0];
-  if (!first) return "";
-  const start = first.startTime.slice(0, 5);
-  const matching = sessions.filter((session) => {
-    if (session.status === "cancelled") return false;
-    if (session.startTime.slice(0, 5) !== start) return false;
-    return sessionWeekday(session.sessionDate) === first.dayOfWeek;
+export function inferSessionCount(
+  slots: WeeklySlot[],
+  sessions: ClassSessionDraft[]
+): string {
+  const active = sessions.filter(
+    (session) => session.status !== "cancelled" && session.sessionDate
+  );
+  if (slots.length === 0) {
+    return active.length > 0 ? String(active.length) : "";
+  }
+
+  const counts = slots.map((slot) => {
+    const start = slot.startTime.slice(0, 5);
+    return active.filter((session) => {
+      if (session.startTime.slice(0, 5) !== start) return false;
+      return sessionWeekday(session.sessionDate) === slot.dayOfWeek;
+    }).length;
   });
-  return matching.length > 0 ? String(matching.length) : "";
+
+  const first = counts[0] ?? 0;
+  const n = first > 0 ? first : Math.max(0, ...counts);
+  return n > 0 ? String(n) : "";
+}
+
+/** מעדכן את רשימת המפגשים בלי לייצר אותה מחדש — למשל אחרי מחיקה או ביטול. */
+export function scheduleWithSessionEdits(
+  schedule: ClassScheduleState,
+  sessions: ClassSessionDraft[]
+): ClassScheduleState {
+  const active = sessions.filter((session) => session.status !== "cancelled");
+  return {
+    ...schedule,
+    sessions,
+    sessionCount: inferSessionCount(schedule.weeklySlots, sessions),
+    rangeEnd: lastSessionDate(active),
+  };
 }
 
 export function weeklySlotsFromDb(

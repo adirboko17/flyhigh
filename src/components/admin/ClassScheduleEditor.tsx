@@ -13,6 +13,7 @@ import {
   parseSessionCount,
   formatScheduleSummary,
   refreshWeeklySessions,
+  scheduleWithSessionEdits,
   sessionSlotKey,
   weeklySlotKey,
   type ClassScheduleState,
@@ -90,34 +91,51 @@ export function ClassScheduleEditor({
     });
   }
 
+  function applySessions(sessions: ClassSessionDraft[]) {
+    onChange(scheduleWithSessionEdits(value, sessions));
+  }
+
   function updateSession(index: number, patch: Partial<ClassSessionDraft>) {
-    const sessions = value.sessions.map((s, i) =>
-      i === index ? { ...s, ...patch } : s,
-    );
-    onChange({ ...value, sessions });
+    onChange({
+      ...value,
+      sessions: value.sessions.map((s, i) =>
+        i === index ? { ...s, ...patch } : s
+      ),
+    });
   }
 
   function removeSession(index: number) {
-    onChange({
-      ...value,
-      sessions: value.sessions.filter((_, i) => i !== index),
-    });
+    applySessions(value.sessions.filter((_, i) => i !== index));
+  }
+
+  function removeSessions(indexes: number[]) {
+    const remove = new Set(indexes);
+    applySessions(value.sessions.filter((_, i) => !remove.has(i)));
+  }
+
+  function removeAllSessions() {
+    if (value.sessions.length === 0) return;
+    if (
+      !window.confirm(
+        "למחוק את כל המפגשים? מספר המפגשים למעלה יתאפס."
+      )
+    ) {
+      return;
+    }
+    applySessions([]);
   }
 
   function addCustomSession() {
     const last = value.sessions[value.sessions.length - 1];
-    onChange({
-      ...value,
-      sessions: [
-        ...value.sessions,
-        {
-          sessionDate: last?.sessionDate ?? value.rangeStart ?? "",
-          startTime: last?.startTime ?? value.weeklySlots[0]?.startTime ?? "16:00",
-          endTime: last?.endTime ?? value.weeklySlots[0]?.endTime ?? "17:00",
-          status: "scheduled",
-        },
-      ],
-    });
+    applySessions([
+      ...value.sessions,
+      {
+        sessionDate: last?.sessionDate ?? value.rangeStart ?? "",
+        startTime: last?.startTime ?? value.weeklySlots[0]?.startTime ?? "16:00",
+        endTime: last?.endTime ?? value.weeklySlots[0]?.endTime ?? "17:00",
+        status: "scheduled",
+      },
+    ]);
   }
 
   function addSessionToSlot(slot: WeeklySlot) {
@@ -128,18 +146,15 @@ export function ClassScheduleEditor({
       .sort()
       .at(-1);
 
-    onChange({
-      ...value,
-      sessions: [
-        ...value.sessions,
-        {
-          sessionDate: nextWeeklySessionDate(slot, lastDate, value.rangeStart),
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "scheduled",
-        },
-      ],
-    });
+    applySessions([
+      ...value.sessions,
+      {
+        sessionDate: nextWeeklySessionDate(slot, lastDate, value.rangeStart),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        status: "scheduled",
+      },
+    ]);
   }
 
   return (
@@ -388,6 +403,8 @@ export function ClassScheduleEditor({
         scheduleType={value.scheduleType}
         onUpdate={updateSession}
         onRemove={removeSession}
+        onRemoveMany={removeSessions}
+        onRemoveAll={removeAllSessions}
         onAdd={addCustomSession}
         onAddToSlot={addSessionToSlot}
         disabled={disabled}
@@ -561,6 +578,8 @@ function SessionList({
   scheduleType,
   onUpdate,
   onRemove,
+  onRemoveMany,
+  onRemoveAll,
   onAdd,
   onAddToSlot,
   disabled,
@@ -570,6 +589,8 @@ function SessionList({
   scheduleType: ClassScheduleState["scheduleType"];
   onUpdate: (index: number, patch: Partial<ClassSessionDraft>) => void;
   onRemove: (index: number) => void;
+  onRemoveMany: (indexes: number[]) => void;
+  onRemoveAll: () => void;
   onAdd: () => void;
   onAddToSlot: (slot: WeeklySlot) => void;
   disabled?: boolean;
@@ -600,12 +621,29 @@ function SessionList({
       : null;
 
   return (
-    <Field label="מפגשים" hint="לחצו כדי לערוך מפגש בודד">
+    <div className="min-w-0 space-y-1.5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink-800">מפגשים</p>
+          <p className="text-xs text-ink-500">לחצו כדי לערוך מפגש בודד</p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+          disabled={disabled}
+          onClick={onRemoveAll}
+        >
+          מחיקת כל המפגשים
+        </Button>
+      </div>
       {grouped ? (
         <GroupedSessionList
           groups={grouped}
           onUpdate={onUpdate}
           onRemove={onRemove}
+          onRemoveMany={onRemoveMany}
           onAddToSlot={onAddToSlot}
           disabled={disabled}
         />
@@ -631,7 +669,7 @@ function SessionList({
           </Button>
         </div>
       )}
-    </Field>
+    </div>
   );
 }
 
@@ -639,12 +677,14 @@ function GroupedSessionList({
   groups,
   onUpdate,
   onRemove,
+  onRemoveMany,
   onAddToSlot,
   disabled,
 }: {
   groups: ReturnType<typeof groupSessionsByWeeklySlot>;
   onUpdate: (index: number, patch: Partial<ClassSessionDraft>) => void;
   onRemove: (index: number) => void;
+  onRemoveMany: (indexes: number[]) => void;
   onAddToSlot: (slot: WeeklySlot) => void;
   disabled?: boolean;
 }) {
@@ -690,28 +730,51 @@ function GroupedSessionList({
             key={group.key}
             className="overflow-hidden rounded-2xl border border-ink-200 bg-white"
           >
-            <button
-              type="button"
-              onClick={() => toggle(group.key)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right"
-            >
-              <span className="min-w-0">
-                <span className="block font-semibold text-ink-900">{title}</span>
-                <span className="mt-0.5 block text-xs text-ink-500">
-                  {active.length} מפגשים
-                  {cancelled > 0 ? ` · ${cancelled} מבוטלים` : ""}
-                  {range ? ` · ${range}` : ""}
+            <div className="flex items-center gap-2 px-2 py-1.5 sm:px-3">
+              <button
+                type="button"
+                onClick={() => toggle(group.key)}
+                className="flex min-w-0 flex-1 items-center justify-between gap-3 px-2 py-1.5 text-right"
+              >
+                <span className="min-w-0">
+                  <span className="block font-semibold text-ink-900">{title}</span>
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    {active.length} מפגשים
+                    {cancelled > 0 ? ` · ${cancelled} מבוטלים` : ""}
+                    {range ? ` · ${range}` : ""}
+                  </span>
                 </span>
-              </span>
-              <Icon
-                name="chevron"
-                size={18}
-                className={cn(
-                  "shrink-0 text-ink-400 transition-transform",
-                  open && "-rotate-90"
-                )}
-              />
-            </button>
+                <Icon
+                  name="chevron"
+                  size={18}
+                  className={cn(
+                    "shrink-0 text-ink-400 transition-transform",
+                    open && "-rotate-90"
+                  )}
+                />
+              </button>
+              {groups.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  disabled={disabled}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `למחוק את כל המפגשים במועד "${title}"? מספר המפגשים למעלה יתעדכן.`
+                      )
+                    ) {
+                      return;
+                    }
+                    onRemoveMany(group.items.map((item) => item.index));
+                  }}
+                >
+                  מחיקת הכל
+                </Button>
+              )}
+            </div>
 
             {open && (
               <div className="space-y-3 border-t border-ink-100 bg-ink-50/50 p-3">
