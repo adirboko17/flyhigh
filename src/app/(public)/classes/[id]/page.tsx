@@ -1,6 +1,10 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { ClassEnrollmentPanel } from "@/components/classes/ClassEnrollmentPanel";
+import { Suspense } from "react";
+import {
+  ClassEnrollmentPanel,
+  ClassEnrollmentPanelFallback,
+} from "@/components/classes/ClassEnrollmentPanel";
 import { ClassSessionGroups } from "@/components/classes/ClassSessionGroups";
 import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
@@ -319,12 +323,14 @@ export default async function ClassDetailPage({
         </div>
 
         <div className="order-2">
-          <ClassEnrollmentPanel
-            cls={cls}
-            soldOut={soldOut}
-            proration={proration}
-            slots={slots}
-          />
+          <Suspense fallback={<ClassEnrollmentPanelFallback />}>
+            <ClassEnrollmentPanel
+              cls={cls}
+              soldOut={soldOut}
+              proration={proration}
+              slots={slots}
+            />
+          </Suspense>
         </div>
       </div>
     </div>

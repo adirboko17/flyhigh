@@ -1,6 +1,6 @@
 "use server";
 
-import { requireRole } from "@/lib/auth";
+import { createSessionReadClient, requireRole } from "@/lib/auth";
 import { DEFERRED_PAYMENT_METHODS, isDeferredPaymentMethod } from "@/lib/constants";
 import { addMonths, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
@@ -437,7 +437,8 @@ export async function completePlanPurchase(input: {
 
   let selectedChildren: { id: string; full_name: string }[] = [];
   if (uniqueChildIds.length > 0) {
-    const { data: children } = await supabase
+    const reads = await createSessionReadClient();
+    const { data: children } = await reads
       .from("children")
       .select("id, full_name")
       .eq("parent_id", profile.id)

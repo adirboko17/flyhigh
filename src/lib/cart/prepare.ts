@@ -45,6 +45,7 @@ import {
   missingHealthDeclarationChildren,
 } from "@/lib/health-declaration";
 import { addMonths, todayInIsrael } from "@/lib/scheduling/monthGrid";
+import { createSessionReadClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanKind } from "@/lib/enrollment/planActions";
 import type { Database } from "@/types/database.types";
@@ -90,7 +91,7 @@ function childrenEligibilityError(
 }
 
 async function requireHealthDeclarations(
-  supabase: Client,
+  supabase: Awaited<ReturnType<typeof createSessionReadClient>>,
   parentId: string,
   children: { id: string; full_name: string }[]
 ): Promise<string | null> {
@@ -173,6 +174,7 @@ async function prepareClassLine(
     return { success: false, error: `נא לבחור מתאמנים ל${item.title}.` };
   }
 
+  const reads = await createSessionReadClient();
   const [{ data: cls }, { data: children }, { data: existingEnrollments }] =
     await Promise.all([
       supabase
@@ -184,7 +186,7 @@ async function prepareClassLine(
         .in("status", ["active", "full"])
         .maybeSingle(),
       uniqueChildIds.length > 0
-        ? supabase
+        ? reads
             .from("children")
             .select(
               "id, full_name, gender, birth_date, school_grade, grade_school_year"
@@ -192,7 +194,7 @@ async function prepareClassLine(
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
         : Promise.resolve({ data: [] }),
-      supabase
+      reads
         .from("enrollments")
         .select(
           "child_id, status, payment_status, payments(status, payment_method, external_reference)"
@@ -245,7 +247,7 @@ async function prepareClassLine(
   }
 
   const healthError = await requireHealthDeclarations(
-    supabase,
+    reads,
     profile.id,
     selectedChildren
   );
@@ -302,7 +304,7 @@ async function prepareClassLine(
 
   const [{ data: tiersJson }, categorySiblingIds, familyDiscount] = await Promise.all([
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
-    listFamilyChildrenInCategory(supabase, profile.id, classId, cls.category),
+    listFamilyChildrenInCategory(reads, profile.id, classId, cls.category),
     loadFamilyDiscountSettings(supabase),
   ]);
 
@@ -475,7 +477,8 @@ async function preparePlanLine(
 
   let selectedChildren: { id: string; full_name: string }[] = [];
   if (uniqueChildIds.length > 0) {
-    const { data: children } = await supabase
+    const reads = await createSessionReadClient();
+    const { data: children } = await reads
       .from("children")
       .select("id, full_name")
       .eq("parent_id", profile.id)

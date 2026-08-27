@@ -5,7 +5,7 @@ import { HomePlansGrid } from "@/components/home/HomePlansGrid";
 import { SectionHead } from "@/components/home/SectionHead";
 import type { PlanViewer } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
-import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { createSessionReadClient, getSessionProfile, homeForRole } from "@/lib/auth";
 import { pickFeaturedClasses } from "@/lib/home/featuredClasses";
 import { loadFamilyDiscountSettings } from "@/lib/finance/siblingDiscount";
 import {
@@ -35,7 +35,8 @@ export default async function HomePage() {
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
   } else if (profile) {
-    const { data: kids } = await supabase
+    const reads = await createSessionReadClient();
+    const { data: kids } = await reads
       .from("children")
       .select("id, full_name")
       .eq("parent_id", profile.id)

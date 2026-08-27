@@ -1,4 +1,9 @@
-import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { connection } from "next/server";
+import {
+  createSessionReadClient,
+  getSessionProfile,
+  homeForRole,
+} from "@/lib/auth";
 import { declarationSchoolYear } from "@/lib/health-declaration";
 import {
   formatClassAudience,
@@ -34,12 +39,25 @@ interface ClassEnrollmentPanelProps {
   slots?: PublicClassSlot[];
 }
 
+export function ClassEnrollmentPanelFallback() {
+  return (
+    <aside className="lg:sticky lg:top-24 lg:self-start">
+      <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
+        <div className="h-4 w-28 animate-pulse rounded bg-ink-100" />
+        <div className="mt-3 h-8 w-40 animate-pulse rounded bg-ink-100" />
+        <div className="mt-6 h-12 w-full animate-pulse rounded-2xl bg-ink-100" />
+      </div>
+    </aside>
+  );
+}
+
 export async function ClassEnrollmentPanel({
   cls,
   soldOut,
   proration,
   slots = [],
 }: ClassEnrollmentPanelProps) {
+  await connection();
   const interestOnly = isInterestClass(cls);
   const registrationClosed = soldOut || (!interestOnly && proration.hasEnded);
   const profile = await getSessionProfile();
@@ -73,16 +91,22 @@ export async function ClassEnrollmentPanel({
       );
     } else {
       const healthYear = declarationSchoolYear();
-      const [{ data: children }, { data: enrollments }, { data: waitlist }, categorySiblingIds, { data: declarations }] =
-        await Promise.all([
-          supabase
+      const reads = await createSessionReadClient();
+      const [
+        { data: children, error: childrenError },
+        { data: enrollments },
+        { data: waitlist },
+        categorySiblingIds,
+        { data: declarations },
+      ] = await Promise.all([
+          reads
             .from("children")
             .select(
               "id, full_name, birth_date, gender, school_grade, grade_school_year"
             )
             .eq("parent_id", profile.id)
             .order("created_at"),
-          supabase
+          reads
             .from("enrollments")
             .select(
               "id, child_id, status, payment_status, children(full_name), payments(payment_method, status)"
@@ -90,24 +114,27 @@ export async function ClassEnrollmentPanel({
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)
             .neq("status", "cancelled"),
-          supabase
+          reads
             .from("waitlist")
             .select("id, child_id, status, children(full_name)")
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)
             .neq("status", "cancelled"),
           listFamilyChildrenInCategory(
-            supabase,
+            reads,
             profile.id,
             cls.id,
             cls.category
           ),
-          supabase
+          reads
             .from("health_declarations")
             .select("child_id")
             .eq("parent_id", profile.id)
             .eq("school_year", healthYear),
         ]);
+      if (childrenError) {
+        console.error("ClassEnrollmentPanel children", childrenError.message);
+      }
 
       const declaredIds = new Set(
         (declarations ?? []).map((row) => row.child_id)

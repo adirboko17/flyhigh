@@ -6,7 +6,7 @@ import {
   type ClassAudienceFields,
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
-import { requireRole } from "@/lib/auth";
+import { createSessionReadClient, requireRole } from "@/lib/auth";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { revalidatePath } from "next/cache";
 import {
@@ -267,6 +267,7 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   const supabase = await createClient();
+  const reads = await createSessionReadClient();
 
   const [{ data: cls }, { data: children }, { data: existingEnrollments }] =
     await Promise.all([
@@ -279,7 +280,7 @@ export async function completeClassEnrollmentPayment(input: {
         .in("status", ["active", "full"])
         .maybeSingle(),
       uniqueChildIds.length > 0
-        ? supabase
+        ? reads
             .from("children")
             .select(
               "id, full_name, gender, birth_date, school_grade, grade_school_year"
@@ -287,7 +288,7 @@ export async function completeClassEnrollmentPayment(input: {
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
         : Promise.resolve({ data: [] }),
-      supabase
+      reads
         .from("enrollments")
         .select(
           "child_id, status, payment_status, payments(status, payment_method, external_reference)"
@@ -340,7 +341,7 @@ export async function completeClassEnrollmentPayment(input: {
   }
 
   const healthError = await requireHealthDeclarations(
-    supabase,
+    reads,
     profile.id,
     selectedChildren
   );
@@ -397,7 +398,7 @@ export async function completeClassEnrollmentPayment(input: {
   const [{ data: tiersJson }, categorySiblingIds, familyDiscount] = await Promise.all([
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
     listFamilyChildrenInCategory(
-      supabase,
+      reads,
       profile.id,
       classId,
       cls.category
@@ -650,6 +651,7 @@ export async function registerInterestForClass(input: {
   }
 
   const supabase = await createClient();
+  const reads = await createSessionReadClient();
   const [{ data: cls }, { data: children }, { data: existingEnrollments }] =
     await Promise.all([
       supabase
@@ -661,7 +663,7 @@ export async function registerInterestForClass(input: {
         .in("status", ["active", "full"])
         .maybeSingle(),
       uniqueChildIds.length > 0
-        ? supabase
+        ? reads
             .from("children")
             .select(
               "id, full_name, gender, birth_date, school_grade, grade_school_year"
@@ -669,7 +671,7 @@ export async function registerInterestForClass(input: {
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
         : Promise.resolve({ data: [] }),
-      supabase
+      reads
         .from("enrollments")
         .select(
           "child_id, status, payment_status, payments(status, payment_method, external_reference)"
@@ -689,7 +691,7 @@ export async function registerInterestForClass(input: {
   }
 
   const healthError = await requireHealthDeclarations(
-    supabase,
+    reads,
     profile.id,
     selectedChildren
   );
@@ -817,6 +819,7 @@ export async function joinClassWaitlist(input: {
   }
 
   const supabase = await createClient();
+  const reads = await createSessionReadClient();
 
   const [{ data: cls }, { data: children }, { data: existingWaitlist }] =
     await Promise.all([
@@ -828,7 +831,7 @@ export async function joinClassWaitlist(input: {
         .eq("id", input.classId)
         .maybeSingle(),
       uniqueChildIds.length > 0
-        ? supabase
+        ? reads
             .from("children")
             .select(
               "id, full_name, gender, birth_date, school_grade, grade_school_year"
@@ -836,7 +839,7 @@ export async function joinClassWaitlist(input: {
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
         : Promise.resolve({ data: [] }),
-      supabase
+      reads
         .from("waitlist")
         .select("child_id")
         .eq("class_id", input.classId)
@@ -892,7 +895,7 @@ export async function joinClassWaitlist(input: {
   }
 
   const healthError = await requireHealthDeclarations(
-    supabase,
+    reads,
     profile.id,
     selectedChildren
   );
@@ -947,7 +950,7 @@ export async function joinClassWaitlist(input: {
 }
 
 async function requireHealthDeclarations(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createSessionReadClient>>,
   parentId: string,
   children: { id: string; full_name: string }[]
 ): Promise<string | null> {

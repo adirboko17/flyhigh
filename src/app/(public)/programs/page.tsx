@@ -7,7 +7,7 @@ import {
   type PlanViewer,
 } from "@/components/programs/PlanPurchase";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
-import { getSessionProfile, homeForRole } from "@/lib/auth";
+import { createSessionReadClient, getSessionProfile, homeForRole } from "@/lib/auth";
 import {
   PRIVATE_LESSON_CARD_TEMPLATES,
   PROGRAM_CARD_TEMPLATES,
@@ -50,8 +50,8 @@ export default async function ProgramsPage() {
   if (profile && profile.role !== "parent") {
     viewer = { kind: "other", homeHref: homeForRole(profile.role) };
   } else if (profile) {
-    const supabase = await createClient();
-    const { data: kids } = await supabase
+    const reads = await createSessionReadClient();
+    const { data: kids } = await reads
       .from("children")
       .select("id, full_name")
       .eq("parent_id", profile.id)

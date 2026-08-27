@@ -51,6 +51,19 @@ function getCachedProfileById(userId: string) {
 }
 
 /**
+ * לקוח לקריאת נתונים של משתמש שכבר זוהה ב־JWT.
+ * getClaims מאמת את הטוקן מקומית, בלי להבטיח ש־PostgREST יקבל auth.uid().
+ * אחרי getSessionProfile / requireRole — ילדים והרשמות נקראים מכאן,
+ * מסוננים תמיד לפי profile.id.
+ */
+export const createSessionReadClient = cache(async () => {
+  if (isAdminClientConfigured()) {
+    return createAdminClient();
+  }
+  return createClient();
+});
+
+/**
  * מחזיר את המשתמש המחובר ואת הפרופיל שלו, או null אם לא מחובר.
  * cache מונע קריאה כפולה באותה בקשה כאשר גם ה-layout וגם העמוד צריכים פרופיל.
  */
