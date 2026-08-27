@@ -135,7 +135,7 @@ export default async function InstructorDashboard() {
   const todayClasses = classCards.filter((c) => c.isToday);
   const nextClass = classCards.find((c) => !c.isToday && c.status === "active");
 
-  const { thisMonth, previousMonth, monthlySummary, currentMonth, rate } = payroll;
+  const { thisMonth, previousMonth, monthlySummary, currentMonth, rate, payType } = payroll;
   const monthDiff = previousMonth ? thisMonth.amount - previousMonth.amount : 0;
 
   return (
@@ -181,7 +181,8 @@ export default async function InstructorDashboard() {
             </p>
             <p className="mt-1 text-xs text-white/80">
               {formatHours(thisMonth.hours)}
-              {rate > 0 && ` · ${formatCurrency(rate)} לשעה`}
+              {rate > 0 &&
+                ` · ${formatCurrency(rate)} ${payType === "monthly" ? "לחודש" : "לשעה"}`}
             </p>
 
             {previousMonth && (
@@ -272,11 +273,15 @@ export default async function InstructorDashboard() {
             hint={`${thisMonth.sessions} מפגשים שהתקיימו`}
           />
           <StatCard
-            label="תעריף שעתי"
+            label={payType === "monthly" ? "שכר חודשי" : "תעריף שעתי"}
             value={rate > 0 ? formatCurrency(rate) : "-"}
             icon="💰"
             tone="violet"
-            hint="השכר מחושב משעות המפגשים בפועל"
+            hint={
+              payType === "monthly"
+                ? "שכר קבוע בכל חודש"
+                : "השכר מחושב משעות המפגשים בפועל"
+            }
           />
         </div>
       </div>

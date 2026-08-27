@@ -865,6 +865,8 @@ export type Database = {
           gender: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate: number | null
           id: string
+          monthly_salary: number | null
+          pay_type: Database["public"]["Enums"]["instructor_pay_type"]
           phone: string | null
           profile_id: string | null
           status: Database["public"]["Enums"]["instructor_status"]
@@ -875,6 +877,8 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate?: number | null
           id?: string
+          monthly_salary?: number | null
+          pay_type?: Database["public"]["Enums"]["instructor_pay_type"]
           phone?: string | null
           profile_id?: string | null
           status?: Database["public"]["Enums"]["instructor_status"]
@@ -885,6 +889,8 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_type"] | null
           hourly_rate?: number | null
           id?: string
+          monthly_salary?: number | null
+          pay_type?: Database["public"]["Enums"]["instructor_pay_type"]
           phone?: string | null
           profile_id?: string | null
           status?: Database["public"]["Enums"]["instructor_status"]
@@ -1788,6 +1794,7 @@ export type Database = {
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
       enrollment_type: "class" | "program" | "pool_pass" | "private_lesson"
       gender_type: "male" | "female" | "other"
+      instructor_pay_type: "hourly" | "monthly"
       instructor_status: "active" | "inactive"
       listing_status: "draft" | "active" | "inactive"
       payment_method:
@@ -1952,6 +1959,7 @@ export const Constants = {
       enrollment_status: ["pending", "active", "cancelled", "completed"],
       enrollment_type: ["class", "program", "pool_pass", "private_lesson"],
       gender_type: ["male", "female", "other"],
+      instructor_pay_type: ["hourly", "monthly"],
       instructor_status: ["active", "inactive"],
       listing_status: ["draft", "active", "inactive"],
       payment_method: [

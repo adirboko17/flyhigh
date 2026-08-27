@@ -8,8 +8,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { requireRole } from "@/lib/auth";
 import { GENDER } from "@/lib/constants";
-import { instructorStatusLabel, instructorTitle } from "@/lib/instructors/labels";
-import { formatCurrency } from "@/utils/format";
+import {
+  formatInstructorPay,
+  instructorStatusLabel,
+  instructorTitle,
+} from "@/lib/instructors/labels";
 
 export const metadata = { title: "פרופיל מדריך" };
 
@@ -27,7 +30,7 @@ export default async function AdminInstructorProfilePage({
       supabase
         .from("instructors")
         .select(
-          "id, full_name, gender, phone, hourly_rate, status, profile_id, created_at, profiles(email)"
+          "id, full_name, gender, phone, hourly_rate, monthly_salary, pay_type, status, profile_id, created_at, profiles(email)"
         )
         .eq("id", id)
         .maybeSingle(),
@@ -67,64 +70,52 @@ export default async function AdminInstructorProfilePage({
         <CardHeader>
           <CardTitle>פרטי {instructorTitle(instructor.gender)}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Avatar name={instructor.full_name} className="h-14 w-14 text-lg" />
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-display text-lg font-bold text-ink-900">
-                    {instructor.full_name}
-                  </p>
-                  <Badge
-                    tone={instructor.status === "active" ? "success" : "neutral"}
-                  >
-                    {instructorStatusLabel(instructor.status, instructor.gender)}
-                  </Badge>
-                </div>
-                <p className="text-sm text-ink-500">
-                  {email ? (
-                    <span dir="ltr" className="inline-block text-right">
-                      {email}
-                    </span>
-                  ) : (
-                    "ללא גישה למערכת"
-                  )}
+        <CardContent className="space-y-5">
+          <div className="flex items-center gap-4">
+            <Avatar
+              name={instructor.full_name}
+              className="h-16 w-16 text-xl"
+            />
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-display text-xl font-bold text-ink-900">
+                  {instructor.full_name}
                 </p>
+                <Badge
+                  tone={instructor.status === "active" ? "success" : "neutral"}
+                >
+                  {instructorStatusLabel(instructor.status, instructor.gender)}
+                </Badge>
               </div>
+              <p className="text-sm text-ink-500">
+                {email ? (
+                  <span dir="ltr" className="inline-block">
+                    {email}
+                  </span>
+                ) : (
+                  "ללא גישה למערכת"
+                )}
+              </p>
             </div>
-
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:text-end">
-              <div>
-                <dt className="text-ink-400">מגדר</dt>
-                <dd className="font-medium text-ink-800">
-                  {instructor.gender ? GENDER[instructor.gender] : "לא צוין"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-ink-400">טלפון</dt>
-                <dd dir="ltr" className="font-medium text-ink-800 sm:text-end">
-                  {instructor.phone ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-ink-400">תעריף שעתי</dt>
-                <dd className="font-medium text-ink-800">
-                  {formatCurrency(instructor.hourly_rate)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-ink-400">חוגים</dt>
-                <dd className="font-medium text-ink-800">{classCount ?? 0}</dd>
-              </div>
-              <div>
-                <dt className="text-ink-400">מסמכים</dt>
-                <dd className="font-medium text-ink-800">
-                  {documents?.length ?? 0}
-                </dd>
-              </div>
-            </dl>
           </div>
+
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <FactTile
+              label="מגדר"
+              value={instructor.gender ? GENDER[instructor.gender] : "לא צוין"}
+            />
+            <FactTile label="טלפון" value={instructor.phone ?? "—"} dir="ltr" />
+            <FactTile label="שכר" value={formatInstructorPay(instructor)} />
+            <FactTile label="חוגים" value={String(classCount ?? 0)} />
+            <FactTile
+              label="מסמכים"
+              value={String(documents?.length ?? 0)}
+            />
+            <FactTile
+              label="גישה למערכת"
+              value={email ? "יש חשבון" : "ללא חשבון"}
+            />
+          </dl>
         </CardContent>
       </Card>
 
@@ -148,6 +139,28 @@ export default async function AdminInstructorProfilePage({
           emptyDescription="עדיין לא הועלו מסמכים למדריכה זו. העלו טופס 101, הסכם העסקה או מסמך אחר."
         />
       </div>
+    </div>
+  );
+}
+
+function FactTile({
+  label,
+  value,
+  dir,
+}: {
+  label: string;
+  value: string;
+  dir?: "ltr" | "rtl";
+}) {
+  return (
+    <div className="rounded-2xl bg-ink-50 px-4 py-3">
+      <dt className="text-xs font-medium text-ink-500">{label}</dt>
+      <dd
+        dir={dir}
+        className="mt-1 truncate text-sm font-semibold text-ink-900"
+      >
+        {value}
+      </dd>
     </div>
   );
 }

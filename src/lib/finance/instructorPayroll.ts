@@ -17,6 +17,10 @@ export type InstructorPayrollInstructor = {
   id: string;
   full_name: string;
   hourly_rate: number | null;
+  pay_type?: Enums<"instructor_pay_type"> | null;
+  monthly_salary?: number | null;
+  status?: Enums<"instructor_status"> | null;
+  created_at?: string | null;
 };
 
 export type InstructorPayrollSession = {
@@ -45,6 +49,7 @@ export type InstructorPayroll = {
   /** המפגשים של החודש הנוכחי, ללא מפגשים שבוטלו. */
   sessionsThisMonth: InstructorPayrollSession[];
   rate: number;
+  payType: Enums<"instructor_pay_type">;
 };
 
 const SESSION_COLUMNS =
@@ -113,7 +118,7 @@ export async function loadInstructorPayroll(
     const monthSessions = mySessions
       .filter((session) => session.session_date.startsWith(month))
       .map(toPayrollSession);
-    const [line] = buildPayroll(monthSessions, payrollInstructor);
+    const [line] = buildPayroll(monthSessions, payrollInstructor, { month });
 
     return {
       month,
@@ -145,6 +150,10 @@ export async function loadInstructorPayroll(
     thisMonth,
     previousMonth,
     sessionsThisMonth,
-    rate: Number(instructor?.hourly_rate ?? 0),
+    rate:
+      instructor?.pay_type === "monthly"
+        ? Number(instructor.monthly_salary ?? 0)
+        : Number(instructor?.hourly_rate ?? 0),
+    payType: instructor?.pay_type === "monthly" ? "monthly" : "hourly",
   };
 }

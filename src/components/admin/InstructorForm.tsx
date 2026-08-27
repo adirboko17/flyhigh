@@ -9,9 +9,11 @@ import {
   createInstructor,
   createInstructorAccount,
 } from "@/lib/instructors/actions";
+import { instructorPayType } from "@/lib/instructors/labels";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Input";
+import { cn } from "@/utils/cn";
 
 export type InstructorFormData = {
   id: string;
@@ -19,6 +21,8 @@ export type InstructorFormData = {
   gender: Enums<"gender_type"> | null;
   phone: string | null;
   hourly_rate: number | null;
+  monthly_salary?: number | null;
+  pay_type?: Enums<"instructor_pay_type"> | null;
   status: "active" | "inactive";
   /** מזהה חשבון ההתחברות המשויך, אם נוצר כזה. */
   profile_id: string | null;
@@ -29,7 +33,9 @@ const emptyForm = {
   full_name: "",
   gender: "",
   phone: "",
+  pay_type: "hourly" as Enums<"instructor_pay_type">,
   hourly_rate: "",
+  monthly_salary: "",
   status: "active",
 };
 
@@ -39,7 +45,9 @@ function toFormState(existing?: InstructorFormData) {
     full_name: existing.full_name,
     gender: existing.gender ?? "",
     phone: existing.phone ?? "",
+    pay_type: instructorPayType(existing.pay_type),
     hourly_rate: existing.hourly_rate?.toString() ?? "",
+    monthly_salary: existing.monthly_salary?.toString() ?? "",
     status: existing.status,
   };
 }
@@ -103,12 +111,17 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
 
     setLoading(true);
 
+    const hourlyRate = form.hourly_rate ? Number(form.hourly_rate) : null;
+    const monthlySalary = form.monthly_salary ? Number(form.monthly_salary) : null;
+
     if (!isEdit) {
       const result = await createInstructor({
         fullName: form.full_name,
         gender: form.gender,
         phone: form.phone || null,
-        hourlyRate: form.hourly_rate ? Number(form.hourly_rate) : null,
+        payType: form.pay_type,
+        hourlyRate,
+        monthlySalary,
         account: credentials,
       });
       setLoading(false);
@@ -127,7 +140,9 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
         full_name: form.full_name,
         gender: form.gender,
         phone: form.phone || null,
-        hourly_rate: form.hourly_rate ? Number(form.hourly_rate) : null,
+        hourly_rate: hourlyRate,
+        monthly_salary: monthlySalary,
+        pay_type: form.pay_type,
         status: form.status as "active" | "inactive",
       })
       .eq("id", existing!.id);
@@ -173,24 +188,57 @@ export function InstructorForm({ existing, onClose }: InstructorFormProps) {
           <option value="female">{GENDER.female}</option>
         </Select>
       </Field>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="טלפון">
-          <Input
-            dir="ltr"
-            value={form.phone}
-            onChange={set("phone")}
-            placeholder="052-7654321"
+      <Field label="טלפון">
+        <Input
+          dir="ltr"
+          value={form.phone}
+          onChange={set("phone")}
+          placeholder="052-7654321"
+        />
+      </Field>
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-ink-800">סוג שכר</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <PayModeOption
+            selected={form.pay_type === "hourly"}
+            onSelect={() =>
+              setForm((f) => ({ ...f, pay_type: "hourly" }))
+            }
+            title="לפי שעה"
+            hint="תעריף × שעות המפגשים"
           />
-        </Field>
-        <Field label="תעריף שעתי (₪)">
-          <Input
-            type="number"
-            min={0}
-            step="1"
-            value={form.hourly_rate}
-            onChange={set("hourly_rate")}
+          <PayModeOption
+            selected={form.pay_type === "monthly"}
+            onSelect={() =>
+              setForm((f) => ({ ...f, pay_type: "monthly" }))
+            }
+            title="שכר חודשי קבוע"
+            hint="סכום קבוע בכל חודש"
           />
-        </Field>
+        </div>
+        {form.pay_type === "monthly" ? (
+          <Field label="שכר חודשי (₪)" hint="ישולם בכל חודש, בלי קשר למספר השעות">
+            <Input
+              type="number"
+              min={0}
+              step="1"
+              value={form.monthly_salary}
+              onChange={set("monthly_salary")}
+              placeholder="למשל: 4500"
+            />
+          </Field>
+        ) : (
+          <Field label="תעריף שעתי (₪)">
+            <Input
+              type="number"
+              min={0}
+              step="1"
+              value={form.hourly_rate}
+              onChange={set("hourly_rate")}
+              placeholder="למשל: 80"
+            />
+          </Field>
+        )}
       </div>
       {isEdit && (
         <Field label="סטטוס">
@@ -359,6 +407,42 @@ function ExistingAccountNotice({ email }: { email: string | null }) {
         שינוי הסיסמה מתבצע על ידי המדריכה בעמוד ההגדרות שלה.
       </p>
     </div>
+  );
+}
+
+function PayModeOption({
+  selected,
+  onSelect,
+  title,
+  hint,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        "rounded-xl border px-4 py-3 text-start transition-colors",
+        selected
+          ? "border-brand-500 bg-brand-50"
+          : "border-ink-200 bg-white hover:border-ink-300"
+      )}
+    >
+      <span
+        className={cn(
+          "block text-sm font-semibold",
+          selected ? "text-brand-800" : "text-ink-800"
+        )}
+      >
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs text-ink-500">{hint}</span>
+    </button>
   );
 }
 

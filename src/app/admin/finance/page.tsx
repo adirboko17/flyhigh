@@ -138,7 +138,9 @@ export default async function AdminFinancePage({
       )
       .gte("session_date", trendStart)
       .lte("session_date", monthEnd),
-    supabase.from("instructors").select("id, full_name, hourly_rate, status"),
+    supabase
+      .from("instructors")
+      .select("id, full_name, hourly_rate, monthly_salary, pay_type, status, created_at"),
     supabase
       .from("enrollments")
       .select("id", { count: "exact", head: true })
@@ -191,10 +193,14 @@ export default async function AdminFinancePage({
 
   const payrollLines = buildPayroll(
     sessionsByMonth.get(month) ?? [],
-    allInstructors
+    allInstructors,
+    { month }
   );
   const monthPayroll = payrollTotal(payrollLines);
-  const workingPayrollLines = payrollLines.filter((line) => line.sessions > 0);
+  const workingPayrollLines = payrollLines.filter(
+    (line) =>
+      line.sessions > 0 || (line.payType === "monthly" && line.amount > 0)
+  );
 
   const matnasEntries = (matnasRows ?? []).map((row) => ({
     month: row.month,
@@ -417,7 +423,11 @@ export default async function AdminFinancePage({
                 (revenueByMonth.get(trendMonth) ?? 0) +
                   (matnasByMonth.get(trendMonth) ?? 0),
                 payrollTotal(
-                  buildPayroll(sessionsByMonth.get(trendMonth) ?? [], allInstructors)
+                  buildPayroll(
+                    sessionsByMonth.get(trendMonth) ?? [],
+                    allInstructors,
+                    { month: trendMonth }
+                  )
                 ),
               ],
               href: `/admin/finance?month=${trendMonth}`,
@@ -531,7 +541,7 @@ export default async function AdminFinancePage({
                   <TH>מדריכה</TH>
                   <TH className="hidden sm:table-cell">מפגשים</TH>
                   <TH>שעות</TH>
-                  <TH className="hidden md:table-cell">תעריף שעתי</TH>
+                  <TH className="hidden md:table-cell">תעריף</TH>
                   <TH>לתשלום</TH>
                 </TR>
               </THead>
@@ -546,7 +556,13 @@ export default async function AdminFinancePage({
                       {formatHours(line.hours)}
                     </TD>
                     <TD className="hidden text-ink-600 md:table-cell">
-                      {line.hourlyRate > 0 ? (
+                      {line.payType === "monthly" ? (
+                        line.monthlySalary > 0 ? (
+                          `${formatCurrency(line.monthlySalary)} לחודש`
+                        ) : (
+                          <Badge tone="warning">לא הוגדר שכר</Badge>
+                        )
+                      ) : line.hourlyRate > 0 ? (
                         formatCurrency(line.hourlyRate)
                       ) : (
                         <Badge tone="warning">לא הוגדר תעריף</Badge>
@@ -575,7 +591,7 @@ export default async function AdminFinancePage({
         ) : (
           <EmptyState
             title="לא התקיימו מפגשים בחודש זה"
-            description="השכר מחושב משעות המפגשים בפועל, ללא מפגשים שבוטלו."
+            description="שכר שעתי מחושב ממפגשים בפועל. מדריכות בשכר חודשי מופיעות גם בלי מפגשים."
             icon="👩‍🏫"
             className="rounded-none border-0 bg-transparent"
           />

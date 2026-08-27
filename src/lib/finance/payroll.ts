@@ -1,9 +1,10 @@
 import type { Enums } from "@/types/database.types";
+import { instructorPayType } from "@/lib/instructors/labels";
 
 /**
- * חישוב שכר מדריכות מתוך המפגשים שהתקיימו בפועל.
- * מקור האמת הוא class_sessions — לכל מפגש יש תאריך ושעות, ומהן נגזרות
- * שעות העבודה. מפגשים שבוטלו אינם משולמים.
+ * חישוב שכר מדריכות.
+ * לפי שעה: שעות המפגשים בפועל × תעריף, בלי מפגשים שבוטלו.
+ * שכר חודשי קבוע: הסכום החודשי, כל עוד המדריכה כבר הועסקה בחודש הזה.
  */
 
 export type PayrollSession = {
@@ -18,12 +19,18 @@ export type PayrollInstructor = {
   id: string;
   full_name: string;
   hourly_rate: number | null;
+  pay_type?: Enums<"instructor_pay_type"> | null;
+  monthly_salary?: number | null;
+  status?: Enums<"instructor_status"> | null;
+  created_at?: string | null;
 };
 
 export type PayrollLine = {
   instructorId: string;
   name: string;
+  payType: Enums<"instructor_pay_type">;
   hourlyRate: number;
+  monthlySalary: number;
   sessions: number;
   hours: number;
   amount: number;
@@ -62,7 +69,8 @@ export function payableMinutesByInstructor(
 
 export function buildPayroll(
   sessions: PayrollSession[],
-  instructors: PayrollInstructor[]
+  instructors: PayrollInstructor[],
+  options?: { month?: string }
 ): PayrollLine[] {
   const totals = payableMinutesByInstructor(sessions);
 
@@ -71,14 +79,29 @@ export function buildPayroll(
       const worked = totals.get(instructor.id) ?? { minutes: 0, sessions: 0 };
       const hours = worked.minutes / 60;
       const hourlyRate = Number(instructor.hourly_rate ?? 0);
+      const monthlySalary = Number(instructor.monthly_salary ?? 0);
+      const payType = instructorPayType(instructor.pay_type);
+      const hiredMonth = instructor.created_at?.slice(0, 7);
+      const beforeHire =
+        Boolean(options?.month && hiredMonth && options.month < hiredMonth);
+      const inactiveWithoutWork =
+        instructor.status === "inactive" && worked.sessions === 0;
+      const amount =
+        payType === "monthly"
+          ? beforeHire || inactiveWithoutWork
+            ? 0
+            : monthlySalary
+          : Math.round(hours * hourlyRate * 100) / 100;
 
       return {
         instructorId: instructor.id,
         name: instructor.full_name,
+        payType,
         hourlyRate,
+        monthlySalary,
         sessions: worked.sessions,
         hours: Math.round(hours * 100) / 100,
-        amount: Math.round(hours * hourlyRate * 100) / 100,
+        amount: Math.round(amount * 100) / 100,
       };
     })
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "he"));

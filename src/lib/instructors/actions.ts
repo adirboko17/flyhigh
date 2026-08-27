@@ -90,7 +90,9 @@ export async function createInstructor(input: {
   fullName: string;
   gender: Enums<"gender_type">;
   phone: string | null;
+  payType: Enums<"instructor_pay_type">;
   hourlyRate: number | null;
+  monthlySalary: number | null;
   account: InstructorAccountInput | null;
 }): Promise<InstructorActionResult> {
   if (!(await isCallerAdmin())) {
@@ -125,6 +127,8 @@ export async function createInstructor(input: {
     gender: input.gender,
     phone,
     hourly_rate: input.hourlyRate,
+    monthly_salary: input.monthlySalary,
+    pay_type: input.payType,
     status: "active",
     profile_id: profileId,
   });

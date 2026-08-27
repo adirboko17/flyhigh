@@ -9,7 +9,7 @@ export default async function AdminInstructorsPage() {
   const [{ data: instructors }, { data: classes }] = await Promise.all([
     supabase
       .from("instructors")
-      .select("id, full_name, gender, phone, hourly_rate, status, profile_id, profiles(email)")
+      .select("id, full_name, gender, phone, hourly_rate, monthly_salary, pay_type, status, profile_id, profiles(email)")
       .order("created_at", { ascending: false }),
     supabase.from("classes").select("instructor_id"),
   ]);

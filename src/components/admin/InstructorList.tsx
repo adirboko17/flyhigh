@@ -15,15 +15,20 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { createClient } from "@/lib/supabase/client";
-import { instructorStatusLabel, instructorTitle } from "@/lib/instructors/labels";
+import {
+  formatInstructorPay,
+  instructorStatusLabel,
+  instructorTitle,
+} from "@/lib/instructors/labels";
 import type { Enums } from "@/types/database.types";
-import { formatCurrency } from "@/utils/format";
 export type AdminInstructorRow = {
   id: string;
   full_name: string;
   gender: Enums<"gender_type"> | null;
   phone: string | null;
   hourly_rate: number | null;
+  monthly_salary: number | null;
+  pay_type: Enums<"instructor_pay_type">;
   status: "active" | "inactive";
   profile_id: string | null;
   email: string | null;
@@ -122,7 +127,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
               <TR>
                 <TH>שם</TH>
                 <TH className="hidden sm:table-cell">טלפון</TH>
-                <TH className="hidden md:table-cell">תעריף שעתי</TH>
+                <TH className="hidden md:table-cell">שכר</TH>
                 <TH className="hidden lg:table-cell">חוגים</TH>
                 <TH>סטטוס</TH>
                 <TH className="w-14 sm:w-28">פעולות</TH>
@@ -163,7 +168,7 @@ export function InstructorList({ instructors }: InstructorListProps) {
                     {i.phone ?? "—"}
                   </TD>
                   <TD className="hidden whitespace-nowrap font-medium md:table-cell">
-                    {formatCurrency(i.hourly_rate)}
+                    {formatInstructorPay(i)}
                   </TD>
                   <TD className="hidden lg:table-cell">{i.classCount}</TD>
                   <TD>

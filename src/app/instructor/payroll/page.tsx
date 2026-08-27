@@ -27,6 +27,7 @@ export default async function InstructorPayrollPage() {
     thisMonth,
     sessionsThisMonth,
     rate,
+    payType,
   } = await loadInstructorPayroll(supabase, instructor, TREND_MONTHS);
 
   return (
@@ -38,7 +39,7 @@ export default async function InstructorPayrollPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="תעריף שעתי"
+          label={payType === "monthly" ? "שכר חודשי" : "תעריף שעתי"}
           value={formatCurrency(rate)}
           icon="💰"
           tone="brand"
@@ -60,7 +61,11 @@ export default async function InstructorPayrollPage() {
           value={formatCurrency(thisMonth.amount)}
           icon="🧮"
           tone="violet"
-          hint="לפי שעות המפגשים בפועל"
+          hint={
+            payType === "monthly"
+              ? "שכר חודשי קבוע"
+              : "לפי שעות המפגשים בפועל"
+          }
         />
       </div>
 
@@ -158,7 +163,11 @@ export default async function InstructorPayrollPage() {
         ) : (
           <EmptyState
             title="אין מפגשים החודש"
-            description="השכר מחושב משעות המפגשים בפועל, ללא מפגשים שבוטלו."
+            description={
+              payType === "monthly"
+                ? "השכר החודשי קבוע. כאן מוצגים המפגשים שהתקיימו בפועל."
+                : "השכר מחושב משעות המפגשים בפועל, ללא מפגשים שבוטלו."
+            }
             icon="📅"
             className="rounded-none border-0 bg-transparent"
           />

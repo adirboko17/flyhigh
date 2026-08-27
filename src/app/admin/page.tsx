@@ -107,7 +107,9 @@ export default async function AdminDashboard() {
       .order("session_date")
       .order("start_time"),
     supabase.from("classes").select("id, title, capacity, status"),
-    supabase.from("instructors").select("id, hourly_rate, status"),
+    supabase
+      .from("instructors")
+      .select("id, hourly_rate, monthly_salary, pay_type, status"),
     supabase
       .from("waitlist")
       .select("id", { count: "exact", head: true })
@@ -215,7 +217,10 @@ export default async function AdminDashboard() {
   const instructorsWithoutRate = (instructors ?? []).filter(
     (instructor) =>
       instructor.status === "active" &&
-      (instructor.hourly_rate === null || Number(instructor.hourly_rate) <= 0)
+      (instructor.pay_type === "monthly"
+        ? instructor.monthly_salary === null ||
+          Number(instructor.monthly_salary) <= 0
+        : instructor.hourly_rate === null || Number(instructor.hourly_rate) <= 0)
   ).length;
 
   const expiringMemberships = (memberships ?? []).filter(
@@ -279,7 +284,7 @@ export default async function AdminDashboard() {
     instructorsWithoutRate > 0 && {
       icon: "💰",
       tone: "rose" as const,
-      title: `${instructorsWithoutRate} ${instructorsWithoutRate === 1 ? "מדריכה ללא תעריף" : "מדריכות ללא תעריף"} שעתי`,
+      title: `${instructorsWithoutRate} ${instructorsWithoutRate === 1 ? "מדריכה ללא שכר" : "מדריכות ללא שכר"}`,
       detail: "השכר שלהן לא נכלל בדוח הכספים",
       href: "/admin/instructors",
     },
