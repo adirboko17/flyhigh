@@ -57,7 +57,7 @@ export function ClassCard({
     : slots.length > 1 && cls.pick_one_slot
       ? "בחירת מועד"
       : cls.schedule_days
-        ? `${cls.pick_one_slot ? "בחירת מועד · " : ""}ימים ${cls.schedule_days}`
+        ? `${cls.pick_one_slot ? "בחירת מועד · " : ""}יום ${cls.schedule_days}`
         : cls.schedule_type === "custom"
           ? "תאריכים מותאמים"
           : `יום ${dayLabel(cls.day_of_week)}`;

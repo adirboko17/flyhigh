@@ -73,7 +73,7 @@ export default async function ClassDetailPage({
   const scheduleLabel = interestOnly
     ? "ללא מועד עדיין"
     : cls.schedule_days
-    ? `ימים ${cls.schedule_days}`
+    ? `יום ${cls.schedule_days}`
     : cls.schedule_type === "custom"
       ? "תאריכים מותאמים"
       : cls.day_of_week != null
@@ -143,7 +143,7 @@ export default async function ClassDetailPage({
 
           <div className="order-3 lg:mt-6">
             <div className="overflow-hidden rounded-2xl border border-ink-100 bg-ink-100 sm:mt-8 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent">
-              <div className="grid grid-cols-2 gap-px sm:gap-4">
+              <div className="grid grid-cols-2 gap-px sm:gap-4 [&>*:last-child:nth-child(odd)]:col-span-2 [&>*:last-child:nth-child(odd)]:justify-center">
                 <DetailRow
                   icon="👩‍🏫"
                   label={instructorTitle(cls.instructor_gender)}
@@ -227,7 +227,7 @@ export default async function ClassDetailPage({
               </div>
               {!interestOnly &&
                 (hasDetailValue(startDateLabel) || hasDetailValue(endDateLabel)) && (
-                <div className="grid grid-cols-1 gap-px sm:mt-4 sm:grid-cols-2 sm:gap-4">
+                <div className="grid grid-cols-1 gap-px sm:mt-4 sm:grid-cols-2 sm:gap-4 sm:[&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:justify-center">
                   <DetailRow
                     icon="🗓️"
                     label="תאריך התחלה"
