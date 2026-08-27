@@ -44,18 +44,46 @@ export default async function InstructorDashboard() {
   const today = todayInIsrael();
   const todayWeekday = new Date(`${today}T00:00:00Z`).getUTCDay();
 
-  const [{ data: classesData }, payroll] = await Promise.all([
-    instructor
-      ? supabase
-          .from("classes")
-          .select("*")
-          .eq("instructor_id", instructor.id)
-          .order("day_of_week")
-      : Promise.resolve({ data: [] }),
-    loadInstructorPayroll(supabase, instructor, TREND_MONTHS),
-  ]);
+  const [{ data: ownedClasses }, { data: assignedSlots }, payroll] =
+    await Promise.all([
+      instructor
+        ? supabase
+            .from("classes")
+            .select("*")
+            .eq("instructor_id", instructor.id)
+            .order("day_of_week")
+        : Promise.resolve({ data: [] }),
+      instructor
+        ? supabase
+            .from("class_weekly_slots")
+            .select("id, class_id, day_of_week, start_time, end_time")
+            .eq("instructor_id", instructor.id)
+            .order("day_of_week")
+            .order("start_time")
+        : Promise.resolve({ data: [] }),
+      loadInstructorPayroll(supabase, instructor, TREND_MONTHS),
+    ]);
 
-  const myClasses = classesData ?? [];
+  const ownedIds = new Set((ownedClasses ?? []).map((cls) => cls.id));
+  const extraClassIds = [
+    ...new Set(
+      (assignedSlots ?? [])
+        .map((slot) => slot.class_id)
+        .filter((classId) => !ownedIds.has(classId))
+    ),
+  ];
+  const { data: extraClasses } =
+    extraClassIds.length > 0
+      ? await supabase.from("classes").select("*").in("id", extraClassIds)
+      : { data: [] };
+
+  const myClasses = [...(ownedClasses ?? []), ...(extraClasses ?? [])];
+  const mySlotsByClass = new Map<string, typeof assignedSlots>();
+  for (const slot of assignedSlots ?? []) {
+    const list = mySlotsByClass.get(slot.class_id) ?? [];
+    list.push(slot);
+    mySlotsByClass.set(slot.class_id, list);
+  }
   const classIds = myClasses.map((c) => c.id);
 
   const counts = new Map<string, number>();
@@ -111,19 +139,25 @@ export default async function InstructorDashboard() {
     totalCapacity > 0 ? Math.round((studentCount / totalCapacity) * 100) : null;
 
   const classCards: InstructorClassData[] = myClasses
-    .map((c) => ({
-      id: c.id,
-      title: c.title,
-      status: c.status,
-      dayOfWeek: c.day_of_week,
-      startTime: c.start_time,
-      endTime: c.end_time,
-      capacity: c.capacity,
-      studentCount: counts.get(c.id) ?? 0,
-      students: studentsByClass.get(c.id) ?? [],
-      attendanceHistory: historyByClass.get(c.id) ?? [],
-      isToday: c.day_of_week === todayWeekday && c.status === "active",
-    }))
+    .map((c) => {
+      const mySlots = mySlotsByClass.get(c.id) ?? [];
+      const todaySlot = mySlots.find((slot) => slot.day_of_week === todayWeekday);
+      const displaySlot = todaySlot ?? mySlots[0];
+      const dayOfWeek = displaySlot?.day_of_week ?? c.day_of_week;
+      return {
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        dayOfWeek,
+        startTime: displaySlot?.start_time ?? c.start_time,
+        endTime: displaySlot?.end_time ?? c.end_time,
+        capacity: c.capacity,
+        studentCount: counts.get(c.id) ?? 0,
+        students: studentsByClass.get(c.id) ?? [],
+        attendanceHistory: historyByClass.get(c.id) ?? [],
+        isToday: dayOfWeek === todayWeekday && c.status === "active",
+      };
+    })
     // החוגים של היום עולים לראש הרשימה, ואחריהם השאר לפי סדר השבוע והשעה.
     .sort((a, b) => {
       if (a.isToday !== b.isToday) return a.isToday ? -1 : 1;

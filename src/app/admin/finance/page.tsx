@@ -26,6 +26,7 @@ import {
   payrollTotal,
   type PayrollSession,
 } from "@/lib/finance/payroll";
+import { resolveSessionInstructorId } from "@/lib/instructors/sessionInstructor";
 import {
   SUBJECT_KIND_LABEL,
   subjectClassCategory,
@@ -120,6 +121,7 @@ export default async function AdminFinancePage({
     { count: takenSeatsCount },
     { data: classes },
     { data: matnasRows },
+    { data: weeklySlots },
   ] = await Promise.all([
     supabase
       .from("payments")
@@ -134,7 +136,7 @@ export default async function AdminFinancePage({
     supabase
       .from("class_sessions")
       .select(
-        "session_date, start_time, end_time, status, substitute_instructor_id, classes(instructor_id)"
+        "session_date, start_time, end_time, status, substitute_instructor_id, weekly_slot_id, classes(instructor_id)"
       )
       .gte("session_date", trendStart)
       .lte("session_date", monthEnd),
@@ -156,6 +158,7 @@ export default async function AdminFinancePage({
       .select("month, amount")
       .eq("source", MATNAS_INCOME_SOURCE)
       .order("month"),
+    supabase.from("class_weekly_slots").select("id, instructor_id"),
   ]);
 
   const allPayments = payments ?? [];
@@ -175,13 +178,22 @@ export default async function AdminFinancePage({
     );
   }
 
+  const slotInstructorById = new Map(
+    (weeklySlots ?? []).map((slot) => [slot.id, slot.instructor_id])
+  );
+
   const sessionsByMonth = new Map<string, PayrollSession[]>();
   for (const session of sessions ?? []) {
     const key = session.session_date.slice(0, 7);
     const entry: PayrollSession = {
-      // מפגש שהועבר על ידי מחליפה משולם למחליפה ולא למדריכה הקבועה.
-      instructorId:
-        session.substitute_instructor_id ?? session.classes?.instructor_id ?? null,
+      // מחליפה גוברת, אחר כך מדריך המועד, ואז מדריך החוג.
+      instructorId: resolveSessionInstructorId({
+        substituteInstructorId: session.substitute_instructor_id,
+        slotInstructorId: session.weekly_slot_id
+          ? slotInstructorById.get(session.weekly_slot_id)
+          : null,
+        classInstructorId: session.classes?.instructor_id,
+      }),
       status: session.status,
       startTime: session.start_time,
       endTime: session.end_time,

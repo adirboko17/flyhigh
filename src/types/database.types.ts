@@ -366,6 +366,7 @@ export type Database = {
           end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           id: string
+          instructor_id: string | null
           note: string | null
           start_time: string
         }
@@ -376,6 +377,7 @@ export type Database = {
           end_time: string
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
+          instructor_id?: string | null
           note?: string | null
           start_time: string
         }
@@ -386,6 +388,7 @@ export type Database = {
           end_time?: string
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           id?: string
+          instructor_id?: string | null
           note?: string | null
           start_time?: string
         }
@@ -395,6 +398,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_weekly_slots_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
             referencedColumns: ["id"]
           },
         ]

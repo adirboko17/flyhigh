@@ -78,7 +78,7 @@ export async function loadAdminClassSummary(
       .in("status", ["waiting", "offered"]),
     supabase
       .from("class_weekly_slots")
-      .select("id, day_of_week, start_time, end_time, gender_policy")
+      .select("id, day_of_week, start_time, end_time, gender_policy, instructor_id")
       .eq("class_id", classId)
       .order("day_of_week")
       .order("start_time"),
@@ -121,6 +121,7 @@ export async function loadAdminClassSummary(
       start_time: slot.start_time,
       end_time: slot.end_time,
       gender_policy: slot.gender_policy,
+      instructor_id: slot.instructor_id,
       registeredCount: registeredBySlot.get(slot.id) ?? 0,
       waitlistCount: waitlistBySlot.get(slot.id) ?? 0,
     })),

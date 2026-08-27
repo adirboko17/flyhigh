@@ -42,6 +42,11 @@ export const ADMIN_NAV: NavEntry[] = [
     icon: "🗓️",
     children: [
       {
+        href: "/admin/class-overview",
+        label: "מבט על חוגים",
+        icon: "📋",
+      },
+      {
         href: "/admin/private-lessons",
         label: "תיאום מועדים",
         icon: "🎯",

@@ -25,7 +25,7 @@ export default async function AdminInstructorProfilePage({
   const { id } = await params;
   const supabase = await createAdminDataClient();
 
-  const [{ data: instructor }, { data: documents }, { count: classCount }] =
+  const [{ data: instructor }, { data: documents }, { data: ownedClasses }, { data: slottedClasses }] =
     await Promise.all([
       supabase
         .from("instructors")
@@ -41,11 +41,14 @@ export default async function AdminInstructorProfilePage({
         )
         .eq("instructor_id", id)
         .order("created_at", { ascending: false }),
-      supabase
-        .from("classes")
-        .select("id", { count: "exact", head: true })
-        .eq("instructor_id", id),
+      supabase.from("classes").select("id").eq("instructor_id", id),
+      supabase.from("class_weekly_slots").select("class_id").eq("instructor_id", id),
     ]);
+
+  const classCount = new Set([
+    ...(ownedClasses ?? []).map((cls) => cls.id),
+    ...(slottedClasses ?? []).map((slot) => slot.class_id),
+  ]).size;
 
   if (!instructor) notFound();
 

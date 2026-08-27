@@ -22,6 +22,8 @@ import {
 } from "@/lib/scheduling/classSchedule";
 import { formatDate, formatDateShort, formatTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
+import { InstructorSelect } from "@/components/admin/InstructorSelect";
 
 interface Props {
   value: ClassScheduleState;
@@ -29,6 +31,7 @@ interface Props {
   disabled?: boolean;
   pickOneSlot?: boolean;
   onPickOneSlotChange?: (pickOneSlot: boolean) => void;
+  instructors?: ClassInstructorOption[];
 }
 
 export function ClassScheduleEditor({
@@ -37,6 +40,7 @@ export function ClassScheduleEditor({
   disabled,
   pickOneSlot = true,
   onPickOneSlotChange,
+  instructors = [],
 }: Props) {
   const [moreOpen, setMoreOpen] = useState(() =>
     value.scheduleType === "custom" ||
@@ -67,6 +71,7 @@ export function ClassScheduleEditor({
           startTime: last?.startTime || "16:00",
           endTime: last?.endTime || "16:45",
           genderPolicy: last?.genderPolicy ?? "mixed",
+          instructorId: last?.instructorId,
         },
       ],
     });
@@ -241,6 +246,26 @@ export function ClassScheduleEditor({
                     <span className="hidden sm:block" />
                   )}
                 </div>
+                {instructors.length > 0 && (
+                  <Field
+                    label={
+                      value.weeklySlots.length > 1
+                        ? "מדריך או מדריכה למועד הזה"
+                        : "מדריך או מדריכה"
+                    }
+                  >
+                    <InstructorSelect
+                      value={slot.instructorId ?? ""}
+                      onChange={(instructorId) =>
+                        updateWeeklySlot(index, {
+                          instructorId: instructorId || undefined,
+                        })
+                      }
+                      instructors={instructors}
+                      disabled={disabled}
+                    />
+                  </Field>
+                )}
                 {showNotes && (
                   <Field label="הערה להורים">
                     <Input

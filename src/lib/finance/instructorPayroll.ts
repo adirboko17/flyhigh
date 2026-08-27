@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Enums } from "@/types/database.types";
+import { resolveSessionInstructorId } from "@/lib/instructors/sessionInstructor";
 import { buildPayroll, type PayrollSession } from "./payroll";
 import {
   listMonths,
@@ -25,12 +26,13 @@ export type InstructorPayrollInstructor = {
 
 export type InstructorPayrollSession = {
   class_id: string | null;
+  weekly_slot_id?: string | null;
   session_date: string;
   start_time: string;
   end_time: string;
   status: Enums<"class_session_status">;
   substitute_instructor_id: string | null;
-  classes: { title: string } | null;
+  classes: { title: string; instructor_id?: string | null } | null;
 };
 
 export type InstructorMonthSummary = {
@@ -53,7 +55,7 @@ export type InstructorPayroll = {
 };
 
 const SESSION_COLUMNS =
-  "class_id, session_date, start_time, end_time, status, substitute_instructor_id, classes(title)";
+  "class_id, weekly_slot_id, session_date, start_time, end_time, status, substitute_instructor_id, classes(title, instructor_id)";
 
 function emptyMonth(month: string): InstructorMonthSummary {
   return { month, sessions: 0, hours: 0, amount: 0 };
@@ -69,14 +71,22 @@ export async function loadInstructorPayroll(
   const rangeStart = monthRange(months[0]).start;
   const rangeEnd = monthRange(currentMonth).end;
 
-  const { data: classes } = instructor
-    ? await supabase
-        .from("classes")
-        .select("id")
-        .eq("instructor_id", instructor.id)
-    : { data: [] };
+  const [{ data: classes }, { data: assignedSlots }] = instructor
+    ? await Promise.all([
+        supabase.from("classes").select("id").eq("instructor_id", instructor.id),
+        supabase
+          .from("class_weekly_slots")
+          .select("id, class_id")
+          .eq("instructor_id", instructor.id),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  const classIds = (classes ?? []).map((c) => c.id);
+  const classIds = [
+    ...new Set([
+      ...(classes ?? []).map((c) => c.id),
+      ...(assignedSlots ?? []).map((slot) => slot.class_id),
+    ]),
+  ];
 
   // מפגשים של החוגים שלה, ובנוסף מפגשים בחוגים אחרים שבהם היא משמשת כמחליפה.
   const ownershipFilter = [
@@ -86,21 +96,37 @@ export async function loadInstructorPayroll(
     .filter(Boolean)
     .join(",");
 
-  const { data: sessions } = ownershipFilter
-    ? await supabase
-        .from("class_sessions")
-        .select(SESSION_COLUMNS)
-        .or(ownershipFilter)
-        .gte("session_date", rangeStart)
-        .lte("session_date", rangeEnd)
-    : { data: [] };
+  const [{ data: sessions }, { data: classSlots }] = await Promise.all([
+    ownershipFilter
+      ? supabase
+          .from("class_sessions")
+          .select(SESSION_COLUMNS)
+          .or(ownershipFilter)
+          .gte("session_date", rangeStart)
+          .lte("session_date", rangeEnd)
+      : Promise.resolve({ data: [] }),
+    classIds.length > 0
+      ? supabase
+          .from("class_weekly_slots")
+          .select("id, instructor_id")
+          .in("class_id", classIds)
+      : Promise.resolve({ data: [] }),
+  ]);
 
-  // מפגש שהועבר למחליפה יורד מהשכר של המדריכה הקבועה ונזקף למחליפה.
+  const slotInstructorById = new Map(
+    (classSlots ?? []).map((slot) => [slot.id, slot.instructor_id])
+  );
+
+  // מפגש שהועבר למחליפה משולם למחליפה. מועד עם מדריך משלו נזקף למדריך של המועד.
   const mySessions = ((sessions ?? []) as InstructorPayrollSession[]).filter(
     (session) =>
-      session.substitute_instructor_id
-        ? session.substitute_instructor_id === instructor?.id
-        : true
+      resolveSessionInstructorId({
+        substituteInstructorId: session.substitute_instructor_id,
+        slotInstructorId: session.weekly_slot_id
+          ? slotInstructorById.get(session.weekly_slot_id)
+          : null,
+        classInstructorId: session.classes?.instructor_id,
+      }) === instructor?.id
   );
 
   const payrollInstructor = instructor ? [instructor] : [];

@@ -55,6 +55,7 @@ export async function saveClassSchedule(
             start_time: slot.startTime,
             end_time: slot.endTime,
             gender_policy: slot.genderPolicy ?? "mixed",
+            instructor_id: slot.instructorId || null,
             note: slot.note?.trim() || null,
           })
           .eq("id", match.id);
@@ -70,6 +71,7 @@ export async function saveClassSchedule(
             start_time: slot.startTime,
             end_time: slot.endTime,
             gender_policy: slot.genderPolicy ?? "mixed",
+            instructor_id: slot.instructorId || null,
             note: slot.note?.trim() || null,
           })
           .select("id")

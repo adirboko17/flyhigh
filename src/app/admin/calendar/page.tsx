@@ -53,6 +53,7 @@ export default async function AdminCalendarPage({
     { data: instructors },
     { data: privateSlots },
     { data: activityBookings },
+    { data: weeklySlots },
   ] = await Promise.all([
     supabase
       .from("class_sessions")
@@ -94,7 +95,20 @@ export default async function AdminCalendarPage({
       .lte("session_date", end)
       .order("session_date")
       .order("start_time"),
+    supabase
+      .from("class_weekly_slots")
+      .select("id, instructor_id, instructors(full_name)"),
   ]);
+
+  const slotInstructorById = new Map(
+    (weeklySlots ?? []).map((slot) => [
+      slot.id,
+      {
+        instructorId: slot.instructor_id,
+        instructorName: slot.instructors?.full_name ?? null,
+      },
+    ])
+  );
 
   const registeredByClass = new Map<string, number>();
   for (const enrollment of enrollments ?? []) {
@@ -117,8 +131,16 @@ export default async function AdminCalendarPage({
           classId: session.class_id,
           title: cls.title,
           category: cls.category,
-          instructorId: cls.instructor_id,
-          instructor: cls.instructors?.full_name ?? null,
+          instructorId:
+            (session.weekly_slot_id
+              ? slotInstructorById.get(session.weekly_slot_id)?.instructorId
+              : null) ?? cls.instructor_id,
+          instructor:
+            (session.weekly_slot_id
+              ? slotInstructorById.get(session.weekly_slot_id)?.instructorName
+              : null) ??
+            cls.instructors?.full_name ??
+            null,
           substituteInstructorId: session.substitute_instructor_id,
           substituteInstructor: session.substitute?.full_name ?? null,
           date: session.session_date,

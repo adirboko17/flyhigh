@@ -21,6 +21,7 @@ export type WeeklySlot = {
   startTime: string;
   endTime: string;
   genderPolicy: ClassGenderPolicy;
+  instructorId?: string;
   note?: string;
 };
 
@@ -72,6 +73,20 @@ export type ClassScheduleState = {
   sessionCount: string;
   sessions: ClassSessionDraft[];
 };
+
+/** מדריך ראשי של החוג: המועד הראשון שיש לו מדריך, או ערך ברירת מחדל. */
+export function primaryInstructorId(
+  schedule: Pick<ClassScheduleState, "scheduleType" | "weeklySlots">,
+  fallback?: string | null
+): string | null {
+  if (schedule.scheduleType === "weekly") {
+    const fromSlot = schedule.weeklySlots
+      .map((slot) => slot.instructorId?.trim())
+      .find(Boolean);
+    if (fromSlot) return fromSlot;
+  }
+  return fallback?.trim() || null;
+}
 
 function formatLocalDate(d: Date): string {
   const y = d.getFullYear();
@@ -436,8 +451,10 @@ export function weeklySlotsFromDb(
     start_time: string;
     end_time: string;
     gender_policy?: ClassGenderPolicy | null;
+    instructor_id?: string | null;
     note?: string | null;
-  }[]
+  }[],
+  fallbackInstructorId?: string | null
 ): WeeklySlot[] {
   return rows
     .map((r) => ({
@@ -446,6 +463,7 @@ export function weeklySlotsFromDb(
       startTime: r.start_time.slice(0, 5),
       endTime: r.end_time.slice(0, 5),
       genderPolicy: r.gender_policy ?? "mixed",
+      instructorId: r.instructor_id ?? fallbackInstructorId ?? undefined,
       note: r.note?.trim() || undefined,
     }))
     .sort(
@@ -617,6 +635,7 @@ export function buildInitialSchedule(
     start_date?: string | null;
     end_date?: string | null;
     gender_policy?: ClassGenderPolicy | null;
+    instructor_id?: string | null;
   },
   slotRows: {
     id?: string;
@@ -624,6 +643,7 @@ export function buildInitialSchedule(
     start_time: string;
     end_time: string;
     gender_policy?: ClassGenderPolicy | null;
+    instructor_id?: string | null;
     note?: string | null;
   }[],
   sessionRows: {
@@ -638,7 +658,7 @@ export function buildInitialSchedule(
   const scheduleType = classItem.schedule_type ?? "weekly";
   const weeklySlots =
     slotRows.length > 0
-      ? weeklySlotsFromDb(slotRows)
+      ? weeklySlotsFromDb(slotRows, classItem.instructor_id)
       : classItem.day_of_week != null
         ? [
             {
@@ -646,6 +666,7 @@ export function buildInitialSchedule(
               startTime: classItem.start_time?.slice(0, 5) ?? "",
               endTime: classItem.end_time?.slice(0, 5) ?? "",
               genderPolicy: classItem.gender_policy ?? "mixed",
+              instructorId: classItem.instructor_id ?? undefined,
             },
           ]
         : [];

@@ -10,6 +10,7 @@ import {
   ensureWeeklySessions,
   genderPolicyFromWeeklySlots,
   parseSessionCount,
+  primaryInstructorId,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
 import { saveClassSchedule } from "@/lib/scheduling/saveClassSchedule";
@@ -21,6 +22,7 @@ import { ClassCategoryField } from "@/components/admin/ClassCategoryField";
 import { ClassImageUpload } from "@/components/admin/ClassImageUpload";
 import { ClassPreviewPanel } from "@/components/admin/ClassPreview";
 import { ClassScheduleEditor } from "@/components/admin/ClassScheduleEditor";
+import { InstructorSelect } from "@/components/admin/InstructorSelect";
 import {
   DEFAULT_CLASS_INSTALLMENTS,
   classPeriodTotal,
@@ -199,7 +201,7 @@ function toPayload(
     planned_session_count: form.interest_only
       ? parseSessionCount(form.planned_session_count)
       : null,
-    instructor_id: form.instructor_id || null,
+    instructor_id: primaryInstructorId(schedule, form.instructor_id),
     pick_one_slot: form.interest_only ? false : form.pick_one_slot,
     status,
     image_url: imageUrl,
@@ -356,8 +358,11 @@ export function ClassForm({
   const previewImageUrl = imagePreviewUrl || form.image_url.trim() || null;
 
   const selectedInstructor = useMemo(
-    () => instructors.find((i) => i.id === form.instructor_id) ?? null,
-    [form.instructor_id, instructors]
+    () =>
+      instructors.find(
+        (i) => i.id === primaryInstructorId(schedule, form.instructor_id)
+      ) ?? null,
+    [form.instructor_id, instructors, schedule]
   );
   const instructorName = selectedInstructor?.full_name ?? null;
 
@@ -806,14 +811,14 @@ export function ClassForm({
             </div>
             {form.interest_only && (
               <Field label="מדריך או מדריכה">
-                <Select value={form.instructor_id} onChange={set("instructor_id")}>
-                  <option value="">ללא שיוך</option>
-                  {instructors.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.isSelf ? `${i.full_name} (אני · מנהל)` : i.full_name}
-                    </option>
-                  ))}
-                </Select>
+                <InstructorSelect
+                  value={form.instructor_id}
+                  onChange={(instructorId) =>
+                    setForm((f) => ({ ...f, instructor_id: instructorId }))
+                  }
+                  instructors={instructors}
+                  disabled={loading}
+                />
               </Field>
             )}
           </CardContent>
@@ -823,7 +828,7 @@ export function ClassForm({
           <CardContent className="space-y-5">
             <StepIntro
               title="מועדים"
-              hint="יום, שעה, מתי מתחילים וכמה מפגשים."
+              hint="יום, שעה ומדריך לכל מועד, מתי מתחילים וכמה מפגשים."
             />
             <ClassScheduleEditor
               value={schedule}
@@ -833,7 +838,20 @@ export function ClassForm({
               onPickOneSlotChange={(pickOneSlot) =>
                 setForm((f) => ({ ...f, pick_one_slot: pickOneSlot }))
               }
+              instructors={instructors}
             />
+            {schedule.scheduleType === "custom" && (
+              <Field label="מדריך או מדריכה">
+                <InstructorSelect
+                  value={form.instructor_id}
+                  onChange={(instructorId) =>
+                    setForm((f) => ({ ...f, instructor_id: instructorId }))
+                  }
+                  instructors={instructors}
+                  disabled={loading}
+                />
+              </Field>
+            )}
           </CardContent>
         </Card>
 
@@ -923,16 +941,6 @@ export function ClassForm({
                 {DEFAULT_CLASS_INSTALLMENTS} תשלומים בקארדקום.
               </p>
             )}
-            <Field label="מדריך או מדריכה">
-              <Select value={form.instructor_id} onChange={set("instructor_id")}>
-                <option value="">ללא שיוך</option>
-                {instructors.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.isSelf ? `${i.full_name} (אני · מנהל)` : i.full_name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
           </CardContent>
         </Card>
 

@@ -3,13 +3,24 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminClassRow } from "@/components/admin/ClassList";
+import { InstructorSelect } from "@/components/admin/InstructorSelect";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Input";
+import { Field, Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
+import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { createClient } from "@/lib/supabase/client";
+
+function slotInstructorMap(cls: AdminClassRow) {
+  return Object.fromEntries(
+    cls.slots.map((slot) => [
+      slot.id,
+      slot.instructor_id ?? cls.instructor_id ?? "",
+    ])
+  );
+}
 
 export function ClassQuickEditDialog({
   cls,
@@ -26,6 +37,7 @@ export function ClassQuickEditDialog({
     cls.capacity != null ? String(cls.capacity) : ""
   );
   const [instructorId, setInstructorId] = useState(cls.instructor_id ?? "");
+  const [slotInstructors, setSlotInstructors] = useState(slotInstructorMap(cls));
   const [price, setPrice] = useState(String(cls.price ?? 0));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +46,7 @@ export function ClassQuickEditDialog({
     setTitle(cls.title);
     setCapacity(cls.capacity != null ? String(cls.capacity) : "");
     setInstructorId(cls.instructor_id ?? "");
+    setSlotInstructors(slotInstructorMap(cls));
     setPrice(String(cls.price ?? 0));
     setError(null);
   }, [cls]);
@@ -44,6 +57,7 @@ export function ClassQuickEditDialog({
     : billingMonths
       ? "מחיר לחודש (₪)"
       : "מחיר (₪)";
+  const hasSlots = cls.slots.length > 0;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -81,14 +95,33 @@ export function ClassQuickEditDialog({
       nextPrice = Number(price);
     }
 
+    const nextClassInstructorId = hasSlots
+      ? cls.slots.map((slot) => slotInstructors[slot.id]).find(Boolean) || null
+      : instructorId || null;
+
     setSaving(true);
     const supabase = createClient();
+
+    if (hasSlots) {
+      for (const slot of cls.slots) {
+        const { error: slotError } = await supabase
+          .from("class_weekly_slots")
+          .update({ instructor_id: slotInstructors[slot.id] || null })
+          .eq("id", slot.id);
+        if (slotError) {
+          setError("שמירת המדריך למועד נכשלה. בדקו את הפרטים ונסו שוב.");
+          setSaving(false);
+          return;
+        }
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("classes")
       .update({
         title: nextTitle,
         capacity: nextCapacity,
-        instructor_id: instructorId || null,
+        instructor_id: nextClassInstructorId,
         price: nextPrice,
         ...(!nextCapacity && cls.status === "full" ? { status: "active" as const } : {}),
       })
@@ -138,22 +171,44 @@ export function ClassQuickEditDialog({
           />
         </Field>
 
-        <Field label="מדריך או מדריכה">
-          <Select
-            value={instructorId}
-            onChange={(event) => setInstructorId(event.target.value)}
-            disabled={saving}
-          >
-            <option value="">ללא שיוך</option>
-            {instructors.map((instructor) => (
-              <option key={instructor.id} value={instructor.id}>
-                {instructor.isSelf
-                  ? `${instructor.full_name} (אני · מנהל)`
-                  : instructor.full_name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {hasSlots ? (
+          cls.slots.map((slot) => (
+            <Field
+              key={slot.id}
+              label={
+                cls.slots.length > 1
+                  ? `מדריך · ${formatWeeklySlotLabel(
+                      slot.day_of_week,
+                      slot.start_time,
+                      slot.end_time,
+                      slot.gender_policy
+                    )}`
+                  : "מדריך או מדריכה"
+              }
+            >
+              <InstructorSelect
+                value={slotInstructors[slot.id] ?? ""}
+                onChange={(nextId) =>
+                  setSlotInstructors((current) => ({
+                    ...current,
+                    [slot.id]: nextId,
+                  }))
+                }
+                instructors={instructors}
+                disabled={saving}
+              />
+            </Field>
+          ))
+        ) : (
+          <Field label="מדריך או מדריכה">
+            <InstructorSelect
+              value={instructorId}
+              onChange={setInstructorId}
+              instructors={instructors}
+              disabled={saving}
+            />
+          </Field>
+        )}
 
         <Field
           label={priceLabel}

@@ -59,6 +59,7 @@ import {
   instructorTitle,
   unassignedInstructorLabel,
 } from "@/lib/instructors/labels";
+import { uniqueClassInstructorIds } from "@/lib/instructors/sessionInstructor";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { cn } from "@/utils/cn";
@@ -111,6 +112,7 @@ export type AdminClassSlot = {
   start_time: string;
   end_time: string;
   gender_policy: Enums<"class_gender_policy">;
+  instructor_id: string | null;
   registeredCount: number;
   waitlistCount: number;
 };
@@ -165,16 +167,54 @@ function normalizeSearch(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
 }
 
-function matchesClass(item: AdminClassRow, query: string) {
+function matchesClass(
+  item: AdminClassRow,
+  query: string,
+  instructors: ClassInstructorOption[]
+) {
   const q = normalizeSearch(query);
   if (!q) return true;
+  const instructorNames = classInstructorNames(item, instructors).join(" ");
   return (
     normalizeSearch(item.title).includes(q) ||
     normalizeSearch(item.category ?? "").includes(q) ||
     normalizeSearch(item.instructors?.full_name ?? "").includes(q) ||
+    normalizeSearch(instructorNames).includes(q) ||
     (item.interest_only &&
       (q.includes("עניין") || q.includes("הרשמת")))
   );
+}
+
+function classInstructorIds(item: AdminClassRow) {
+  return uniqueClassInstructorIds(
+    item.instructor_id,
+    item.slots.map((slot) => slot.instructor_id)
+  );
+}
+
+function classInstructorNames(
+  item: AdminClassRow,
+  instructors: ClassInstructorOption[]
+) {
+  return classInstructorIds(item).map((id) => {
+    if (id === item.instructor_id && item.instructors?.full_name) {
+      return item.instructors.full_name;
+    }
+    return instructors.find((instructor) => instructor.id === id)?.full_name ?? "";
+  });
+}
+
+function slotInstructorName(
+  item: AdminClassRow,
+  slot: AdminClassSlot,
+  instructors: ClassInstructorOption[]
+) {
+  const id = slot.instructor_id ?? item.instructor_id;
+  if (!id) return null;
+  if (id === item.instructor_id && item.instructors?.full_name) {
+    return item.instructors.full_name;
+  }
+  return instructors.find((instructor) => instructor.id === id)?.full_name ?? null;
 }
 
 /** נרשמים שתופסים מקום בפועל — ביטולים ואשראי שלא שולם לא נספרים. */
@@ -252,8 +292,8 @@ export function ClassList({
   const [featuredOpen, setFeaturedOpen] = useState(false);
 
   const filtered = useMemo(
-    () => classes.filter((c) => matchesClass(c, query)),
-    [classes, query]
+    () => classes.filter((c) => matchesClass(c, query, instructors)),
+    [classes, query, instructors]
   );
 
   if (classes.length === 0) {
@@ -287,6 +327,7 @@ export function ClassList({
             <ClassCard
               key={cls.id}
               cls={cls}
+              instructors={instructors}
               featuredRank={
                 featuredClassIds.includes(cls.id)
                   ? featuredClassIds.indexOf(cls.id) + 1
@@ -351,6 +392,7 @@ export function ClassList({
 
 function ClassCard({
   cls,
+  instructors,
   featuredRank,
   onOpenPanel,
   onPreview,
@@ -358,6 +400,7 @@ function ClassCard({
   onQuickEdit,
 }: {
   cls: AdminClassRow;
+  instructors: ClassInstructorOption[];
   featuredRank: number | null;
   onOpenPanel: (
     tab: PanelTab,
@@ -520,9 +563,15 @@ function ClassCard({
         <dl className="space-y-1.5 text-sm">
           <DetailLine
             icon="👩‍🏫"
-            label={instructorTitle(cls.instructors?.gender)}
+            label={
+              classInstructorIds(cls).length > 1
+                ? "מדריכים"
+                : instructorTitle(cls.instructors?.gender)
+            }
           >
-            {cls.instructors?.full_name ??
+            {classInstructorNames(cls, instructors)
+              .filter(Boolean)
+              .join(" · ") ||
               unassignedInstructorLabel(cls.instructors?.gender)}
           </DetailLine>
           {cls.slots.length <= 1 && (
@@ -576,6 +625,11 @@ function ClassCard({
                 <div className="space-y-2">
                   {cls.slots.map((slot) => {
                     const selected = activeSlotId === slot.id;
+                    const instructorName = slotInstructorName(
+                      cls,
+                      slot,
+                      instructors
+                    );
                     return (
                       <button
                         key={slot.id}
@@ -599,6 +653,7 @@ function ClassCard({
                             {formatTime(slot.start_time)}–{formatTime(slot.end_time)}
                             {" · "}
                             {formatClassGenderPolicy(slot.gender_policy)}
+                            {instructorName ? ` · ${instructorName}` : ""}
                           </span>
                           <span className="mt-1 block text-xs text-ink-500">
                             {slot.registeredCount} נרשמים
