@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { releaseAbandonedCartCheckout } from "@/lib/cart/actions";
-import {
-  extractCardcomCheckoutId,
-  extractCardcomLowProfileId,
-} from "@/lib/integrations/cardcom";
-import { settleCardcomCheckout } from "@/lib/payments/cardcomCheckout";
+import { extractCardcomCheckoutId } from "@/lib/integrations/cardcom";
+import { voidUnpaidCardcomCheckout } from "@/lib/payments/cardcomCheckout";
 import { ButtonLink } from "@/components/ui/Button";
 
 export const dynamic = "force-dynamic";
@@ -26,14 +23,12 @@ export default async function CheckoutFailedPage({
   const checkoutId = extractCardcomCheckoutId(query);
   const fromCart = query.get("from") === "cart";
 
-  if (fromCart && checkoutId) {
-    await releaseAbandonedCartCheckout(checkoutId).catch(() => null);
-  } else {
-    await settleCardcomCheckout({
-      checkoutId,
-      lowProfileId: extractCardcomLowProfileId(query),
-      markFailedIfUnpaid: true,
-    }).catch(() => null);
+  if (checkoutId) {
+    if (fromCart) {
+      await releaseAbandonedCartCheckout(checkoutId).catch(() => null);
+    } else {
+      await voidUnpaidCardcomCheckout({ checkoutId }).catch(() => null);
+    }
   }
 
   return (
@@ -48,7 +43,7 @@ export default async function CheckoutFailedPage({
         <p className="mt-2 text-sm text-ink-500">
           {fromCart
             ? "לא בוצע חיוב. הפריטים נשארו בסל — אפשר לנסות שוב."
-            : "לא בוצע חיוב, או שהעסקה נדחתה. ההרשמה נשמרה כחוב פתוח — אפשר לנסות שוב מאזור האישי."}
+            : "לא בוצע חיוב, וההרשמה לא נשמרה. אפשר לנסות שוב מההתחלה."}
         </p>
         <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <ButtonLink href={fromCart ? "/cart" : "/parent/dashboard"}>

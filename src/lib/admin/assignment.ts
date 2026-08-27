@@ -15,7 +15,11 @@ import {
   healthDeclarationErrorFor,
   missingHealthDeclarationChildren,
 } from "@/lib/health-declaration";
-import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
+import {
+  countHeldSeats,
+  enrollmentHoldsSeat,
+  isAbandonedCardcomEnrollment,
+} from "@/lib/enrollment/holdsSeat";
 import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
@@ -141,7 +145,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       supabase
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference)"
+          "id, child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference)"
         )
         .eq("class_id", input.classId)
         .eq("parent_id", input.parentId)
@@ -227,6 +231,19 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         ? `${names} כבר רשומים לחוג הזה.`
         : "חלק מהמתאמנים כבר רשומים לחוג הזה.",
     };
+  }
+
+  const leftoverIds = (existing ?? [])
+    .filter((row) => {
+      if (!isAbandonedCardcomEnrollment(row)) return false;
+      if (row.child_id) return childIds.includes(row.child_id);
+      return includeSelf;
+    })
+    .map((row) => row.id);
+
+  if (leftoverIds.length > 0) {
+    await supabase.from("payments").delete().in("enrollment_id", leftoverIds);
+    await supabase.from("enrollments").delete().in("id", leftoverIds);
   }
 
   const takenBefore = await countHeldSeats(supabase, input.classId);
@@ -347,23 +364,25 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     }
   }
 
-  // מי שהיה ברשימת ההמתנה לחוג כבר לא ממתין.
-  if (childIds.length > 0) {
-    await supabase
-      .from("waitlist")
-      .update({ status: "joined" })
-      .eq("class_id", input.classId)
-      .in("child_id", childIds)
-      .in("status", ["waiting", "offered"]);
-  }
-  if (includeSelf) {
-    await supabase
-      .from("waitlist")
-      .update({ status: "joined" })
-      .eq("class_id", input.classId)
-      .eq("parent_id", input.parentId)
-      .is("child_id", null)
-      .in("status", ["waiting", "offered"]);
+  // אשראי ממתין לסליקה — עדיין לא נרשמו, אז לא מסמנים כמי שהצטרפו מההמתנה.
+  if (!awaitingCardcom) {
+    if (childIds.length > 0) {
+      await supabase
+        .from("waitlist")
+        .update({ status: "joined" })
+        .eq("class_id", input.classId)
+        .in("child_id", childIds)
+        .in("status", ["waiting", "offered"]);
+    }
+    if (includeSelf) {
+      await supabase
+        .from("waitlist")
+        .update({ status: "joined" })
+        .eq("class_id", input.classId)
+        .eq("parent_id", input.parentId)
+        .is("child_id", null)
+        .in("status", ["waiting", "offered"]);
+    }
   }
 
   revalidatePath("/admin");

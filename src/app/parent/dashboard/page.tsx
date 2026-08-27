@@ -31,6 +31,7 @@ import {
   parentPaymentBadge,
   PAYMENT_METHOD,
 } from "@/lib/constants";
+import { isAbandonedCardcomEnrollment } from "@/lib/enrollment/holdsSeat";
 import { addDays, dayLabelLong, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database.types";
@@ -97,8 +98,17 @@ export default async function ParentDashboard() {
   ]);
 
   const allChildren = children ?? [];
-  const allEnrollments = enrollments ?? [];
   const allPayments = payments ?? [];
+  const allEnrollments = (enrollments ?? []).filter((enrollment) => {
+    const linked = allPayments.filter(
+      (payment) => payment.enrollment_id === enrollment.id
+    );
+    return !isAbandonedCardcomEnrollment({
+      status: enrollment.status,
+      payment_status: enrollment.payment_status,
+      payments: linked,
+    });
+  });
   const allReceipts = receipts ?? [];
   const waitingList = waitlist ?? [];
 

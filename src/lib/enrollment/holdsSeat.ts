@@ -15,6 +15,33 @@ export type SeatEnrollment = {
 };
 
 /**
+ * הרשמה שנוצרה רק לדף סליקה של קארדקום ולא שולמה —
+ * עגלה נטושה, לא רישום לחוג.
+ */
+export function isAbandonedCardcomEnrollment(
+  enrollment: SeatEnrollment
+): boolean {
+  if (
+    enrollment.payment_status === "paid" ||
+    enrollment.payment_status === "partial" ||
+    enrollment.payment_status === "not_required" ||
+    enrollment.payment_status === "refunded"
+  ) {
+    return false;
+  }
+
+  const payments = enrollment.payments ?? [];
+  if (payments.length === 0) return false;
+  return payments.every((payment) =>
+    isAbandonedCardcomCharge(
+      payment.status,
+      payment.payment_method,
+      payment.external_reference
+    )
+  );
+}
+
+/**
  * האם ההרשמה תופסת מקום בחוג.
  * אשראי שנפתח לדף סליקה ולא שולם — לא תופס מקום.
  */

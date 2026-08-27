@@ -7,6 +7,7 @@ import {
   type CustomerRegistration,
   type CustomerRegistrationKind,
 } from "@/lib/admin/customerRegistrationTypes";
+import { isAbandonedCardcomEnrollment } from "@/lib/enrollment/holdsSeat";
 import {
   ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
@@ -48,7 +49,7 @@ export async function loadCustomerRegistrations(
     supabase
       .from("enrollments")
       .select(
-        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes)"
+        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes), payments(status, payment_method, external_reference)"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),
@@ -84,6 +85,7 @@ export async function loadCustomerRegistrations(
   const rows: CustomerRegistration[] = [];
 
   for (const row of enrollments ?? []) {
+    if (isAbandonedCardcomEnrollment(row)) continue;
     const kind = registrationKind(row.type, row.programs?.kind);
     const participant = row.children?.full_name?.trim() || parentName;
     const slot = row.weekly_slot_id

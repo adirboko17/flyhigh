@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ActivityFeed, type ActivityEntry } from "@/components/admin/ActivityFeed";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { ENROLLMENT_TYPE } from "@/lib/constants";
+import { isAbandonedCardcomEnrollment } from "@/lib/enrollment/holdsSeat";
 import { formatDate } from "@/utils/format";
 
 export const metadata = { title: "פעילות אחרונה" };
@@ -26,7 +27,7 @@ export default async function AdminActivityPage() {
   const { data: enrollments } = await supabase
     .from("enrollments")
     .select(
-      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name, phone)"
+      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference)"
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -35,7 +36,9 @@ export default async function AdminActivityPage() {
   const todayKey = dayKeyOf(now);
   const yesterdayKey = dayKeyOf(new Date(now.getTime() - 86_400_000));
 
-  const entries: ActivityEntry[] = (enrollments ?? []).map((e) => {
+  const entries: ActivityEntry[] = (enrollments ?? [])
+    .filter((e) => !isAbandonedCardcomEnrollment(e))
+    .map((e) => {
     const createdAt = new Date(e.created_at);
     return {
       id: e.id,

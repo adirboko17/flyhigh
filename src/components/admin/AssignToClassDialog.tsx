@@ -78,6 +78,30 @@ function normalize(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
 }
 
+/** פותחים כרטיסייה בלחיצה עצמה — אחרת הדפדפן חוסם חלון קופץ אחרי ה-await. */
+function openCheckoutTab() {
+  const tab = window.open("about:blank", "cardcom-checkout");
+  if (!tab) return null;
+  try {
+    tab.document.write(
+      `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>סליקה</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center;color:#334155">פותחים את דף הסליקה...</body></html>`
+    );
+    tab.document.close();
+  } catch {
+    // אם אי אפשר לכתוב לכרטיסייה — עדיין ננווט אליה בהמשך.
+  }
+  return tab;
+}
+
+function goToCheckout(url: string, tab: Window | null) {
+  if (tab && !tab.closed) {
+    tab.location.replace(url);
+    return true;
+  }
+  window.location.assign(url);
+  return false;
+}
+
 export function AssignToClassDialog({
   cls,
   mode,
@@ -313,6 +337,9 @@ export function AssignToClassDialog({
       return;
     }
 
+    const checkoutTab =
+      !cls.interest_only && isCreditCard ? openCheckoutTab() : null;
+
     setSaving(true);
     setError(null);
 
@@ -344,12 +371,16 @@ export function AssignToClassDialog({
     setSaving(false);
 
     if (!result.success) {
+      checkoutTab?.close();
       setError(result.error);
       return;
     }
 
     if (result.checkoutUrl) {
-      window.open(result.checkoutUrl, "_blank", "noopener,noreferrer");
+      const openedInTab = goToCheckout(result.checkoutUrl, checkoutTab);
+      if (!openedInTab) return;
+    } else {
+      checkoutTab?.close();
     }
 
     router.refresh();
@@ -511,7 +542,7 @@ export function AssignToClassDialog({
           htmlFor="assign-method"
           hint={
             method === "credit_card"
-              ? "ייפתח דף סליקה של קארדקום. אפשר לגבות עכשיו או לשלוח את ההורה לשלם מאזור האישי."
+              ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
               : method === "none"
                 ? "השיבוץ ייווצר בלי רשומת חיוב."
                 : "החיוב ייפתח כחוב בעמוד הגבייה, עד לסימון כשולם."

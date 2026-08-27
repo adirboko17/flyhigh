@@ -298,6 +298,40 @@ export async function settleCardcomCheckout(input: {
     if (receiptRows.length > 0) {
       await admin.from("receipts").insert(receiptRows);
     }
+
+    const enrollmentIds = [
+      ...new Set(
+        pending
+          .map((payment) => payment.enrollment_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    if (enrollmentIds.length > 0) {
+      const { data: enrollments } = await admin
+        .from("enrollments")
+        .select("class_id, child_id, parent_id")
+        .in("id", enrollmentIds);
+
+      for (const enrollment of enrollments ?? []) {
+        if (!enrollment.class_id) continue;
+        if (enrollment.child_id) {
+          await admin
+            .from("waitlist")
+            .update({ status: "joined" })
+            .eq("class_id", enrollment.class_id)
+            .eq("child_id", enrollment.child_id)
+            .in("status", ["waiting", "offered"]);
+        } else {
+          await admin
+            .from("waitlist")
+            .update({ status: "joined" })
+            .eq("class_id", enrollment.class_id)
+            .eq("parent_id", enrollment.parent_id)
+            .is("child_id", null)
+            .in("status", ["waiting", "offered"]);
+        }
+      }
+    }
   }
 
   await admin
@@ -327,18 +361,18 @@ export async function settleCardcomCheckout(input: {
  */
 export async function voidUnpaidCardcomCheckout(input: {
   checkoutId: string;
-  parentId: string;
+  parentId?: string;
 }): Promise<{ voided: boolean; paid: boolean }> {
   const admin = createAdminClient();
   const checkoutId = input.checkoutId.trim();
   if (!checkoutId) return { voided: false, paid: false };
 
-  const { data: checkout } = await admin
+  let query = admin
     .from("payment_checkouts")
     .select("id, parent_id, status, low_profile_id, coupon_redemption_id")
-    .eq("id", checkoutId)
-    .eq("parent_id", input.parentId)
-    .maybeSingle();
+    .eq("id", checkoutId);
+  if (input.parentId) query = query.eq("parent_id", input.parentId);
+  const { data: checkout } = await query.maybeSingle();
 
   if (!checkout) return { voided: false, paid: false };
   if (checkout.status === "paid") return { voided: false, paid: true };
