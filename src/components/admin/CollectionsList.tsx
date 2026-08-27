@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Field, Input } from "@/components/ui/Input";
+import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
 import {
@@ -15,7 +15,9 @@ import {
   deletePaymentReceipt,
   settleChargeRemaining,
   settleParentCharges,
+  updatePaymentReceiptLabel,
 } from "@/lib/collections/actions";
+import type { ReceiptLabelOption } from "@/lib/receipt-labels";
 import {
   DEFERRED_PAYMENT_METHODS,
   PAYMENT_METHOD,
@@ -47,6 +49,9 @@ export type CollectionCharge = {
   subject: string;
   subjectType: "class" | "program" | "pool_pass" | "private_lesson" | null;
   enrollmentCancelled: boolean;
+  /** תווית קבלה שנבחרה — null אם נשאר שם המוצר כרגיל. */
+  receiptLabelId: string | null;
+  receiptLabel: string | null;
   receipts: CollectionReceipt[];
 };
 
@@ -91,9 +96,13 @@ function todayDateInput() {
 
 interface CollectionsListProps {
   parents: CollectionParent[];
+  receiptLabels: ReceiptLabelOption[];
 }
 
-export function CollectionsList({ parents }: CollectionsListProps) {
+export function CollectionsList({
+  parents,
+  receiptLabels,
+}: CollectionsListProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
@@ -134,7 +143,8 @@ export function CollectionsList({ parents }: CollectionsListProps) {
           return (
             parentMatches ||
             normalize(charge.childName).includes(q) ||
-            normalize(charge.subject).includes(q)
+            normalize(charge.subject).includes(q) ||
+            normalize(charge.receiptLabel).includes(q)
           );
         });
 
@@ -287,9 +297,15 @@ export function CollectionsList({ parents }: CollectionsListProps) {
             <ParentCard
               key={parent.id}
               parent={parent}
+              receiptLabels={receiptLabels}
               busyId={busyId}
               disabled={isPending}
               onOpenCharge={setActiveCharge}
+              onChangeLabel={(paymentId, receiptLabelId) =>
+                runAction(`label:${paymentId}`, () =>
+                  updatePaymentReceiptLabel({ paymentId, receiptLabelId })
+                )
+              }
               onSettleAll={() =>
                 runAction(`parent:${parent.id}`, () =>
                   settleParentCharges({ parentId: parent.id })
@@ -303,6 +319,7 @@ export function CollectionsList({ parents }: CollectionsListProps) {
       {activeCharge && (
         <ChargeReceiptDialog
           charge={activeCharge}
+          receiptLabels={receiptLabels}
           customerEmail={
             parents.find((parent) =>
               parent.charges.some((charge) => charge.id === activeCharge.id)
@@ -314,6 +331,11 @@ export function CollectionsList({ parents }: CollectionsListProps) {
           onError={setError}
           onBusy={setBusyId}
           onDone={() => router.refresh()}
+          onChangeLabel={(paymentId, receiptLabelId) =>
+            runAction(`label:${paymentId}`, () =>
+              updatePaymentReceiptLabel({ paymentId, receiptLabelId })
+            )
+          }
         />
       )}
     </div>
@@ -322,15 +344,19 @@ export function CollectionsList({ parents }: CollectionsListProps) {
 
 function ParentCard({
   parent,
+  receiptLabels,
   busyId,
   disabled,
   onOpenCharge,
+  onChangeLabel,
   onSettleAll,
 }: {
   parent: CollectionParent;
+  receiptLabels: ReceiptLabelOption[];
   busyId: string | null;
   disabled: boolean;
   onOpenCharge: (charge: CollectionCharge) => void;
+  onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onSettleAll: () => void;
 }) {
   const openCharges = parent.charges.filter(isOpen);
@@ -403,8 +429,10 @@ function ParentCard({
           <ChargeRow
             key={charge.id}
             charge={charge}
+            receiptLabels={receiptLabels}
             disabled={disabled}
             onOpen={() => onOpenCharge(charge)}
+            onChangeLabel={onChangeLabel}
           />
         ))}
       </ul>
@@ -414,12 +442,16 @@ function ParentCard({
 
 function ChargeRow({
   charge,
+  receiptLabels,
   disabled,
   onOpen,
+  onChangeLabel,
 }: {
   charge: CollectionCharge;
+  receiptLabels: ReceiptLabelOption[];
   disabled: boolean;
   onOpen: () => void;
+  onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
@@ -443,6 +475,15 @@ function ChargeRow({
           {charge.enrollmentCancelled && (
             <Badge tone="warning">ההרשמה בוטלה</Badge>
           )}
+          {charge.receiptLabel ? (
+            <Badge tone="info" className="text-sm">
+              קבלה: {charge.receiptLabel}
+            </Badge>
+          ) : (
+            <Badge tone="neutral" className="text-sm">
+              קבלה: כרגיל
+            </Badge>
+          )}
         </div>
 
         <p className="mt-2 break-words font-medium text-ink-900">
@@ -453,6 +494,15 @@ function ChargeRow({
           {charge.receipts.length > 0 &&
             ` · ${charge.receipts.length} תקבולים`}
         </p>
+        {open && (
+          <ReceiptLabelSelect
+            charge={charge}
+            labels={receiptLabels}
+            disabled={disabled}
+            compact
+            onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+          />
+        )}
       </div>
 
       <div className="min-w-[7.5rem] text-end">
@@ -489,6 +539,7 @@ function ChargeRow({
 
 function ChargeReceiptDialog({
   charge,
+  receiptLabels,
   customerEmail,
   busyId,
   disabled,
@@ -496,8 +547,10 @@ function ChargeReceiptDialog({
   onError,
   onBusy,
   onDone,
+  onChangeLabel,
 }: {
   charge: CollectionCharge;
+  receiptLabels: ReceiptLabelOption[];
   customerEmail: string | null;
   busyId: string | null;
   disabled: boolean;
@@ -505,6 +558,7 @@ function ChargeReceiptDialog({
   onError: (message: string | null) => void;
   onBusy: (id: string | null) => void;
   onDone: () => void;
+  onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
 }) {
   const open = isOpen(charge);
   const [amount, setAmount] = useState(
@@ -587,6 +641,12 @@ function ChargeReceiptDialog({
     >
       <div className="space-y-5">
         <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+          <p className="text-xs text-ink-500">שם על הקבלה</p>
+          <p className="mt-0.5 font-semibold text-ink-900">
+            {charge.receiptLabel ?? `כרגיל — ${charge.subject}`}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
           <p className="text-xs text-ink-500">הקבלה תישלח לאימייל</p>
           {customerEmail ? (
             <p dir="ltr" className="mt-0.5 text-right font-semibold text-ink-900">
@@ -657,6 +717,12 @@ function ChargeReceiptDialog({
                 disabled={busy}
               />
             </Field>
+            <ReceiptLabelSelect
+              charge={charge}
+              labels={receiptLabels}
+              disabled={busy}
+              onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+            />
             <p className="text-xs leading-relaxed text-ink-500">
               עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
               תישלח למייל הלקוח, ותישלח התראה גם אליכם.
@@ -734,6 +800,72 @@ function ChargeReceiptDialog({
         </div>
       </div>
     </Modal>
+  );
+}
+
+function labelsForCharge(
+  charge: CollectionCharge,
+  labels: ReceiptLabelOption[]
+): ReceiptLabelOption[] {
+  if (
+    charge.receiptLabelId &&
+    !labels.some((label) => label.id === charge.receiptLabelId)
+  ) {
+    return [
+      ...labels,
+      {
+        id: charge.receiptLabelId,
+        label: charge.receiptLabel ?? "תווית לא פעילה",
+      },
+    ];
+  }
+  return labels;
+}
+
+function ReceiptLabelSelect({
+  charge,
+  labels,
+  disabled,
+  compact = false,
+  onChange,
+}: {
+  charge: CollectionCharge;
+  labels: ReceiptLabelOption[];
+  disabled: boolean;
+  compact?: boolean;
+  onChange: (labelId: string | null) => void;
+}) {
+  const options = labelsForCharge(charge, labels);
+  if (options.length === 0) return null;
+
+  const select = (
+    <Select
+      value={charge.receiptLabelId ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value || null)}
+      className={compact ? "h-9 max-w-xs text-sm" : undefined}
+      aria-label="שם על הקבלה"
+    >
+      <option value="">כרגיל — {charge.subject}</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
+  );
+
+  if (compact) {
+    return <div className="mt-2 max-w-xs">{select}</div>;
+  }
+
+  return (
+    <Field
+      label="שם על הקבלה"
+      hint="הטקסט יופיע על החשבונית שמופקת בקארדקום."
+    >
+      {select}
+    </Field>
   );
 }
 

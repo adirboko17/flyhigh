@@ -12,6 +12,7 @@ import {
   createStandaloneDocument,
   isCardcomConfigured,
 } from "@/lib/integrations/cardcom";
+import { resolveReceiptLabelForCheckout } from "@/lib/enrollment/receiptLabel";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -361,5 +362,43 @@ export async function settleParentCharges(input: {
     if (!result.success) return result;
   }
 
+  return { success: true };
+}
+
+/** מעדכן את תווית הקבלה של חיוב — הטקסט יופיע בחשבונית קארדקום. */
+export async function updatePaymentReceiptLabel(input: {
+  paymentId: string;
+  receiptLabelId: string | null;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const resolved = await resolveReceiptLabelForCheckout(
+    supabase,
+    input.receiptLabelId
+  );
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
+  }
+
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      receipt_label_id: resolved.labelId,
+      receipt_description: resolved.description,
+    })
+    .eq("id", input.paymentId);
+
+  if (error) {
+    return { success: false, error: "עדכון תווית הקבלה נכשל. נסו שוב." };
+  }
+
+  revalidatePath("/admin/collections");
   return { success: true };
 }

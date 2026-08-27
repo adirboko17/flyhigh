@@ -6,6 +6,7 @@ import {
 } from "@/components/admin/CollectionsList";
 import { DEFERRED_PAYMENT_METHODS, isDeferredPaymentMethod } from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
+import type { ReceiptLabelOption } from "@/lib/receipt-labels";
 import { addDays, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 
@@ -23,16 +24,26 @@ export default async function AdminCollectionsPage() {
   const paidSince = `${addDays(todayInIsrael(), -PAID_LOOKBACK_DAYS)}T00:00:00`;
 
   // חובות פתוחים/חלקיים תמיד + שולמו לאחרונה בלבד (בלי לגרור את כל ההיסטוריה).
-  const { data: charges } = await supabase
-    .from("payments")
-    .select(
-      "id, amount, payment_method, status, paid_at, created_at, parent_id, profiles(full_name, phone, email), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
-    )
-    .in("payment_method", [...DEFERRED_PAYMENT_METHODS])
-    .or(
-      `status.in.(pending,partial),and(status.eq.paid,paid_at.gte.${paidSince})`
-    )
-    .order("created_at", { ascending: false });
+  const [{ data: charges }, { data: labelRows }] = await Promise.all([
+    supabase
+      .from("payments")
+      .select(
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_labels(id, label), profiles(full_name, phone, email), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
+      )
+      .in("payment_method", [...DEFERRED_PAYMENT_METHODS])
+      .or(
+        `status.in.(pending,partial),and(status.eq.paid,paid_at.gte.${paidSince})`
+      )
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("receipt_labels")
+      .select("id, label")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("label", { ascending: true }),
+  ]);
+
+  const receiptLabels: ReceiptLabelOption[] = labelRows ?? [];
 
   const byParent = new Map<string, CollectionParent>();
 
@@ -57,6 +68,16 @@ export default async function AdminCollectionsPage() {
       receipts.reduce((sum, receipt) => sum + receipt.amount, 0)
     );
     const remaining = round2(Math.max(0, amount - amountPaid));
+    const receiptLabelRow = charge.receipt_labels;
+    const receiptLabel =
+      (receiptLabelRow && !Array.isArray(receiptLabelRow)
+        ? receiptLabelRow.label
+        : Array.isArray(receiptLabelRow)
+          ? receiptLabelRow[0]?.label
+          : null) ??
+      (charge.receipt_label_id
+        ? charge.receipt_description?.trim() || null
+        : null);
 
     const entry: CollectionCharge = {
       id: charge.id,
@@ -71,6 +92,8 @@ export default async function AdminCollectionsPage() {
       subject: subjectLabel(enrollment),
       subjectType: subjectKind(enrollment),
       enrollmentCancelled: enrollment?.status === "cancelled",
+      receiptLabelId: charge.receipt_label_id,
+      receiptLabel,
       receipts,
     };
 
@@ -97,5 +120,5 @@ export default async function AdminCollectionsPage() {
     (a, b) => b.openAmount - a.openAmount || a.name.localeCompare(b.name, "he")
   );
 
-  return <CollectionsList parents={parents} />;
+  return <CollectionsList parents={parents} receiptLabels={receiptLabels} />;
 }
