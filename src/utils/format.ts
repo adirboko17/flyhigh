@@ -57,6 +57,26 @@ export function calcAge(birthDate: string | null | undefined): number | null {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 }
 
+/** שם מלא מתוך שם פרטי ושם משפחה. */
+export function joinPersonName(firstName: string, lastName: string): string {
+  return [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+}
+
+/** פיצול שם מלא לשם פרטי ולשם משפחה. */
+export function splitPersonName(fullName: string): {
+  firstName: string;
+  lastName: string;
+} {
+  const trimmed = fullName.trim();
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const space = trimmed.indexOf(" ");
+  if (space === -1) return { firstName: trimmed, lastName: "" };
+  return {
+    firstName: trimmed.slice(0, space),
+    lastName: trimmed.slice(space + 1).trim(),
+  };
+}
+
 /**
  * ראשי תיבות מתוך שם מלא (לאווטאר).
  */

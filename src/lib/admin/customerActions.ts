@@ -84,7 +84,8 @@ function normalizeProfile(input: CustomerProfileInput) {
 
 function validateProfile(input: CustomerProfileInput): string | null {
   const profile = normalizeProfile(input);
-  if (!profile.fullName) return "יש להזין שם מלא.";
+  if (!profile.fullName) return "יש להזין שם פרטי ושם משפחה.";
+  if (!profile.fullName.includes(" ")) return "יש להזין שם פרטי ושם משפחה.";
   if (!profile.phone) return "נא למלא מספר טלפון.";
   const birthError = validateBirthDate(profile.birthDate, true);
   if (birthError) return birthError;
@@ -123,7 +124,9 @@ function normalizeChildren(children: CustomerChildInput[]) {
 function validateChildren(children: CustomerChildInput[]): string | null {
   for (const [index, child] of normalizeChildren(children).entries()) {
     const label = child.fullName || `ילד/ה ${index + 1}`;
-    if (!child.fullName) return `נא למלא שם ל${label}.`;
+    if (!child.fullName || !child.fullName.includes(" ")) {
+      return `נא למלא שם פרטי ושם משפחה עבור ${label}.`;
+    }
     if (!isGenderType(child.gender)) return `נא לבחור מגדר עבור ${label}.`;
     if (parseSchoolGradeInput(child.grade) === null) {
       return `נא לבחור כיתה עבור ${label}.`;

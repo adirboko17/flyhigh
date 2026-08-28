@@ -25,7 +25,7 @@ import {
   MISSING_HEALTH_DECLARATION_ERROR,
   type HealthDeclarationDraft,
 } from "@/lib/health-declaration";
-import { calcAge, initials } from "@/utils/format";
+import { calcAge, initials, joinPersonName } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -41,7 +41,8 @@ type Step = 1 | 2 | 3 | 4;
 
 type ChildDraft = {
   key: number;
-  name: string;
+  firstName: string;
+  lastName: string;
   birth: string;
   gender: string;
   grade: string;
@@ -51,12 +52,17 @@ type ChildDraft = {
 let childKey = 0;
 const newChild = (): ChildDraft => ({
   key: ++childKey,
-  name: "",
+  firstName: "",
+  lastName: "",
   birth: "",
   gender: "",
   grade: "",
   health: null,
 });
+
+function childFullName(child: Pick<ChildDraft, "firstName" | "lastName">) {
+  return joinPersonName(child.firstName, child.lastName);
+}
 
 export function RegisterForm() {
   const router = useRouter();
@@ -69,7 +75,8 @@ export function RegisterForm() {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   const [details, setDetails] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     phone: "",
     birth: "",
     gender: "",
@@ -120,7 +127,7 @@ export function RegisterForm() {
 
   function updateChild(
     key: number,
-    field: "name" | "birth" | "gender" | "grade",
+    field: "firstName" | "lastName" | "birth" | "gender" | "grade",
     value: string,
   ) {
     setChildren((list) =>
@@ -144,8 +151,9 @@ export function RegisterForm() {
     if (value && children.length === 0) setChildren([newChild()]);
   }
 
+  const parentFullName = joinPersonName(details.firstName, details.lastName);
   const namedChildren = wantsChildren
-    ? children.filter((c) => c.name.trim())
+    ? children.filter((c) => childFullName(c))
     : [];
   const showChildrenDock = step === 2 && wantsChildren === true;
   const childrenDockRef = useRef<HTMLDivElement>(null);
@@ -167,7 +175,8 @@ export function RegisterForm() {
     setError(null);
 
     if (step === 1) {
-      if (!details.fullName.trim()) return setError("נא למלא שם מלא.");
+      if (!details.firstName.trim()) return setError("נא למלא שם פרטי.");
+      if (!details.lastName.trim()) return setError("נא למלא שם משפחה.");
       if (!details.phone.trim()) return setError("נא למלא מספר טלפון.");
       if (!details.birth) return setError("נא למלא תאריך לידה.");
       if (!isGenderType(details.gender)) return setError("נא לבחור מגדר.");
@@ -186,8 +195,13 @@ export function RegisterForm() {
       if (wantsChildren === null)
         return setError("בחרו אם להוסיף ילדים לחשבון.");
       if (wantsChildren && namedChildren.length === 0)
-        return setError("נא למלא שם של ילד/ה אחד לפחות, או לבחור 'לא'.");
+        return setError("נא למלא שם פרטי ושם משפחה של ילד/ה אחד לפחות, או לבחור 'לא'.");
       if (wantsChildren) {
+        const missingName = children.some(
+          (child) => !child.firstName.trim() || !child.lastName.trim(),
+        );
+        if (missingName)
+          return setError("נא למלא שם פרטי ושם משפחה לכל ילד/ה.");
         const missingGrade = namedChildren.some(
           (child) => parseSchoolGradeInput(child.grade) === null,
         );
@@ -278,7 +292,7 @@ export function RegisterForm() {
       password: credentials.password,
       options: {
         data: {
-          full_name: details.fullName.trim(),
+          full_name: parentFullName,
           phone: details.phone.trim(),
           birth_date: details.birth || null,
           gender: details.gender || null,
@@ -290,7 +304,7 @@ export function RegisterForm() {
             ? details.receiptIdNumber.trim() || null
             : null,
           pending_children: namedChildren.map((c) => ({
-            full_name: c.name.trim(),
+            full_name: childFullName(c),
             birth_date: c.birth || null,
             gender: c.gender || null,
             school_grade: parseSchoolGradeInput(c.grade),
@@ -447,16 +461,30 @@ export function RegisterForm() {
 
       {step === 1 && (
         <div className="animate-fade-in flex flex-col gap-4">
-          <Field label="שם מלא — הורה / משתתף מבוגר" htmlFor="fullName" required variant="ds">
-            <Input
-              id="fullName"
-              variant="ds"
-              autoComplete="name"
-              placeholder="ישראל ישראלי"
-              value={details.fullName}
-              onChange={setDetailsField("fullName")}
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="שם פרטי" htmlFor="firstName" required variant="ds">
+              <Input
+                id="firstName"
+                variant="ds"
+                autoComplete="given-name"
+                placeholder="ישראל"
+                value={details.firstName}
+                onChange={setDetailsField("firstName")}
+                required
+              />
+            </Field>
+            <Field label="שם משפחה" htmlFor="lastName" required variant="ds">
+              <Input
+                id="lastName"
+                variant="ds"
+                autoComplete="family-name"
+                placeholder="ישראלי"
+                value={details.lastName}
+                onChange={setDetailsField("lastName")}
+                required
+              />
+            </Field>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="מספר טלפון" htmlFor="phone" required variant="ds">
               <Input
@@ -632,22 +660,44 @@ export function RegisterForm() {
                       </button>
                     )}
                   </div>
-                  <Field
-                    label="שם הילד/ה"
-                    htmlFor={`childName-${child.key}`}
-                    required
-                    variant="ds"
-                  >
-                    <Input
-                      id={`childName-${child.key}`}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="שם פרטי"
+                      htmlFor={`childFirstName-${child.key}`}
+                      required
                       variant="ds"
-                      placeholder="איתי לוי"
-                      value={child.name}
-                      onChange={(e) =>
-                        updateChild(child.key, "name", e.target.value)
-                      }
-                    />
-                  </Field>
+                    >
+                      <Input
+                        id={`childFirstName-${child.key}`}
+                        variant="ds"
+                        autoComplete="off"
+                        placeholder="איתי"
+                        value={child.firstName}
+                        onChange={(e) =>
+                          updateChild(child.key, "firstName", e.target.value)
+                        }
+                        required
+                      />
+                    </Field>
+                    <Field
+                      label="שם משפחה"
+                      htmlFor={`childLastName-${child.key}`}
+                      required
+                      variant="ds"
+                    >
+                      <Input
+                        id={`childLastName-${child.key}`}
+                        variant="ds"
+                        autoComplete="off"
+                        placeholder="לוי"
+                        value={child.lastName}
+                        onChange={(e) =>
+                          updateChild(child.key, "lastName", e.target.value)
+                        }
+                        required
+                      />
+                    </Field>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field
                       label="תאריך לידה"
@@ -690,8 +740,10 @@ export function RegisterForm() {
                       type="button"
                       onClick={() => {
                         setError(null);
-                        if (!child.name.trim()) {
-                          setError("נא למלא קודם את שם הילד/ה לפני הצהרת הבריאות.");
+                        if (!child.firstName.trim() || !child.lastName.trim()) {
+                          setError(
+                            "נא למלא קודם שם פרטי ושם משפחה לפני הצהרת הבריאות."
+                          );
                           return;
                         }
                         setHealthChildKey(child.key);
@@ -755,7 +807,7 @@ export function RegisterForm() {
                     הוספת ילד/ה נוסף/ת
                   </span>
                   <span className="block text-xs text-ink-500">
-                    שם, כיתה, תאריך לידה ומין
+                    שם פרטי, שם משפחה, כיתה, תאריך לידה ומין
                   </span>
                 </span>
               </button>
@@ -821,7 +873,7 @@ export function RegisterForm() {
           </Field>
 
           <Summary
-            fullName={details.fullName}
+            fullName={parentFullName}
             city={details.city}
             childrenCount={namedChildren.length}
           />
@@ -833,7 +885,12 @@ export function RegisterForm() {
         open={healthChildKey !== null}
         onClose={() => setHealthChildKey(null)}
         childName={
-          children.find((child) => child.key === healthChildKey)?.name ?? ""
+          childFullName(
+            children.find((child) => child.key === healthChildKey) ?? {
+              firstName: "",
+              lastName: "",
+            }
+          )
         }
         today={maxBirthDate || todayIso()}
         schoolYear={declarationSchoolYear()}
@@ -960,7 +1017,7 @@ function FormActions({
 }
 
 function ChildrenLiveSummary({ items }: { items: ChildDraft[] }) {
-  const namedCount = items.filter((child) => child.name.trim()).length;
+  const namedCount = items.filter((child) => childFullName(child)).length;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-brand-200/90 bg-gradient-to-bl from-brand-50 via-white to-brand-50/40 shadow-sm">
@@ -997,7 +1054,7 @@ function ChildSummaryRow({
   child: ChildDraft;
   index: number;
 }) {
-  const name = child.name.trim();
+  const name = childFullName(child);
   const gradeValue = parseSchoolGradeInput(child.grade);
   const grade = schoolGradeLabel(gradeValue);
   const gradeText =

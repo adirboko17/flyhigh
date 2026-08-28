@@ -17,11 +17,13 @@ import {
   resolveSchoolGrade,
   SCHOOL_GRADES,
 } from "@/lib/school-grade";
+import { joinPersonName, splitPersonName } from "@/utils/format";
 
 type ChildDraft = {
   key: string;
   id?: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   birth: string;
   gender: string;
   grade: string;
@@ -29,7 +31,8 @@ type ChildDraft = {
 };
 
 type ProfileForm = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   birth: string;
   gender: string;
@@ -46,7 +49,8 @@ function newChildKey() {
 function emptyChild(): ChildDraft {
   return {
     key: newChildKey(),
-    name: "",
+    firstName: "",
+    lastName: "",
     birth: "",
     gender: "",
     grade: "",
@@ -54,9 +58,15 @@ function emptyChild(): ChildDraft {
   };
 }
 
+function childFullName(child: Pick<ChildDraft, "firstName" | "lastName">) {
+  return joinPersonName(child.firstName, child.lastName);
+}
+
 function toProfileForm(existing?: CustomerWithChildren): ProfileForm {
+  const name = splitPersonName(existing?.full_name ?? "");
   return {
-    fullName: existing?.full_name ?? "",
+    firstName: name.firstName,
+    lastName: name.lastName,
     phone: existing?.phone ?? "",
     birth: existing?.birth_date ?? "",
     gender: existing?.gender ?? "",
@@ -74,10 +84,12 @@ function toChildDrafts(existing?: CustomerWithChildren): ChildDraft[] {
       child.school_grade,
       child.grade_school_year
     );
+    const name = splitPersonName(child.full_name);
     return {
       key: child.id,
       id: child.id,
-      name: child.full_name,
+      firstName: name.firstName,
+      lastName: name.lastName,
       birth: child.birth_date ?? "",
       gender: child.gender ?? "",
       grade: currentGrade == null ? "" : String(currentGrade),
@@ -125,10 +137,10 @@ export function CustomerForm({
 
   function payloadChildren() {
     return children
-      .filter((child) => child.name.trim())
+      .filter((child) => childFullName(child))
       .map((child) => ({
         id: child.id,
-        fullName: child.name,
+        fullName: childFullName(child),
         birthDate: child.birth,
         gender: child.gender,
         grade: child.grade,
@@ -145,8 +157,34 @@ export function CustomerForm({
       return;
     }
 
+    if (!profile.firstName.trim()) {
+      setError("נא למלא שם פרטי.");
+      return;
+    }
+    if (!profile.lastName.trim()) {
+      setError("נא למלא שם משפחה.");
+      return;
+    }
+
+    const incompleteChild = children.find((child) => {
+      const started =
+        Boolean(child.id) ||
+        child.firstName.trim() ||
+        child.lastName.trim() ||
+        child.birth ||
+        child.gender ||
+        child.grade ||
+        child.notes;
+      return started && (!child.firstName.trim() || !child.lastName.trim());
+    });
+    if (incompleteChild) {
+      setError("נא למלא שם פרטי ושם משפחה לכל ילד/ה.");
+      return;
+    }
+
     const namedWithoutGrade = children.filter(
-      (child) => child.name.trim() && parseSchoolGradeInput(child.grade) === null
+      (child) =>
+        childFullName(child) && parseSchoolGradeInput(child.grade) === null
     );
     if (namedWithoutGrade.length > 0) {
       setError("נא לבחור כיתה לכל ילד/ה.");
@@ -155,7 +193,7 @@ export function CustomerForm({
 
     setLoading(true);
     const profileInput = {
-      fullName: profile.fullName,
+      fullName: joinPersonName(profile.firstName, profile.lastName),
       phone: profile.phone,
       birthDate: profile.birth,
       gender: profile.gender,
@@ -197,16 +235,29 @@ export function CustomerForm({
         <h3 className="font-display text-base font-bold text-ink-900">
           פרטי הלקוח
         </h3>
-        <Field label="שם מלא" htmlFor="customerFullName" required>
-          <Input
-            id="customerFullName"
-            value={profile.fullName}
-            onChange={setProfileField("fullName")}
-            placeholder="ישראל ישראלי"
-            required
-            autoFocus
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="שם פרטי" htmlFor="customerFirstName" required>
+            <Input
+              id="customerFirstName"
+              value={profile.firstName}
+              onChange={setProfileField("firstName")}
+              placeholder="ישראל"
+              required
+              autoFocus
+              autoComplete="given-name"
+            />
+          </Field>
+          <Field label="שם משפחה" htmlFor="customerLastName" required>
+            <Input
+              id="customerLastName"
+              value={profile.lastName}
+              onChange={setProfileField("lastName")}
+              placeholder="ישראלי"
+              required
+              autoComplete="family-name"
+            />
+          </Field>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="טלפון" htmlFor="customerPhone" required>
             <Input
@@ -332,14 +383,38 @@ export function CustomerForm({
                 <Icon name="x" size={15} />
               </button>
             </div>
-            <Field label="שם הילד/ה" htmlFor={`childName-${child.key}`} required>
-              <Input
-                id={`childName-${child.key}`}
-                value={child.name}
-                onChange={(e) => updateChild(child.key, "name", e.target.value)}
-                placeholder="איתי לוי"
-              />
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="שם פרטי"
+                htmlFor={`childFirstName-${child.key}`}
+                required
+              >
+                <Input
+                  id={`childFirstName-${child.key}`}
+                  value={child.firstName}
+                  onChange={(e) =>
+                    updateChild(child.key, "firstName", e.target.value)
+                  }
+                  placeholder="איתי"
+                  required
+                />
+              </Field>
+              <Field
+                label="שם משפחה"
+                htmlFor={`childLastName-${child.key}`}
+                required
+              >
+                <Input
+                  id={`childLastName-${child.key}`}
+                  value={child.lastName}
+                  onChange={(e) =>
+                    updateChild(child.key, "lastName", e.target.value)
+                  }
+                  placeholder="לוי"
+                  required
+                />
+              </Field>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="תאריך לידה" htmlFor={`childBirth-${child.key}`}>
                 <BirthDateInput
@@ -400,7 +475,7 @@ export function CustomerForm({
               הוספת ילד/ה
             </span>
             <span className="block text-xs text-ink-500">
-              שם, מגדר, כיתה ותאריך לידה
+              שם פרטי, שם משפחה, מגדר, כיתה ותאריך לידה
             </span>
           </span>
         </button>
