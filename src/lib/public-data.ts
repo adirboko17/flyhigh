@@ -1,5 +1,9 @@
 import { unstable_cache } from "next/cache";
 import {
+  CATALOG_ORDER_SETTING_KEY,
+  parseCatalogClassIds,
+} from "@/lib/classes/catalogOrder";
+import {
   HOME_FEATURED_SETTING_KEY,
   parseFeaturedClassIds,
 } from "@/lib/home/featuredClasses";
@@ -50,6 +54,25 @@ export const getPublicClasses = unstable_cache(
     }));
   },
   ["public-classes-v5"],
+  {
+    revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
+    tags: ["public-classes"],
+  }
+);
+
+export const getCatalogClassOrderIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", CATALOG_ORDER_SETTING_KEY)
+      .maybeSingle();
+
+    if (error) return [];
+    return parseCatalogClassIds(data?.value);
+  },
+  ["catalog-class-order-v2"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-classes"],

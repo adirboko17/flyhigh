@@ -5,7 +5,9 @@
 } from "@/components/admin/ClassList";
 import { getClassInstructorOptions } from "@/lib/admin/classInstructors";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { getCatalogClassOrderIds } from "@/lib/admin/catalogOrder";
 import { getHomeFeaturedClassIds } from "@/lib/admin/featuredClasses";
+import { getPublicClasses } from "@/lib/public-data";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 
 export const metadata = { title: "ניהול חוגים" };
@@ -21,6 +23,8 @@ export default async function AdminClassesPage() {
     { data: slotRows },
     instructors,
     featuredClassIds,
+    catalogClassIds,
+    publicClasses,
   ] =
     await Promise.all([
       supabase
@@ -48,6 +52,8 @@ export default async function AdminClassesPage() {
         .order("start_time"),
       getClassInstructorOptions(),
       getHomeFeaturedClassIds(),
+      getCatalogClassOrderIds(),
+      getPublicClasses(),
     ]);
 
   const registeredByClass = new Map<string, number>();
@@ -113,6 +119,8 @@ export default async function AdminClassesPage() {
       classes={rows}
       instructors={instructors}
       featuredClassIds={featuredClassIds}
+      catalogClassIds={catalogClassIds}
+      publicClasses={publicClasses}
     />
   );
 }

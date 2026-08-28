@@ -10,13 +10,21 @@ import {
   UserPlusMenuIcon,
 } from "@/components/admin/AdminRowActions";
 import { deleteAdminRow } from "@/components/admin/adminDelete";
-import { loadClassAttendance, loadClassRoster } from "@/lib/admin/classRoster";
+import {
+  loadClassAttendance,
+  loadClassRoster,
+  type AdminRosterSession,
+} from "@/lib/admin/classRoster";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
+import { dayLabelLong, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import {
   AssignToClassDialog,
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
 import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
+import { CatalogOrderDialog } from "@/components/admin/CatalogOrderDialog";
+import { ClassArrangementChooser } from "@/components/admin/ClassArrangementChooser";
 import { FeaturedClassesDialog } from "@/components/admin/FeaturedClassesDialog";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
@@ -36,7 +44,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Input } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
@@ -62,6 +70,7 @@ import {
 import { uniqueClassInstructorIds } from "@/lib/instructors/sessionInstructor";
 import { parseBillingMonths } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
+import type { PublicClass } from "@/types";
 import { cn } from "@/utils/cn";
 import type { Enums, Json } from "@/types/database.types";
 import { calcAge, formatCurrency, formatDate, formatTime } from "@/utils/format";
@@ -168,6 +177,8 @@ interface ClassListProps {
   classes: AdminClassRow[];
   instructors: ClassInstructorOption[];
   featuredClassIds: string[];
+  catalogClassIds: string[];
+  publicClasses: PublicClass[];
 }
 
 function normalizeSearch(value: string) {
@@ -271,6 +282,15 @@ function audienceLabel(item: AdminClassRow) {
   return parts.filter(Boolean).join(" · ");
 }
 
+function defaultAppointmentDate(
+  dates: string[],
+  preferred: string | null | undefined,
+  today: string
+) {
+  if (preferred && dates.includes(preferred)) return preferred;
+  return dates.find((date) => date >= today) ?? dates[dates.length - 1] ?? "";
+}
+
 function scheduleLabel(item: AdminClassRow) {
   if (item.interest_only) {
     return item.planned_session_count
@@ -294,8 +314,13 @@ export function ClassList({
   classes,
   instructors,
   featuredClassIds,
+  catalogClassIds,
+  publicClasses,
 }: ClassListProps) {
   const [query, setQuery] = useState("");
+  const [arrangeStep, setArrangeStep] = useState<
+    null | "choose" | "featured" | "catalog"
+  >(null);
   const [selected, setSelected] = useState<{
     cls: AdminClassRow;
     tab: PanelTab;
@@ -305,8 +330,6 @@ export function ClassList({
   const [previewed, setPreviewed] = useState<AdminClassRow | null>(null);
   const [manualAssign, setManualAssign] = useState<AdminClassRow | null>(null);
   const [quickEdit, setQuickEdit] = useState<AdminClassRow | null>(null);
-  const [featuredOpen, setFeaturedOpen] = useState(false);
-
   const filtered = useMemo(
     () => classes.filter((c) => matchesClass(c, query, instructors)),
     [classes, query, instructors]
@@ -329,7 +352,7 @@ export function ClassList({
         onQueryChange={setQuery}
         resultCount={filtered.length}
         totalCount={classes.length}
-        onManageFeatured={() => setFeaturedOpen(true)}
+        onManageArrangement={() => setArrangeStep("choose")}
       />
 
       {filtered.length === 0 ? (
@@ -395,11 +418,27 @@ export function ClassList({
         />
       )}
 
-      {featuredOpen && (
+      {arrangeStep === "choose" && (
+        <ClassArrangementChooser
+          onClose={() => setArrangeStep(null)}
+          onPickFeatured={() => setArrangeStep("featured")}
+          onPickCatalog={() => setArrangeStep("catalog")}
+        />
+      )}
+
+      {arrangeStep === "featured" && (
         <FeaturedClassesDialog
           classes={classes}
           initialIds={featuredClassIds}
-          onClose={() => setFeaturedOpen(false)}
+          onClose={() => setArrangeStep(null)}
+        />
+      )}
+
+      {arrangeStep === "catalog" && (
+        <CatalogOrderDialog
+          classes={publicClasses}
+          initialIds={catalogClassIds}
+          onClose={() => setArrangeStep(null)}
         />
       )}
     </div>
@@ -435,7 +474,8 @@ function ClassCard({
   const waiting = cls.waitlistCount;
   const rate = attendanceRate(cls);
   const ageLabel = audienceLabel(cls);
-  const multiSlot = cls.pick_one_slot && cls.slots.length > 1;
+  const appointment = isAppointmentClass(cls);
+  const multiSlot = !appointment && cls.pick_one_slot && cls.slots.length > 1;
   const activeSlot = cls.slots.find((slot) => slot.id === activeSlotId) ?? null;
 
   return (
@@ -704,16 +744,31 @@ function ClassCard({
             <SlotStats
               registered={registered}
               waiting={waiting}
-              capacity={cls.capacity}
+              capacity={appointment ? null : cls.capacity}
+              occupancyLabel={
+                appointment ? `${registered} תורים שנקבעו` : undefined
+              }
               attendanceLabel={rate === null ? "—" : `${rate}%`}
               onEnrollments={() =>
-                onOpenPanel("enrollments", undefined, cls.slots[0]?.id)
+                onOpenPanel(
+                  "enrollments",
+                  undefined,
+                  appointment ? undefined : cls.slots[0]?.id
+                )
               }
               onWaitlist={() =>
-                onOpenPanel("waitlist", undefined, cls.slots[0]?.id)
+                onOpenPanel(
+                  "waitlist",
+                  undefined,
+                  appointment ? undefined : cls.slots[0]?.id
+                )
               }
               onAttendance={() =>
-                onOpenPanel("attendance", "mark", cls.slots[0]?.id)
+                onOpenPanel(
+                  "attendance",
+                  "mark",
+                  appointment ? undefined : cls.slots[0]?.id
+                )
               }
             />
           )}
@@ -785,6 +840,7 @@ function SlotStats({
   registered,
   waiting,
   capacity,
+  occupancyLabel,
   attendanceLabel,
   onEnrollments,
   onWaitlist,
@@ -793,6 +849,7 @@ function SlotStats({
   registered: number;
   waiting: number;
   capacity: number | null;
+  occupancyLabel?: string;
   attendanceLabel: string;
   onEnrollments: () => void;
   onWaitlist: () => void;
@@ -809,7 +866,7 @@ function SlotStats({
       <div className="flex items-baseline justify-between text-sm">
         <span className="text-ink-500">תפוסה</span>
         <span className="font-semibold text-ink-900">
-          {formatClassOccupancy(registered, capacity)}
+          {occupancyLabel ?? formatClassOccupancy(registered, capacity)}
         </span>
       </div>
       {!unlimited && (
@@ -917,9 +974,12 @@ export function ClassDetailPanel({
     useState<AttendanceMode>(initialAttendanceMode);
   const [assigning, setAssigning] = useState<AssignMode | null>(null);
   const [listQuery, setListQuery] = useState("");
+  const appointment = isAppointmentClass(cls);
+  const [selectedDate, setSelectedDate] = useState(initialSessionDate ?? "");
   const [roster, setRoster] = useState<{
     enrollments: AdminClassEnrollment[];
     waitlist: AdminClassWaitlistEntry[];
+    sessions: AdminRosterSession[];
   } | null>(null);
   const [rosterLoading, setRosterLoading] = useState(true);
   const [attendance, setAttendance] = useState<AdminClassAttendance[]>(
@@ -969,36 +1029,83 @@ export function ClassDetailPanel({
     ? { ...cls, enrollments: roster.enrollments, waitlist: roster.waitlist }
     : cls;
 
+  const sessions = roster?.sessions ?? [];
+  const sessionDates = useMemo(() => {
+    const dates = [...new Set(sessions.map((session) => session.session_date))];
+    dates.sort();
+    return dates;
+  }, [sessions]);
+
+  useEffect(() => {
+    if (!appointment || sessionDates.length === 0) return;
+    setSelectedDate((current) =>
+      current && sessionDates.includes(current)
+        ? current
+        : defaultAppointmentDate(
+            sessionDates,
+            initialSessionDate,
+            todayInIsrael()
+          )
+    );
+  }, [appointment, sessionDates, initialSessionDate]);
+
+  const daySessions = useMemo(
+    () =>
+      appointment && selectedDate
+        ? sessions.filter((session) => session.session_date === selectedDate)
+        : [],
+    [appointment, selectedDate, sessions]
+  );
+
   const selectedSlot =
-    weeklySlotId
+    !appointment && weeklySlotId
       ? cls.slots.find((slot) => slot.id === weeklySlotId) ?? null
       : null;
 
   const enrollments = useMemo(() => {
-    const rows = activeEnrollments(rosterClass).filter((row) =>
-      weeklySlotId ? row.weekly_slot_id === weeklySlotId : true
-    );
+    const rows = activeEnrollments(rosterClass).filter((row) => {
+      if (appointment) {
+        if (!selectedDate) return true;
+        if (row.class_sessions?.session_date) {
+          return row.class_sessions.session_date === selectedDate;
+        }
+        return daySessions.some((session) => session.id === row.session_id);
+      }
+      return weeklySlotId ? row.weekly_slot_id === weeklySlotId : true;
+    });
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [rosterClass, weeklySlotId]);
+  }, [appointment, daySessions, rosterClass, selectedDate, weeklySlotId]);
 
   const cancelled = useMemo(() => {
-    const rows = rosterClass.enrollments.filter(
-      (e) =>
-        e.status === "cancelled" &&
-        (!weeklySlotId || e.weekly_slot_id === weeklySlotId)
-    );
+    const rows = rosterClass.enrollments.filter((e) => {
+      if (e.status !== "cancelled") return false;
+      if (appointment) {
+        if (!selectedDate) return true;
+        if (e.class_sessions?.session_date) {
+          return e.class_sessions.session_date === selectedDate;
+        }
+        return daySessions.some((session) => session.id === e.session_id);
+      }
+      return !weeklySlotId || e.weekly_slot_id === weeklySlotId;
+    });
     return [...rows].sort((a, b) =>
       (a.children?.full_name ?? "").localeCompare(
         b.children?.full_name ?? "",
         "he"
       )
     );
-  }, [rosterClass.enrollments, weeklySlotId]);
+  }, [
+    appointment,
+    daySessions,
+    rosterClass.enrollments,
+    selectedDate,
+    weeklySlotId,
+  ]);
 
   const waiting = useMemo(
     () =>
@@ -1102,20 +1209,23 @@ export function ClassDetailPanel({
               {cls.title}
             </h2>
             <p className="mt-0.5 text-sm text-white/80">
-              {formatClassOccupancy(
-                rosterLoading
-                  ? selectedSlot?.registeredCount ?? cls.registeredCount
-                  : enrollments.length,
-                cls.capacity
-              )}
-              {selectedSlot
-                ? ` · ${formatWeeklySlotLabel(
-                    selectedSlot.day_of_week,
-                    selectedSlot.start_time,
-                    selectedSlot.end_time,
-                    selectedSlot.gender_policy
-                  )}`
-                : ` · ${scheduleLabel(cls)}`}
+              {appointment && selectedDate
+                ? `${enrollments.length} מתוך ${daySessions.length} · ${dayLabelLong(selectedDate)}`
+                : `${formatClassOccupancy(
+                    rosterLoading
+                      ? selectedSlot?.registeredCount ?? cls.registeredCount
+                      : enrollments.length,
+                    cls.capacity
+                  )}${
+                    selectedSlot
+                      ? ` · ${formatWeeklySlotLabel(
+                          selectedSlot.day_of_week,
+                          selectedSlot.start_time,
+                          selectedSlot.end_time,
+                          selectedSlot.gender_policy
+                        )}`
+                      : ` · ${scheduleLabel(cls)}`
+                  }`}
             </p>
           </div>
           <button
@@ -1162,6 +1272,14 @@ export function ClassDetailPanel({
           })}
         </div>
 
+        {appointment && sessionDates.length > 0 && (
+          <AppointmentDateBar
+            dates={sessionDates}
+            selectedDate={selectedDate}
+            onChange={setSelectedDate}
+          />
+        )}
+
         {showListSearch && (
           <div className="shrink-0 border-b border-ink-100 bg-white px-4 py-2.5">
             <div className="relative">
@@ -1184,12 +1302,21 @@ export function ClassDetailPanel({
               טוען את הרשימה...
             </p>
           ) : tab === "enrollments" ? (
-            <EnrollmentsTab
-              active={filteredEnrollments}
-              cancelled={filteredCancelled}
-              totalActive={enrollments.length}
-              searching={Boolean(q)}
-            />
+            appointment ? (
+              <AppointmentEnrollmentsTab
+                sessions={daySessions}
+                enrollments={filteredEnrollments}
+                cancelled={filteredCancelled}
+                searching={Boolean(q)}
+              />
+            ) : (
+              <EnrollmentsTab
+                active={filteredEnrollments}
+                cancelled={filteredCancelled}
+                totalActive={enrollments.length}
+                searching={Boolean(q)}
+              />
+            )
           ) : tab === "waitlist" &&
             (waiting.length === 0 ? (
               <div className="p-5">
@@ -1226,8 +1353,10 @@ export function ClassDetailPanel({
               cls={cls}
               attendance={attendance}
               students={students}
-              weeklySlotId={weeklySlotId}
-              initialSessionDate={initialSessionDate}
+              weeklySlotId={appointment ? null : weeklySlotId}
+              initialSessionDate={
+                appointment ? selectedDate || initialSessionDate : initialSessionDate
+              }
               mode={attendanceMode}
               onModeChange={setAttendanceMode}
               query={listQuery}
@@ -1250,6 +1379,125 @@ export function ClassDetailPanel({
             });
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function AppointmentDateBar({
+  dates,
+  selectedDate,
+  onChange,
+}: {
+  dates: string[];
+  selectedDate: string;
+  onChange: (date: string) => void;
+}) {
+  const index = dates.indexOf(selectedDate);
+  const prev = index > 0 ? dates[index - 1] : null;
+  const next = index >= 0 && index < dates.length - 1 ? dates[index + 1] : null;
+
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-ink-100 bg-white px-4 py-2.5">
+      <button
+        type="button"
+        onClick={() => prev && onChange(prev)}
+        disabled={!prev}
+        aria-label="תאריך קודם"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-ink-50 disabled:opacity-30"
+      >
+        <Icon name="chevron" size={18} className="rotate-180" />
+      </button>
+      <Select
+        value={selectedDate}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="בחירת תאריך"
+        className="h-9"
+      >
+        {dates.map((date) => (
+          <option key={date} value={date}>
+            {dayLabelLong(date)}
+          </option>
+        ))}
+      </Select>
+      <button
+        type="button"
+        onClick={() => next && onChange(next)}
+        disabled={!next}
+        aria-label="תאריך הבא"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-ink-50 disabled:opacity-30"
+      >
+        <Icon name="chevron" size={18} />
+      </button>
+    </div>
+  );
+}
+
+function AppointmentEnrollmentsTab({
+  sessions,
+  enrollments,
+  cancelled,
+  searching,
+}: {
+  sessions: AdminRosterSession[];
+  enrollments: AdminClassEnrollment[];
+  cancelled: AdminClassEnrollment[];
+  searching: boolean;
+}) {
+  const bySessionId = new Map(
+    enrollments
+      .filter((row) => row.session_id)
+      .map((row) => [row.session_id as string, row])
+  );
+  const visibleSessions = searching
+    ? sessions.filter((session) => bySessionId.has(session.id))
+    : sessions;
+
+  if (visibleSessions.length === 0 && cancelled.length === 0) {
+    return (
+      <div className="p-5">
+        <EmptyState
+          title={searching ? "לא נמצאו נרשמים לפי החיפוש" : "אין תורים בתאריך הזה"}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <ul className="divide-y divide-ink-100 border-b border-ink-100 bg-white">
+        {visibleSessions.map((session) => {
+          const enrollment = bySessionId.get(session.id);
+          return (
+            <li key={session.id}>
+              <p className="px-4 pt-2.5 text-[11px] font-semibold tabular-nums text-ink-400">
+                <span dir="ltr">
+                  {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                </span>
+              </p>
+              {enrollment ? (
+                <EnrollmentRow
+                  enrollment={enrollment}
+                  hideSession
+                />
+              ) : (
+                <p className="px-4 pb-3 pt-1 text-sm text-ink-400">פנוי</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {cancelled.length > 0 && (
+        <div className="mt-3">
+          <p className="sticky top-0 z-[1] bg-ink-50/95 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink-400 backdrop-blur-sm">
+            הרשמות שבוטלו · {cancelled.length}
+          </p>
+          <ul className="divide-y divide-ink-100 border-y border-ink-100 bg-white">
+            {cancelled.map((enrollment) => (
+              <EnrollmentRow key={enrollment.id} enrollment={enrollment} muted />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -1320,10 +1568,12 @@ function EnrollmentRow({
   enrollment,
   index,
   muted = false,
+  hideSession = false,
 }: {
   enrollment: AdminClassEnrollment;
   index?: number;
   muted?: boolean;
+  hideSession?: boolean;
 }) {
   const childName = enrollment.children?.full_name;
   const displayName = participantDisplayName(
@@ -1369,11 +1619,11 @@ function EnrollmentRow({
             {parentLine}
           </p>
         )}
-        {enrollment.class_sessions && (
+        {!hideSession && enrollment.class_sessions && (
           <p className="mt-0.5 truncate text-xs text-ink-500">
-            {enrollment.class_sessions.session_date} ·{" "}
-            {enrollment.class_sessions.start_time.slice(0, 5)}–
-            {enrollment.class_sessions.end_time.slice(0, 5)}
+            {formatDate(enrollment.class_sessions.session_date)} ·{" "}
+            {formatTime(enrollment.class_sessions.start_time)}–
+            {formatTime(enrollment.class_sessions.end_time)}
           </p>
         )}
       </div>
@@ -1649,13 +1899,13 @@ function ClassSearchBar({
   onQueryChange,
   resultCount,
   totalCount,
-  onManageFeatured,
+  onManageArrangement,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
   resultCount: number;
   totalCount: number;
-  onManageFeatured: () => void;
+  onManageArrangement: () => void;
 }) {
   const isSearching = query.trim().length > 0;
 
@@ -1695,9 +1945,9 @@ function ClassSearchBar({
               type="button"
               variant="outline"
               className="h-12 px-5 sm:w-auto"
-              onClick={onManageFeatured}
+              onClick={onManageArrangement}
             >
-              חוגים מובילים
+              סידור חוגים
             </Button>
             <ButtonLink
               href="/admin/classes/new"

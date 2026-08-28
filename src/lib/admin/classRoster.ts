@@ -15,31 +15,50 @@ const ENROLLMENT_SELECT =
 const WAITLIST_SELECT =
   "id, class_id, parent_id, child_id, weekly_slot_id, status, created_at, children(full_name), profiles(full_name, phone)";
 
+export type AdminRosterSession = {
+  id: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  weekly_slot_id: string | null;
+  status: "scheduled" | "cancelled" | "completed";
+};
+
 export async function loadClassRoster(classId: string): Promise<{
   enrollments: AdminClassEnrollment[];
   waitlist: AdminClassWaitlistEntry[];
+  sessions: AdminRosterSession[];
 }> {
   const supabase = await createAdminDataClient();
 
-  const [{ data: enrollments }, { data: waitlist }] = await Promise.all([
-    supabase
-      .from("enrollments")
-      .select(ENROLLMENT_SELECT)
-      .eq("type", "class")
-      .eq("class_id", classId)
-      .in("status", ["active", "pending", "cancelled"])
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("waitlist")
-      .select(WAITLIST_SELECT)
-      .eq("class_id", classId)
-      .in("status", ["waiting", "offered"])
-      .order("created_at"),
-  ]);
+  const [{ data: enrollments }, { data: waitlist }, { data: sessions }] =
+    await Promise.all([
+      supabase
+        .from("enrollments")
+        .select(ENROLLMENT_SELECT)
+        .eq("type", "class")
+        .eq("class_id", classId)
+        .in("status", ["active", "pending", "cancelled"])
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("waitlist")
+        .select(WAITLIST_SELECT)
+        .eq("class_id", classId)
+        .in("status", ["waiting", "offered"])
+        .order("created_at"),
+      supabase
+        .from("class_sessions")
+        .select("id, session_date, start_time, end_time, weekly_slot_id, status")
+        .eq("class_id", classId)
+        .neq("status", "cancelled")
+        .order("session_date")
+        .order("start_time"),
+    ]);
 
   return {
     enrollments: (enrollments ?? []) as AdminClassEnrollment[],
     waitlist: (waitlist ?? []) as AdminClassWaitlistEntry[],
+    sessions: (sessions ?? []) as AdminRosterSession[],
   };
 }
 

@@ -79,7 +79,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       items,
-      count: items.length,
+      count: ready ? items.length : 0,
       addItem,
       removeItem,
       clear,

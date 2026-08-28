@@ -1,14 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminClassRow } from "@/components/admin/ClassList";
-import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { saveHomeFeaturedClasses } from "@/lib/admin/featuredClassActions";
-import { CLASS_STATUS } from "@/lib/constants";
 import { HOME_FEATURED_LIMIT } from "@/lib/home/featuredClasses";
 import { cn } from "@/utils/cn";
 
@@ -27,7 +27,9 @@ export function FeaturedClassesDialog({
 }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    initialIds.filter((id) => classes.some((cls) => cls.id === id)).slice(0, HOME_FEATURED_LIMIT)
+    initialIds
+      .filter((id) => classes.some((cls) => cls.id === id))
+      .slice(0, HOME_FEATURED_LIMIT)
   );
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -63,6 +65,18 @@ export function FeaturedClassesDialog({
     setSelectedIds((current) => current.filter((item) => item !== id));
   }
 
+  function moveSlot(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= selectedIds.length) return;
+    setError(null);
+    setSelectedIds((current) => {
+      const next = [...current];
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
@@ -83,42 +97,58 @@ export function FeaturedClassesDialog({
       open
       onClose={onClose}
       title="חוגים מובילים"
-      description="בחרו עד 3 חוגים שיוצגו בדף הבית. הסדר כאן הוא הסדר באתר."
-      className="max-w-2xl"
+      description="עד 3 חוגים בדף הבית. בחרו מהרשימה, והסדר כאן הוא הסדר באתר."
+      className="max-w-5xl"
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-ink-500">
+            נבחרו {selectedIds.length} מתוך {HOME_FEATURED_LIMIT}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={saving}
+            >
+              ביטול
+            </Button>
+            <Button type="button" onClick={() => void handleSave()} disabled={saving}>
+              {saving ? "שומרים..." : "שמירת בחירה"}
+            </Button>
+          </div>
+        </div>
+      }
     >
-      <div className="space-y-5">
-        <ol className="grid gap-2 sm:grid-cols-3">
+      <div className="space-y-6">
+        <ol className="grid gap-4 sm:grid-cols-3">
           {Array.from({ length: HOME_FEATURED_LIMIT }, (_, index) => {
             const id = selectedIds[index];
             const cls = id ? byId.get(id) : undefined;
             return (
-              <li
-                key={id ?? `empty-${index}`}
-                className={cn(
-                  "flex min-h-[4.5rem] flex-col justify-center rounded-2xl border px-3 py-2.5",
-                  cls
-                    ? "border-brand-200 bg-brand-50/70"
-                    : "border-dashed border-ink-200 bg-ink-50/50"
-                )}
-              >
-                <p className="text-[11px] font-semibold text-ink-400">
-                  מקום {index + 1}
-                </p>
+              <li key={id ?? `empty-${index}`}>
                 {cls ? (
-                  <div className="mt-1 flex items-start justify-between gap-2">
-                    <p className="min-w-0 text-sm font-semibold text-ink-900">
-                      {cls.title}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => clearSlot(cls.id)}
-                      className="shrink-0 text-xs font-semibold text-ink-400 hover:text-ink-700"
-                    >
-                      הסרה
-                    </button>
-                  </div>
+                  <FeaturedSlotCard
+                    cls={cls}
+                    place={index + 1}
+                    canMoveEarlier={index > 0}
+                    canMoveLater={index < selectedIds.length - 1}
+                    onMoveEarlier={() => moveSlot(index, -1)}
+                    onMoveLater={() => moveSlot(index, 1)}
+                    onRemove={() => clearSlot(cls.id)}
+                  />
                 ) : (
-                  <p className="mt-1 text-sm text-ink-400">טרם נבחר</p>
+                  <div className="flex min-h-[12.5rem] flex-col items-center justify-center rounded-[22px] border border-dashed border-ink-200 bg-ink-50/70 px-4 text-center">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-ink-400 ring-1 ring-ink-100">
+                      {index + 1}
+                    </span>
+                    <p className="mt-3 text-sm font-semibold text-ink-500">
+                      מקום {index + 1} פנוי
+                    </p>
+                    <p className="mt-1 text-xs text-ink-400">
+                      לחצו על חוג למטה כדי לבחור
+                    </p>
+                  </div>
                 )}
               </li>
             );
@@ -134,18 +164,13 @@ export function FeaturedClassesDialog({
             aria-label="חיפוש חוג לבחירה"
             className="h-11"
           />
-          <p className="mt-2 text-xs text-ink-400">
-            נבחרו {selectedIds.length} מתוך {HOME_FEATURED_LIMIT}
-          </p>
         </div>
 
-        <ul className="divide-y divide-ink-50 overflow-hidden rounded-2xl border border-ink-100">
-          {filtered.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-ink-400">
-              לא נמצאו חוגים
-            </li>
-          ) : (
-            filtered.map((cls) => {
+        {filtered.length === 0 ? (
+          <p className="py-8 text-center text-sm text-ink-400">לא נמצאו חוגים</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((cls) => {
               const selectedIndex = selectedIds.indexOf(cls.id);
               const selected = selectedIndex >= 0;
               const full = !selected && selectedIds.length >= HOME_FEATURED_LIMIT;
@@ -153,73 +178,159 @@ export function FeaturedClassesDialog({
                 cls.status === "active" || cls.status === "full";
 
               return (
-                <li key={cls.id}>
-                  <button
-                    type="button"
-                    onClick={() => toggleClass(cls.id)}
-                    disabled={full}
-                    className={cn(
-                      "flex w-full items-start justify-between gap-3 px-4 py-3 text-start transition-colors",
-                      selected
-                        ? "bg-brand-50"
-                        : full
-                          ? "cursor-not-allowed opacity-50"
-                          : "hover:bg-ink-50"
-                    )}
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-ink-900">
-                        {cls.title}
-                      </span>
-                      <span className="mt-1 flex flex-wrap gap-1.5">
-                        <Badge tone={CLASS_STATUS[cls.status].tone}>
-                          {CLASS_STATUS[cls.status].label}
-                        </Badge>
-                        {cls.category && (
-                          <Badge tone="brand">{cls.category}</Badge>
-                        )}
-                        {!publicReady && (
-                          <Badge tone="warning">לא מוצג באתר</Badge>
-                        )}
-                      </span>
-                    </span>
+                <button
+                  key={cls.id}
+                  type="button"
+                  onClick={() => toggleClass(cls.id)}
+                  disabled={full}
+                  className={cn(
+                    "overflow-hidden rounded-[22px] border bg-white text-right shadow-soft transition-all",
+                    selected
+                      ? "border-brand-400 ring-2 ring-brand-100"
+                      : "border-ink-100 hover:border-brand-200",
+                    full && "cursor-not-allowed opacity-40"
+                  )}
+                >
+                  <div className="relative aspect-[16/10] bg-ink-100">
+                    <ClassImage cls={cls} />
                     <span
                       className={cn(
-                        "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                        "absolute end-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-soft",
                         selected
                           ? "bg-brand-600 text-white"
-                          : "border border-ink-200 text-ink-300"
+                          : "bg-white/90 text-ink-400"
                       )}
                     >
                       {selected ? selectedIndex + 1 : ""}
                     </span>
-                  </button>
-                </li>
+                    {!publicReady && (
+                      <span className="absolute start-3 top-3 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                        לא באתר
+                      </span>
+                    )}
+                  </div>
+                  <p className="line-clamp-2 px-4 py-3 text-sm font-extrabold leading-snug text-ink-900">
+                    {cls.title}
+                  </p>
+                </button>
               );
-            })
-          )}
-        </ul>
+            })}
+          </div>
+        )}
 
         {error && (
           <p className="text-sm font-medium text-red-600" role="alert">
             {error}
           </p>
         )}
-
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={saving}
-          >
-            ביטול
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "שומרים..." : "שמירת בחירה"}
-          </Button>
-        </div>
       </div>
     </Modal>
+  );
+}
+
+function FeaturedSlotCard({
+  cls,
+  place,
+  canMoveEarlier,
+  canMoveLater,
+  onMoveEarlier,
+  onMoveLater,
+  onRemove,
+}: {
+  cls: AdminClassRow;
+  place: number;
+  canMoveEarlier: boolean;
+  canMoveLater: boolean;
+  onMoveEarlier: () => void;
+  onMoveLater: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[22px] border border-brand-200 bg-white shadow-soft">
+      <div className="relative aspect-[16/10] bg-ink-100">
+        <ClassImage cls={cls} />
+        <span className="absolute end-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-soft">
+          {place}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute start-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-ink-600 shadow-soft hover:bg-white hover:text-ink-900"
+        >
+          הסרה
+        </button>
+      </div>
+      <div className="px-4 pb-3 pt-3">
+        <h3 className="line-clamp-2 min-h-[2.5rem] font-display text-sm font-extrabold leading-snug text-ink-900">
+          {cls.title}
+        </h3>
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <MoveButton
+            label="העברה קדימה"
+            disabled={!canMoveEarlier}
+            onClick={onMoveEarlier}
+          >
+            <Icon name="chevron" size={15} className="rotate-180" />
+          </MoveButton>
+          <MoveButton
+            label="העברה אחורה"
+            disabled={!canMoveLater}
+            onClick={onMoveLater}
+          >
+            <Icon name="chevron" size={15} />
+          </MoveButton>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ClassImage({ cls }: { cls: Pick<AdminClassRow, "image_url" | "title"> }) {
+  if (!cls.image_url) {
+    return (
+      <div className="flex h-full items-center justify-center bg-brand-600 text-white">
+        <Icon name="waves" size={32} />
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={cls.image_url}
+      alt=""
+      fill
+      sizes="(max-width: 768px) 100vw, 33vw"
+      className="object-cover"
+      unoptimized
+    />
+  );
+}
+
+function MoveButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex h-8 w-8 items-center justify-center rounded-full border border-ink-100 text-ink-600 transition-colors",
+        disabled
+          ? "cursor-not-allowed opacity-30"
+          : "hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+      )}
+    >
+      {children}
+    </button>
   );
 }

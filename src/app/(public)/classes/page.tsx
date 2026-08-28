@@ -2,29 +2,20 @@
 import { ClassesCatalog } from "@/components/classes/ClassesCatalog";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
-import { getPublicClasses } from "@/lib/public-data";
+import { sortByCatalogOrder } from "@/lib/classes/catalogOrder";
+import { getCatalogClassOrderIds, getPublicClasses } from "@/lib/public-data";
 
 export const metadata = {
   title: "חוגים",
   description: "כל חוגי השחייה ופעילויות המים של על הגובה.",
 };
 
-/** אותה קטגוריה ברצף, בלי כותרות — רק סידור הכרטיסים. */
-function sortClassesByCategory<T extends { category: string | null; title: string }>(
-  classes: T[]
-) {
-  return [...classes].sort((a, b) => {
-    const byCategory = (a.category ?? "\uffff").localeCompare(
-      b.category ?? "\uffff",
-      "he"
-    );
-    if (byCategory !== 0) return byCategory;
-    return a.title.localeCompare(b.title, "he");
-  });
-}
-
 export default async function ClassesPage() {
-  const classes = sortClassesByCategory(await getPublicClasses());
+  const [classes, catalogOrderIds] = await Promise.all([
+    getPublicClasses(),
+    getCatalogClassOrderIds(),
+  ]);
+  const ordered = sortByCatalogOrder(classes, catalogOrderIds);
 
   return (
     <div className="bg-ink-50">
@@ -37,8 +28,8 @@ export default async function ClassesPage() {
       />
 
       <div className="container-page relative z-[3] py-12">
-        {classes.length > 0 ? (
-          <ClassesCatalog classes={classes} />
+        {ordered.length > 0 ? (
+          <ClassesCatalog classes={ordered} />
         ) : (
           <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-16 text-center">
             <p className="text-2xl">🏊</p>

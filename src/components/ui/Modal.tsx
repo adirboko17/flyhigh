@@ -12,6 +12,7 @@ interface ModalProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export function Modal({
   title,
   description,
   children,
+  footer,
   className,
 }: ModalProps) {
   const titleId = useId();
@@ -113,6 +115,11 @@ export function Modal({
         <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
           {children}
         </div>
+        {footer && (
+          <div className="shrink-0 border-t border-ink-100 bg-white px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body
