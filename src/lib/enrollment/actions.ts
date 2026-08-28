@@ -50,6 +50,11 @@ import {
   resolveReceiptLabelForCheckout,
 } from "@/lib/enrollment/receiptLabel";
 import { resolveClassParticipants } from "@/lib/enrollment/trainees";
+import {
+  isUniqueSessionViolation,
+  loadBookableAppointmentSessions,
+  uniqueSessionIds,
+} from "@/lib/enrollment/appointmentSessions";
 
 /** אמצעי התשלום שאפשר לבחור במסך ההרשמה. */
 export type CheckoutPaymentMethod = "credit_card" | DeferredPaymentMethod;
@@ -112,6 +117,7 @@ export async function previewClassCoupon(input: {
   childIds: string[];
   includeSelf?: boolean;
   weeklySlotId?: string | null;
+  sessionIds?: string[];
 }): Promise<CouponPreviewResult> {
   const profile = await requireRole("parent");
   const code = normalizeCouponCode(input.code);
@@ -135,7 +141,8 @@ export async function previewClassCoupon(input: {
     input.classId,
     uniqueChildIds,
     Boolean(input.includeSelf),
-    input.weeklySlotId
+    input.weeklySlotId,
+    input.sessionIds
   );
 
   if (subtotal === null) {
@@ -195,12 +202,13 @@ async function classSubtotal(
   classId: string,
   childIds: string[],
   includeSelf: boolean,
-  weeklySlotId?: string | null
+  weeklySlotId?: string | null,
+  sessionIds?: string[]
 ): Promise<number | null> {
   const [{ data: cls }, { data: tiersJson }, familyDiscount] = await Promise.all([
     supabase
       .from("classes")
-      .select("price, category, billing_months, pick_one_slot")
+      .select("price, category, billing_months, pick_one_slot, booking_mode")
       .eq("id", classId)
       .in("status", ["active", "full"])
       .maybeSingle(),
@@ -209,6 +217,16 @@ async function classSubtotal(
   ]);
 
   if (!cls) return null;
+
+  if (cls.booking_mode === "appointment") {
+    const booked = await loadBookableAppointmentSessions(
+      supabase,
+      classId,
+      uniqueSessionIds(sessionIds)
+    );
+    if ("error" in booked) return null;
+    return (Number(cls.price) || 0) * booked.sessions.length;
+  }
 
   const [proration, categorySiblingIds] = await Promise.all([
     loadClassUnitPrice(
@@ -248,6 +266,7 @@ export async function completeClassEnrollmentPayment(input: {
   /** תווית לקבלה — אם נבחרה, מחליפה את שם החוג בתיאור החיוב/הקבלה. */
   receiptLabelId?: string | null;
   weeklySlotId?: string | null;
+  sessionIds?: string[];
 }): Promise<CompleteEnrollmentResult> {
   const profile = await requireRole("parent");
   const { classId, childIds, paymentMethod } = input;
@@ -274,7 +293,7 @@ export async function completeClassEnrollmentPayment(input: {
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
+          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -308,9 +327,24 @@ export async function completeClassEnrollmentPayment(input: {
     };
   }
 
+  const isAppointment = cls.booking_mode === "appointment";
+  const bookedSessions = isAppointment
+    ? await loadBookableAppointmentSessions(
+        supabase,
+        classId,
+        uniqueSessionIds(input.sessionIds)
+      )
+    : null;
+  if (bookedSessions && "error" in bookedSessions) {
+    return { success: false, error: bookedSessions.error };
+  }
+  if (isAppointment && participants.length !== 1) {
+    return { success: false, error: "נא לבחור מתאמן אחד לתור." };
+  }
+
   let weeklySlotId: string | null = null;
   let slotGenders: ClassGenderPolicy[] = [];
-  if (cls.pick_one_slot) {
+  if (!isAppointment && cls.pick_one_slot) {
     if (!input.weeklySlotId) {
       return { success: false, error: "נא לבחור מועד לחוג." };
     }
@@ -368,19 +402,22 @@ export async function completeClassEnrollmentPayment(input: {
     holdingEnrollments.map((e) => e.child_id).filter(Boolean) as string[]
   );
   const duplicate = uniqueChildIds.find((id) => alreadyEnrolled.has(id));
-  if (duplicate) {
+  if (!isAppointment && duplicate) {
     return { success: false, error: "אחד או יותר מהילדים כבר רשומים לחוג זה." };
   }
   if (
+    !isAppointment &&
     includeSelf &&
     holdingEnrollments.some((enrollment) => enrollment.child_id == null)
   ) {
     return { success: false, error: "ההורה כבר רשום לחוג זה." };
   }
 
-  const takenCount = await countHeldSeats(supabase, classId, weeklySlotId);
+  const takenCount = isAppointment
+    ? 0
+    : await countHeldSeats(supabase, classId, weeklySlotId);
 
-  if (cls.capacity != null) {
+  if (!isAppointment && cls.capacity != null) {
     const available = cls.capacity - (takenCount ?? 0);
     if (participants.length > available) {
       return {
@@ -406,31 +443,44 @@ export async function completeClassEnrollmentPayment(input: {
     loadFamilyDiscountSettings(supabase),
   ]);
 
-  const proration = await loadClassUnitPrice(
-    supabase,
-    classId,
-    classPeriodTotal(Number(cls.price), cls.billing_months),
-    weeklySlotId
-  );
+  const appointmentCount =
+    bookedSessions && "sessions" in bookedSessions
+      ? bookedSessions.sessions.length
+      : 0;
+  const proration = isAppointment
+    ? {
+        unitPrice: Number(cls.price) || 0,
+        hasEnded: false,
+      }
+    : await loadClassUnitPrice(
+        supabase,
+        classId,
+        classPeriodTotal(Number(cls.price), cls.billing_months),
+        weeklySlotId
+      );
   if (proration.hasEnded) {
     return { success: false, error: "החוג כבר הסתיים ולא ניתן להירשם אליו." };
   }
 
   const unitPrice = proration.unitPrice;
-  const alreadyEnrolledCount = countFamilyChildrenInCategory(
-    categorySiblingIds,
-    uniqueChildIds
-  );
-  const order = calculateOrderTotal(
-    unitPrice,
-    participants.length,
-    siblingTiersForCheckout(
-      cls.category,
-      parseSiblingTiers(tiersJson),
-      familyDiscount.classCategories
-    ),
-    alreadyEnrolledCount + participants.length
-  );
+  const alreadyEnrolledCount = isAppointment
+    ? 0
+    : countFamilyChildrenInCategory(categorySiblingIds, uniqueChildIds);
+  const order = isAppointment
+    ? {
+        total: unitPrice * appointmentCount,
+        percent: 0,
+      }
+    : calculateOrderTotal(
+        unitPrice,
+        participants.length,
+        siblingTiersForCheckout(
+          cls.category,
+          parseSiblingTiers(tiersJson),
+          familyDiscount.classCategories
+        ),
+        alreadyEnrolledCount + participants.length
+      );
 
   // הקופון נתפס לפני החיוב, כדי שלא נגבה כסף על הנחה שכבר מוצתה.
   const requestedCode = input.couponCode
@@ -501,21 +551,35 @@ export async function completeClassEnrollmentPayment(input: {
   const awaitingCardcom = !deferred && totalAmount > 0;
 
   const paidAt = new Date().toISOString();
-  const enrollmentRows = participants.map((childId, index) => {
-    const paysFull =
-      order.percent <= 0 || (alreadyEnrolledCount === 0 && index === 0);
-    return {
-      parent_id: profile.id,
-      child_id: childId,
-      class_id: classId,
-      weekly_slot_id: weeklySlotId,
-      type: "class" as const,
-      status: "active" as const,
-      payment_status:
-        deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
-      discount_percent: paysFull ? 0 : order.percent,
-    };
-  });
+  const enrollmentRows =
+    bookedSessions && "sessions" in bookedSessions
+      ? bookedSessions.sessions.map((session) => ({
+          parent_id: profile.id,
+          child_id: participants[0] ?? null,
+          class_id: classId,
+          weekly_slot_id: session.weekly_slot_id,
+          session_id: session.id,
+          type: "class" as const,
+          status: "active" as const,
+          payment_status:
+            deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+          discount_percent: 0,
+        }))
+      : participants.map((childId, index) => {
+          const paysFull =
+            order.percent <= 0 || (alreadyEnrolledCount === 0 && index === 0);
+          return {
+            parent_id: profile.id,
+            child_id: childId,
+            class_id: classId,
+            weekly_slot_id: weeklySlotId,
+            type: "class" as const,
+            status: "active" as const,
+            payment_status:
+              deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+            discount_percent: paysFull ? 0 : order.percent,
+          };
+        });
 
   const { data: createdEnrollments, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -524,7 +588,12 @@ export async function completeClassEnrollmentPayment(input: {
 
   if (enrollmentError || !createdEnrollments?.length) {
     await releaseCoupon();
-    return { success: false, error: "לא הצלחנו לשמור את ההרשמות. נסו שוב." };
+    return {
+      success: false,
+      error: isUniqueSessionViolation(enrollmentError)
+        ? "אחד מהתורים כבר תפוס. רעננו ובחרו תור אחר."
+        : "לא הצלחנו לשמור את ההרשמות. נסו שוב.",
+    };
   }
 
   if (redemptionId) {
@@ -541,7 +610,9 @@ export async function completeClassEnrollmentPayment(input: {
       createdEnrollments.map((enrollment) => ({
         parent_id: profile.id,
         enrollment_id: enrollment.id,
-        amount: amountPerParticipant.get(enrollment.child_id) ?? unitPrice,
+        amount: isAppointment
+          ? unitPrice
+          : (amountPerParticipant.get(enrollment.child_id) ?? unitPrice),
         payment_method: paymentMethod,
         status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
         paid_at: deferred || awaitingCardcom ? null : paidAt,
@@ -826,7 +897,7 @@ export async function joinClassWaitlist(input: {
       supabase
         .from("classes")
         .select(
-          "id, pick_one_slot, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
+          "id, pick_one_slot, booking_mode, gender_policy, audience_type, age_min, age_max, grade_min, grade_max"
         )
         .eq("id", input.classId)
         .maybeSingle(),
@@ -849,6 +920,9 @@ export async function joinClassWaitlist(input: {
 
   if (!cls) {
     return { success: false, error: "החוג לא נמצא." };
+  }
+  if (cls.booking_mode === "appointment") {
+    return { success: false, error: "לתורים לטיפול אין רשימת המתנה — בחרו תור פנוי." };
   }
 
   const { data: sessions } = await supabase

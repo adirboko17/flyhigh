@@ -18,7 +18,7 @@ import {
 } from "@/lib/class-audience";
 import { classIsSoldOut, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
-import { dayLabel } from "@/lib/constants";
+import { DAY_ABBR, dayLabel } from "@/lib/constants";
 import {
   getPublicClasses,
   getPublicClassSessions,
@@ -27,9 +27,11 @@ import {
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { classPeriodTotal } from "@/lib/finance/classPricing";
 import {
+  appointmentClassPrice,
   billableClassSessions,
   prorateClassPrice,
 } from "@/lib/finance/proratedClassPrice";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { instructorTitle } from "@/lib/instructors/labels";
 import { formatTime, formatDate } from "@/utils/format";
@@ -61,21 +63,30 @@ export default async function ClassDetailPage({
   if (!cls) notFound();
 
   const today = todayInIsrael();
+  const appointment = isAppointmentClass(cls);
   const pricingSessions =
     cls.pick_one_slot && slots[0]
       ? allSessions.filter((session) => session.weekly_slot_id === slots[0].id)
       : allSessions;
-  const proration = prorateClassPrice(
-    classPeriodTotal(Number(cls.price), cls.billing_months),
-    pricingSessions,
-    today
-  );
+  const proration = appointment
+    ? appointmentClassPrice(
+        Number(cls.price),
+        cls.available,
+        cls.billable_session_count
+      )
+    : prorateClassPrice(
+        classPeriodTotal(Number(cls.price), cls.billing_months),
+        pricingSessions,
+        today
+      );
   const sessions = billableClassSessions(allSessions);
   const interestOnly = isInterestClass(cls);
   const soldOut = classIsSoldOut(cls);
   const unlimited = isUnlimitedCapacity(cls.capacity);
   const scheduleLabel = interestOnly
     ? "ללא מועד עדיין"
+    : appointment
+      ? "טיפול לפי תור"
     : cls.schedule_days
     ? `יום ${cls.schedule_days}`
     : cls.schedule_type === "custom"
@@ -122,12 +133,20 @@ export default async function ClassDetailPage({
         {/* display:contents במובייל מפרק את העמודה לפריטי גריד, כך שהתמונה עולה מעל כרטיס ההרשמה ושאר הפרטים יורדים מתחתיו. */}
         <div className="contents lg:order-1 lg:block">
           <div className="relative order-1 h-72 w-full overflow-hidden rounded-3xl bg-ink-100 sm:h-96">
+            {(soldOut || !appointment) && (
             <Badge
               tone={soldOut ? "warning" : "success"}
               className="absolute end-3 top-3 z-10 px-3 py-1 text-sm shadow-sm sm:end-4 sm:top-4"
             >
-              {soldOut ? "מלא" : unlimited ? "ללא הגבלה" : "יש מקום"}
+              {soldOut
+                ? appointment
+                  ? "אין תורים"
+                  : "מלא"
+                : unlimited
+                  ? "ללא הגבלה"
+                  : "יש מקום"}
             </Badge>
+            )}
             {cls.image_url ? (
               <Image
                 src={cls.image_url}
@@ -183,6 +202,7 @@ export default async function ClassDetailPage({
                     {cls.level && (
                       <DetailRow icon="🏅" label="רמה" value={cls.level} />
                     )}
+                    {!appointment && (
                     <DetailRow
                       icon="🎟️"
                       label="תפוסה"
@@ -192,15 +212,19 @@ export default async function ClassDetailPage({
                           : `${cls.capacity} מקומות`
                       }
                     />
+                    )}
                   </>
                 ) : (
                   <>
                     <DetailRow icon="📅" label="לוח זמנים" value={scheduleLabel} />
                     <DetailRow
                       icon="🕒"
-                      label={cls.pick_one_slot ? "הרשמה" : "שעות"}
+                      label={appointment ? "שעות טיפול" : cls.pick_one_slot ? "הרשמה" : "שעות"}
                       value={
-                        cls.pick_one_slot
+                        appointment
+                          ? appointmentHoursLabel(cls.weekly_slots) ||
+                            "בחירת תור לטיפול בודד"
+                          : cls.pick_one_slot
                           ? "בחירת מועד אחד בשבוע"
                           : cls.start_time && cls.end_time
                             ? `${formatTime(cls.start_time)}–${formatTime(cls.end_time)}`
@@ -258,7 +282,7 @@ export default async function ClassDetailPage({
               </div>
             )}
 
-            {!interestOnly && cls.pick_one_slot && slots.length > 0 && (
+            {!interestOnly && !appointment && cls.pick_one_slot && slots.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
                 <h2 className="font-display text-lg font-bold text-ink-900">
                   מועדים לבחירה
@@ -297,7 +321,7 @@ export default async function ClassDetailPage({
               </div>
             )}
 
-            {!interestOnly && sessions.length > 0 && (
+            {!interestOnly && !appointment && sessions.length > 0 && (
               <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6">
                 <h2 className="font-display text-lg font-bold text-ink-900">
                   מפגשים
@@ -329,6 +353,7 @@ export default async function ClassDetailPage({
               soldOut={soldOut}
               proration={proration}
               slots={slots}
+              sessions={allSessions}
             />
           </Suspense>
         </div>
@@ -343,6 +368,27 @@ function minimumRegistrantsLabel(
   if (genderPolicy === "female") return "מותנה במינימום נרשמות";
   if (genderPolicy === "male") return "מותנה במינימום נרשמים";
   return "מותנה במינימום נרשמים";
+}
+
+function appointmentHoursLabel(
+  slots: { day_of_week: number; start_time: string; end_time: string }[]
+) {
+  const groups = new Map<number, typeof slots>();
+  for (const slot of slots ?? []) {
+    const list = groups.get(slot.day_of_week) ?? [];
+    list.push(slot);
+    groups.set(slot.day_of_week, list);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([day, daySlots]) => {
+      const times = [...daySlots]
+        .sort((a, b) => a.start_time.localeCompare(b.start_time))
+        .map((slot) => formatTime(slot.start_time))
+        .join(" · ");
+      return `יום ${DAY_ABBR[day] ?? day} · ${times}`;
+    })
+    .join(" · ");
 }
 
 function hasDetailValue(value: string | null | undefined) {

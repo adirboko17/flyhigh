@@ -73,7 +73,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
+        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only, booking_mode), class_sessions(session_date, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -820,6 +820,12 @@ type EnrollmentRowData = {
     start_time: string | null;
     end_time: string | null;
     interest_only?: boolean | null;
+    booking_mode?: "series" | "appointment" | null;
+  } | null;
+  class_sessions?: {
+    session_date: string;
+    start_time: string;
+    end_time: string;
   } | null;
   programs: { title: string; kind?: "membership" | "activity" | null } | null;
   pool_passes: { title: string; entries_count: number } | null;
@@ -885,7 +891,13 @@ function EnrollmentRow({
   paymentMethod?: Enums<"payment_method"> | null;
   showDate?: boolean;
 }) {
-  const schedule = classSchedule(enrollment.classes);
+  const bookedSession = enrollment.class_sessions;
+  const schedule = bookedSession
+    ? {
+        day: formatDate(bookedSession.session_date),
+        time: `${formatTime(bookedSession.start_time)}–${formatTime(bookedSession.end_time)}`,
+      }
+    : classSchedule(enrollment.classes);
   const paymentBadge = parentEnrollmentPaymentBadge(
     enrollment.payment_status,
     paymentMethod

@@ -8,6 +8,9 @@ import { uploadClassImage } from "@/lib/storage/classImage";
 import {
   emptyScheduleState,
   ensureWeeklySessions,
+  firstDuplicateSession,
+  firstDuplicateWeeklySlot,
+  formatWeeklySlotLabel,
   genderPolicyFromWeeklySlots,
   parseSessionCount,
   primaryInstructorId,
@@ -48,6 +51,7 @@ import {
   sortCategoryNames,
 } from "@/lib/admin/classCategories";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
+import type { ClassBookingMode } from "@/lib/classes/bookingMode";
 
 export type ClassFormData = {
   id: string;
@@ -65,6 +69,7 @@ export type ClassFormData = {
   price: number;
   billing_months: number | null;
   pick_one_slot: boolean;
+  booking_mode?: ClassBookingMode;
   planned_session_count?: number | null;
   instructor_id: string | null;
   status: "active" | "inactive" | "full";
@@ -113,6 +118,7 @@ const emptyForm = {
   price: "",
   planned_session_count: "",
   pick_one_slot: true,
+  booking_mode: "series" as ClassBookingMode,
   price_mode: "period" as const,
   billing_months: "10",
   instructor_id: "",
@@ -148,6 +154,7 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
         ? String(existing.planned_session_count)
         : "",
     pick_one_slot: existing.pick_one_slot ?? true,
+    booking_mode: existing.booking_mode ?? "series",
     price_mode: parseBillingMonths(existing.billing_months)
       ? ("monthly" as const)
       : ("period" as const),
@@ -190,19 +197,28 @@ function toPayload(
       : parseAgeBoundInput(form.age_max, form.age_max_unit),
     grade_min: isGrade ? parseSchoolGradeInput(form.grade_min) : null,
     grade_max: isGrade ? parseSchoolGradeInput(form.grade_max) : null,
-    capacity: form.capacity_limited ? Number(form.capacity) || 0 : null,
+    capacity:
+      form.booking_mode === "appointment"
+        ? 1
+        : form.capacity_limited
+          ? Number(form.capacity) || 0
+          : null,
     price: Number(form.price) || 0,
     billing_months:
-      form.interest_only
+      form.interest_only || form.booking_mode === "appointment"
         ? null
         : form.price_mode === "monthly"
           ? parseBillingMonths(Number(form.billing_months))
           : null,
+    booking_mode: form.interest_only ? "series" : form.booking_mode,
     planned_session_count: form.interest_only
       ? parseSessionCount(form.planned_session_count)
       : null,
     instructor_id: primaryInstructorId(schedule, form.instructor_id),
-    pick_one_slot: form.interest_only ? false : form.pick_one_slot,
+    pick_one_slot:
+      form.interest_only || form.booking_mode === "appointment"
+        ? false
+        : form.pick_one_slot,
     status,
     image_url: imageUrl,
     schedule_type: schedule.scheduleType,
@@ -283,6 +299,7 @@ function validatePricing(form: ReturnType<typeof toFormState>): string | null {
 }
 
 function validateCapacity(form: ReturnType<typeof toFormState>): string | null {
+  if (form.booking_mode === "appointment") return null;
   if (!form.capacity_limited) return null;
   if (!Number(form.capacity) || Number(form.capacity) < 1) {
     return "נא למלא מכסת משתתפים.";
@@ -299,6 +316,14 @@ function validateSchedule(schedule: ClassScheduleState): string | null {
     );
     if (validSlots.length === 0) {
       return "הוסיפו לפחות מועד אחד עם שעות.";
+    }
+    const duplicateSlot = firstDuplicateWeeklySlot(validSlots);
+    if (duplicateSlot) {
+      return `אי אפשר לשמור שני מועדים באותו יום ובאותה שעת התחלה (${formatWeeklySlotLabel(
+        duplicateSlot.dayOfWeek,
+        duplicateSlot.startTime,
+        duplicateSlot.endTime
+      )}). שנו את שעת ההתחלה או מחקו את הכפיל.`;
     }
     if (!schedule.rangeStart) {
       return "הזינו תאריך התחלה ללוח הזמנים.";
@@ -322,6 +347,11 @@ function validateSchedule(schedule: ClassScheduleState): string | null {
     if (!session.sessionDate || !session.startTime || !session.endTime) {
       return "מלאו תאריך ושעות לכל המפגשים.";
     }
+  }
+
+  const duplicateSession = firstDuplicateSession(active);
+  if (duplicateSession) {
+    return `אי אפשר לשמור שני מפגשים באותו תאריך ובאותה שעת התחלה (${duplicateSession.sessionDate} ${duplicateSession.startTime.slice(0, 5)}).`;
   }
 
   return null;
@@ -552,21 +582,48 @@ export function ClassForm({
               title="פרטי החוג"
               hint="שם, קטגוריה ותיאור קצר — אפשר להוסיף תמונה עכשיו או אחר כך."
             />
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <AudienceModeOption
-                selected={!form.interest_only}
+                selected={!form.interest_only && form.booking_mode !== "appointment"}
                 onSelect={() => {
-                  setForm((f) => ({ ...f, interest_only: false }));
+                  setForm((f) => ({
+                    ...f,
+                    interest_only: false,
+                    booking_mode: "series",
+                    pick_one_slot: true,
+                  }));
                   setError(null);
                 }}
                 title="חוג רגיל"
-                hint="עם מועדים, מחיר והרשמה לתשלום"
+                hint="עם מועדים, מחיר והרשמה לתקופה"
+                disabled={loading}
+              />
+              <AudienceModeOption
+                selected={!form.interest_only && form.booking_mode === "appointment"}
+                onSelect={() => {
+                  setForm((f) => ({
+                    ...f,
+                    interest_only: false,
+                    booking_mode: "appointment",
+                    pick_one_slot: false,
+                    price_mode: "period",
+                    capacity_limited: true,
+                    capacity: "1",
+                  }));
+                  setError(null);
+                }}
+                title="תורים לטיפול"
+                hint="כל משבצת לאדם אחד — רוכשים טיפול בודד, לא את כל הסדרה"
                 disabled={loading}
               />
               <AudienceModeOption
                 selected={form.interest_only}
                 onSelect={() => {
-                  setForm((f) => ({ ...f, interest_only: true }));
+                  setForm((f) => ({
+                    ...f,
+                    interest_only: true,
+                    booking_mode: "series",
+                  }));
                   setStep((current) => Math.min(current, 1));
                   setError(null);
                 }}
@@ -773,6 +830,7 @@ export function ClassForm({
               </div>
             ) : null}
 
+            {form.booking_mode !== "appointment" && (
             <div className="space-y-2">
               <p className="text-sm font-semibold text-ink-800">
                 מכסת משתתפים
@@ -809,6 +867,12 @@ export function ClassForm({
                 </Field>
               )}
             </div>
+            )}
+            {form.booking_mode === "appointment" && (
+              <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+                בכל משבצת זמן יכול לקבוע אדם אחד בלבד — כמו תור לטיפול.
+              </p>
+            )}
             {form.interest_only && (
               <Field label="מדריך או מדריכה">
                 <InstructorSelect
@@ -828,15 +892,22 @@ export function ClassForm({
           <CardContent className="space-y-5">
             <StepIntro
               title="מועדים"
-              hint="יום, שעה ומדריך לכל מועד, מתי מתחילים וכמה מפגשים."
+              hint={
+                form.booking_mode === "appointment"
+                  ? "תאריך התחלה וסיום, ומשבצות זמן (למשל 11:00–11:30). כל משבצת היא תור לאדם אחד."
+                  : "יום, שעה ומדריך לכל מועד, מתי מתחילים וכמה מפגשים."
+              }
             />
             <ClassScheduleEditor
               value={schedule}
               onChange={setSchedule}
               disabled={loading}
               pickOneSlot={form.pick_one_slot}
-              onPickOneSlotChange={(pickOneSlot) =>
-                setForm((f) => ({ ...f, pick_one_slot: pickOneSlot }))
+              onPickOneSlotChange={
+                form.booking_mode === "appointment"
+                  ? undefined
+                  : (pickOneSlot) =>
+                      setForm((f) => ({ ...f, pick_one_slot: pickOneSlot }))
               }
               instructors={instructors}
             />
@@ -859,9 +930,14 @@ export function ClassForm({
           <CardContent className="space-y-5">
             <StepIntro
               title="מחיר והנחות"
-              hint="מחיר אחד לכל התקופה, או מחיר חודשי. הלקוח יכול לפרוס בתשלומים."
+              hint={
+                form.booking_mode === "appointment"
+                  ? "מחיר לטיפול אחד. הלקוח משלם לפי מספר המשבצות שבחר."
+                  : "מחיר אחד לכל התקופה, או מחיר חודשי. הלקוח יכול לפרוס בתשלומים."
+              }
             />
 
+            {form.booking_mode !== "appointment" && (
             <div className="grid gap-2 sm:grid-cols-2">
               <AudienceModeOption
                 selected={form.price_mode === "period"}
@@ -882,6 +958,7 @@ export function ClassForm({
                 disabled={loading}
               />
             </div>
+            )}
 
             <div
               className={
@@ -892,7 +969,11 @@ export function ClassForm({
             >
               <Field
                 label={
-                  form.price_mode === "monthly" ? "מחיר לחודש (₪)" : "מחיר לתקופה (₪)"
+                  form.booking_mode === "appointment"
+                    ? "מחיר לטיפול (₪)"
+                    : form.price_mode === "monthly"
+                      ? "מחיר לחודש (₪)"
+                      : "מחיר לתקופה (₪)"
                 }
                 required
               >

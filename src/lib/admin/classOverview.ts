@@ -94,7 +94,7 @@ export async function loadClassOverview(): Promise<ClassOverviewData> {
     supabase
       .from("enrollments")
       .select(
-        "id, class_id, weekly_slot_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference)"
+        "id, class_id, weekly_slot_id, session_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference), class_sessions(session_date, start_time, end_time)"
       )
       .eq("type", "class")
       .in("status", ["active", "pending"])
@@ -103,7 +103,7 @@ export async function loadClassOverview(): Promise<ClassOverviewData> {
     supabase
       .from("classes")
       .select(
-        "id, title, day_of_week, start_time, end_time, instructor_id, interest_only, pick_one_slot, gender_policy"
+        "id, title, day_of_week, start_time, end_time, instructor_id, interest_only, pick_one_slot, booking_mode, gender_policy"
       )
       .order("title"),
     supabase
@@ -145,10 +145,16 @@ export async function loadClassOverview(): Promise<ClassOverviewData> {
       : undefined;
     const attendsAllSlots =
       !enrollment.weekly_slot_id && classSlots.length > 1 && !cls.pick_one_slot;
+    const bookedSession = Array.isArray(enrollment.class_sessions)
+      ? enrollment.class_sessions[0]
+      : enrollment.class_sessions;
 
     let slotLabelText: string;
     let slotSort: string;
-    if (assignedSlot) {
+    if (bookedSession?.session_date) {
+      slotLabelText = `${bookedSession.session_date} · ${String(bookedSession.start_time).slice(0, 5)}`;
+      slotSort = `${bookedSession.session_date}|${bookedSession.start_time}`;
+    } else if (assignedSlot) {
       slotLabelText = slotLabel(assignedSlot);
       slotSort = slotSortKey(assignedSlot.day_of_week, assignedSlot.start_time);
     } else if (classSlots.length === 1) {

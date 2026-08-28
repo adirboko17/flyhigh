@@ -7,7 +7,11 @@ import { formatClassAudience, formatClassGenderPolicy } from "@/lib/class-audien
 import { DAY_ABBR, dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
 import { classPeriodTotal } from "@/lib/finance/classPricing";
-import { classPriceFromPublicCounts } from "@/lib/finance/proratedClassPrice";
+import {
+  appointmentClassPrice,
+  classPriceFromPublicCounts,
+} from "@/lib/finance/proratedClassPrice";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import { formatTime } from "@/utils/format";
 import { classIsSoldOut } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
@@ -39,11 +43,18 @@ export function ClassCard({
   preview?: boolean;
 }) {
   const interestOnly = isInterestClass(cls);
-  const proration = classPriceFromPublicCounts(
-    classPeriodTotal(Number(cls.price), cls.billing_months),
-    cls.billable_session_count,
-    cls.remaining_session_count
-  );
+  const appointment = isAppointmentClass(cls);
+  const proration = appointment
+    ? appointmentClassPrice(
+        Number(cls.price),
+        cls.available,
+        cls.billable_session_count
+      )
+    : classPriceFromPublicCounts(
+        classPeriodTotal(Number(cls.price), cls.billing_months),
+        cls.billable_session_count,
+        cls.remaining_session_count
+      );
   const ended = !interestOnly && proration.hasEnded;
   const soldOut = !ended && classIsSoldOut(cls);
   const closed = ended || soldOut;
@@ -54,6 +65,8 @@ export function ClassCard({
   const slots = cls.weekly_slots ?? [];
   const scheduleLabel = interestOnly
     ? "הרשמה ללא תאריך"
+    : appointment
+      ? "טיפול לפי תור"
     : slots.length > 1 && cls.pick_one_slot
       ? "בחירת מועד"
       : cls.schedule_days
@@ -80,7 +93,10 @@ export function ClassCard({
   const availability = ended
     ? { text: "החוג הסתיים", tone: "danger" as const }
     : soldOut
-      ? { text: "החוג מלא", tone: "danger" as const }
+      ? {
+          text: appointment ? "אין תורים פנויים" : "החוג מלא",
+          tone: "danger" as const,
+        }
       : null;
 
   const card = (
@@ -182,12 +198,16 @@ export function ClassCard({
                   >
                     <span>יום {DAY_ABBR[row.day] ?? row.day}</span>
                     {row.slots.map((slot, index) => (
-                      <Fragment key={`${slot.day_of_week}-${slot.start_time}`}>
+                      <Fragment
+                        key={`${slot.day_of_week}-${slot.start_time}-${slot.end_time}-${index}`}
+                      >
                         <span className="text-ink-300">
-                          {index === 0 ? "·" : "או"}
+                          {index === 0 ? "·" : appointment ? "·" : "או"}
                         </span>
                         <span className="tabular-nums">
-                          {formatTime(slot.start_time)}
+                          {appointment && slot.end_time
+                            ? `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`
+                            : formatTime(slot.start_time)}
                         </span>
                       </Fragment>
                     ))}
@@ -222,7 +242,7 @@ export function ClassCard({
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-ink-100/80 pt-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-400">
-              {classPriceLabel(proration, cls.billing_months, interestOnly)}
+              {classPriceLabel(proration, cls.billing_months, interestOnly, appointment)}
             </p>
             <div className="mt-0.5">
               <ClassPriceAmount
@@ -230,6 +250,7 @@ export function ClassCard({
                 soldOut={closed}
                 billingMonths={cls.billing_months}
                 interestOnly={interestOnly}
+                appointment={appointment}
               />
             </div>
             <div className="mt-1 max-w-[12rem]">
@@ -238,6 +259,7 @@ export function ClassCard({
                 compact
                 billingMonths={cls.billing_months}
                 interestOnly={interestOnly}
+                appointment={appointment}
               />
             </div>
           </div>
@@ -282,7 +304,12 @@ function groupSlotsByDay(slots: PublicClassWeeklySlot[]) {
   }
   return [...groups.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([day, daySlots]) => ({ day, slots: daySlots }));
+    .map(([day, daySlots]) => ({
+      day,
+      slots: [...daySlots].sort((a, b) =>
+        a.start_time.localeCompare(b.start_time)
+      ),
+    }));
 }
 
 function MetaRow({

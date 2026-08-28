@@ -1,10 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import {
+  firstDuplicateSession,
+  firstDuplicateWeeklySlot,
+  formatWeeklySlotLabel,
   syncLegacyClassFields,
   weeklySlotKey,
   type ClassScheduleState,
 } from "@/lib/scheduling/classSchedule";
+
+function uniqueScheduleError(
+  error: { code?: string; message?: string } | null,
+  fallback: string
+) {
+  const text = `${error?.code ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  if (
+    error?.code === "23505" ||
+    text.includes("unique") ||
+    text.includes("_key")
+  ) {
+    return "יש שני מועדים עם אותו יום ואותה שעת התחלה. שנו את השעה או מחקו את הכפיל.";
+  }
+  return fallback;
+}
 
 function sessionWeekday(sessionDate: string) {
   const [year, month, day] = sessionDate.split("-").map(Number);
@@ -31,6 +49,16 @@ export async function saveClassSchedule(
     const incoming = schedule.weeklySlots.filter(
       (slot) => slot.startTime.trim() && slot.endTime.trim()
     );
+    const duplicateSlot = firstDuplicateWeeklySlot(incoming);
+    if (duplicateSlot) {
+      return {
+        error: `אי אפשר לשמור שני מועדים באותו יום ובאותה שעת התחלה (${formatWeeklySlotLabel(
+          duplicateSlot.dayOfWeek,
+          duplicateSlot.startTime,
+          duplicateSlot.endTime
+        )}). שנו את שעת ההתחלה או מחקו את הכפיל.`,
+      };
+    }
     const unusedExisting = [...(existingSlots ?? [])];
 
     for (const slot of incoming) {
@@ -60,7 +88,7 @@ export async function saveClassSchedule(
           })
           .eq("id", match.id);
         if (updateError) {
-          return { error: "שמירת ימי החוג נכשלה." };
+          return { error: uniqueScheduleError(updateError, "שמירת ימי החוג נכשלה.") };
         }
       } else {
         const { data: inserted, error: insertError } = await supabase
@@ -77,7 +105,9 @@ export async function saveClassSchedule(
           .select("id")
           .single();
         if (insertError || !inserted) {
-          return { error: "שמירת ימי החוג נכשלה." };
+          return {
+            error: uniqueScheduleError(insertError, "שמירת ימי החוג נכשלה."),
+          };
         }
         slotIdByKey.set(key, inserted.id);
       }
@@ -130,51 +160,101 @@ export async function saveClassSchedule(
 
   const { data: previousSessions } = await supabase
     .from("class_sessions")
-    .select("session_date, start_time, substitute_instructor_id")
-    .eq("class_id", classId)
-    .not("substitute_instructor_id", "is", null);
-
-  const substituteBySlot = new Map(
-    (previousSessions ?? []).map((session) => [
-      `${session.session_date}|${session.start_time.slice(0, 5)}`,
-      session.substitute_instructor_id,
-    ])
-  );
-
-  const { error: deleteSessionsError } = await supabase
-    .from("class_sessions")
-    .delete()
+    .select("id, session_date, start_time, substitute_instructor_id")
     .eq("class_id", classId);
 
-  if (deleteSessionsError) {
-    return { error: "שמירת לוח הזמנים נכשלה." };
+  const unusedSessions = [...(previousSessions ?? [])];
+  const incomingSessions = schedule.sessions.filter(
+    (session) => session.sessionDate && session.startTime && session.endTime
+  );
+  const duplicateSession = firstDuplicateSession(incomingSessions);
+  if (duplicateSession) {
+    return {
+      error: `אי אפשר לשמור שני מפגשים באותו תאריך ובאותה שעת התחלה (${duplicateSession.sessionDate} ${duplicateSession.startTime.slice(0, 5)}).`,
+    };
   }
 
-  if (schedule.sessions.length > 0) {
-    const { error: sessionsError } = await supabase.from("class_sessions").insert(
-      schedule.sessions.map((session) => ({
+  for (const session of incomingSessions) {
+    const key = `${session.sessionDate}|${session.startTime.slice(0, 5)}`;
+    const byId = session.id
+      ? unusedSessions.find((row) => row.id === session.id)
+      : undefined;
+    const byKey = unusedSessions.find(
+      (row) =>
+        row.session_date === session.sessionDate &&
+        row.start_time.slice(0, 5) === session.startTime.slice(0, 5)
+    );
+    const match = byId ?? byKey;
+    const weeklySlotId =
+      slotIdByKey.get(
+        weeklySlotKey({
+          dayOfWeek: sessionWeekday(session.sessionDate),
+          startTime: session.startTime,
+        })
+      ) ?? null;
+
+    if (match) {
+      unusedSessions.splice(unusedSessions.indexOf(match), 1);
+      const { error: updateError } = await supabase
+        .from("class_sessions")
+        .update({
+          session_date: session.sessionDate,
+          start_time: session.startTime,
+          end_time: session.endTime,
+          status: session.status,
+          notes: session.notes || null,
+          weekly_slot_id: weeklySlotId,
+          substitute_instructor_id: match.substitute_instructor_id,
+        })
+        .eq("id", match.id);
+      if (updateError) {
+        return {
+          error: uniqueScheduleError(updateError, "שמירת המפגשים נכשלה."),
+        };
+      }
+    } else {
+      const { error: insertError } = await supabase.from("class_sessions").insert({
         class_id: classId,
         session_date: session.sessionDate,
         start_time: session.startTime,
         end_time: session.endTime,
         status: session.status,
         notes: session.notes || null,
-        weekly_slot_id:
-          slotIdByKey.get(
-            weeklySlotKey({
-              dayOfWeek: sessionWeekday(session.sessionDate),
-              startTime: session.startTime,
-            })
-          ) ?? null,
+        weekly_slot_id: weeklySlotId,
         substitute_instructor_id:
-          substituteBySlot.get(
-            `${session.sessionDate}|${session.startTime.slice(0, 5)}`
-          ) ?? null,
-      }))
-    );
+          unusedSessions.find(
+            (row) => `${row.session_date}|${row.start_time.slice(0, 5)}` === key
+          )?.substitute_instructor_id ?? null,
+      });
+      if (insertError) {
+        return {
+          error: uniqueScheduleError(insertError, "שמירת המפגשים נכשלה."),
+        };
+      }
+    }
+  }
 
-    if (sessionsError) {
-      return { error: "שמירת המפגשים נכשלה." };
+  if (unusedSessions.length > 0) {
+    const removableIds = unusedSessions.map((row) => row.id);
+    const { count: bookedOnRemoved } = await supabase
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .in("session_id", removableIds)
+      .neq("status", "cancelled");
+
+    if ((bookedOnRemoved ?? 0) > 0) {
+      return {
+        error: "לא ניתן למחוק מפגש שיש בו תור. בטלו את ההרשמה קודם.",
+      };
+    }
+
+    const { error: deleteSessionsError } = await supabase
+      .from("class_sessions")
+      .delete()
+      .in("id", removableIds);
+
+    if (deleteSessionsError) {
+      return { error: "שמירת לוח הזמנים נכשלה." };
     }
   }
 

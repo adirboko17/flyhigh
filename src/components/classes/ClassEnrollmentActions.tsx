@@ -20,7 +20,7 @@ import {
   pickOneSlotTraineeHint,
   pickOneSlotTraineeShort,
 } from "@/lib/class-audience";
-import { formatTime } from "@/utils/format";
+import { formatDate, formatTime } from "@/utils/format";
 import {
   joinClassWaitlist,
   registerInterestForClass,
@@ -42,8 +42,15 @@ import { Modal } from "@/components/ui/Modal";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
-import type { PublicClassSlot } from "@/types";
+import type { PublicClassSession, PublicClassSlot } from "@/types";
 import type { Enums } from "@/types/database.types";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
+import { isElapsedClassSession } from "@/lib/finance/proratedClassPrice";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
+import {
+  AppointmentPickerTrigger,
+  AppointmentSessionPicker,
+} from "./AppointmentSessionPicker";
 
 type Child = {
   id: string;
@@ -101,7 +108,9 @@ interface ClassEnrollmentActionsProps {
   /** אחים שכבר רשומים לאותה קטגוריה — גם בחוג אחר. */
   categorySiblingIds: string[];
   pickOneSlot?: boolean;
+  bookingMode?: Enums<"class_booking_mode">;
   slots?: PublicClassSlot[];
+  sessions?: PublicClassSession[];
   classGenderPolicy?: Enums<"class_gender_policy">;
   interestOnly?: boolean;
 }
@@ -127,10 +136,13 @@ export function ClassEnrollmentActions({
   siblingTiers,
   categorySiblingIds,
   pickOneSlot = false,
+  bookingMode = "series",
   slots = [],
+  sessions = [],
   classGenderPolicy = "mixed",
   interestOnly = false,
 }: ClassEnrollmentActionsProps) {
+  const appointment = isAppointmentClass({ booking_mode: bookingMode });
   const router = useRouter();
   const { addItem } = useCart();
   const traineeGender = displayGenderPolicy(
@@ -153,8 +165,9 @@ export function ClassEnrollmentActions({
     [waitlist]
   );
   const parentAlreadyTaken =
-    enrollments.some((enrollment) => enrollment.child_id == null) ||
-    waitlist.some((entry) => entry.child_id == null);
+    !appointment &&
+    (enrollments.some((enrollment) => enrollment.child_id == null) ||
+      waitlist.some((entry) => entry.child_id == null));
   const parentTrainee = useMemo<Trainee>(
     () => ({
       id: PARENT_TRAINEE_ID,
@@ -169,6 +182,20 @@ export function ClassEnrollmentActions({
 
   const [weeklySlotId, setWeeklySlotId] = useState<string>(
     () => (pickOneSlot && slots.length === 1 ? slots[0].id : "")
+  );
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
+  const bookableSessions = useMemo(() => {
+    const today = todayInIsrael();
+    return sessions.filter(
+      (session) =>
+        session.status === "scheduled" &&
+        (session.available ?? 1) > 0 &&
+        !isElapsedClassSession(session, today)
+    );
+  }, [sessions]);
+  const selectedSessions = bookableSessions.filter((session) =>
+    sessionIds.includes(session.id)
   );
   const selectedSlot = slots.find((slot) => slot.id === weeklySlotId) ?? null;
   const effectiveGender = selectedSlot?.gender_policy ?? traineeGender;
@@ -267,22 +294,34 @@ export function ClassEnrollmentActions({
     () =>
       kids.filter(
         (c) =>
-          !enrolledChildIds.has(c.id) &&
-          !waitlistedChildIds.has(c.id) &&
+          (appointment ||
+            (!enrolledChildIds.has(c.id) && !waitlistedChildIds.has(c.id))) &&
           (eligibilityByChildId.get(c.id)?.eligible ?? true)
       ),
-    [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
+    [
+      kids,
+      enrolledChildIds,
+      waitlistedChildIds,
+      eligibilityByChildId,
+      appointment,
+    ]
   );
 
   const ineligibleChildren = useMemo(
     () =>
       kids.filter(
         (c) =>
-          !enrolledChildIds.has(c.id) &&
-          !waitlistedChildIds.has(c.id) &&
+          (appointment ||
+            (!enrolledChildIds.has(c.id) && !waitlistedChildIds.has(c.id))) &&
           !(eligibilityByChildId.get(c.id)?.eligible ?? true)
       ),
-    [kids, enrolledChildIds, waitlistedChildIds, eligibilityByChildId]
+    [
+      kids,
+      enrolledChildIds,
+      waitlistedChildIds,
+      eligibilityByChildId,
+      appointment,
+    ]
   );
   const parentEligible =
     !parentAlreadyTaken &&
@@ -310,9 +349,10 @@ export function ClassEnrollmentActions({
     : soldOut;
 
   const maxSelectable = useMemo(() => {
+    if (appointment) return 1;
     if (needsSlot || slotSoldOut) return availableTrainees.length;
     return Math.min(availableTrainees.length, Math.max(0, slotSpots));
-  }, [availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
+  }, [appointment, availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
   const [interestConfirmOpen, setInterestConfirmOpen] = useState(false);
@@ -459,6 +499,10 @@ export function ClassEnrollmentActions({
       setInterestConfirmOpen(true);
       return;
     }
+    if (appointment && sessionIds.length === 0) {
+      setError("נא לבחור לפחות תור אחד.");
+      return;
+    }
     if (pickOneSlot && !weeklySlotId) {
       setError("נא לבחור מועד לחוג.");
       return;
@@ -467,7 +511,7 @@ export function ClassEnrollmentActions({
       setError("נא לבחור מתאמן או מתאמנת.");
       return;
     }
-    if (!slotSoldOut && selectedIds.length > maxSelectable) {
+    if (!appointment && !slotSoldOut && selectedIds.length > maxSelectable) {
       setError(
         maxSelectable <= 0
           ? "המועד מלא."
@@ -484,27 +528,38 @@ export function ClassEnrollmentActions({
     }
 
     setError(null);
-    if (slotSoldOut) {
+    if (!appointment && slotSoldOut) {
       void handleWaitlistJoin();
       return;
     }
 
-    const order = calculateOrderTotal(
-      classPrice,
-      selectedIds.length,
-      siblingTiers,
-      enrolledSiblings + selectedIds.length
-    );
+    const listTotal = appointment
+      ? classPrice * sessionIds.length
+      : calculateOrderTotal(
+          classPrice,
+          selectedIds.length,
+          siblingTiers,
+          enrolledSiblings + selectedIds.length
+        ).total;
+    const sessionLabel = selectedSessions
+      .map(
+        (session) =>
+          `${formatDate(session.session_date)} · ${formatTime(session.start_time)}–${formatTime(session.end_time)}`
+      )
+      .join(" · ");
     const result = addItem({
       kind: "class",
       productId: classId,
       title: classTitle,
-      listTotal: order.total,
+      listTotal,
       childIds: selectedChildIds,
       includeSelf,
       participantNames: selectedTrainees.map((trainee) => trainee.full_name),
-      weeklySlotId: weeklySlotId || null,
-      weeklySlotLabel: selectedSlot
+      weeklySlotId: appointment ? null : weeklySlotId || null,
+      sessionIds: appointment ? sessionIds : undefined,
+      weeklySlotLabel: appointment
+        ? sessionLabel
+        : selectedSlot
         ? formatWeeklySlotLabel(
             selectedSlot.day_of_week,
             selectedSlot.start_time,
@@ -594,7 +649,13 @@ export function ClassEnrollmentActions({
 
         {!ended && (availableTrainees.length > 0 || ineligibleTrainees.length > 0) ? (
           <div className="space-y-3">
-            {!interestOnly && pickOneSlot && slots.length > 0 && (
+            {!interestOnly && appointment && (
+              <AppointmentPickerTrigger
+                selectedSessions={selectedSessions}
+                onOpen={() => setSessionPickerOpen(true)}
+              />
+            )}
+            {!interestOnly && !appointment && pickOneSlot && slots.length > 0 && (
               <SlotPickerTrigger
                 slotsCount={slots.length}
                 selectedSlot={selectedSlot}
@@ -605,7 +666,9 @@ export function ClassEnrollmentActions({
 
             {enrollments.length > 0 && availableTrainees.length > 0 && (
               <p className="text-sm text-ink-600">
-                ניתן להירשם גם עבור מתאמן או מתאמנת נוספים:
+                {appointment
+                  ? "אפשר לקבוע תורים נוספים:"
+                  : "ניתן להירשם גם עבור מתאמן או מתאמנת נוספים:"}
               </p>
             )}
 
@@ -657,7 +720,11 @@ export function ClassEnrollmentActions({
                 ? "שומר..."
                 : needsSlot && !interestOnly
                   ? "נא לבחור מועד"
-                  : slotSoldOut
+                  : appointment && sessionIds.length === 0
+                    ? "נא לבחור תור"
+                    : appointment && sessionIds.length > 1
+                      ? `הוספה לסל (${sessionIds.length} טיפולים)`
+                    : slotSoldOut
                     ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
                     : interestOnly
                       ? selectedIds.length > 1
@@ -735,7 +802,20 @@ export function ClassEnrollmentActions({
         </Modal>
       )}
 
-      {!interestOnly && pickOneSlot && slots.length > 0 && (
+      {appointment && (
+        <AppointmentSessionPicker
+          open={sessionPickerOpen}
+          onClose={() => setSessionPickerOpen(false)}
+          sessions={bookableSessions}
+          selectedIds={sessionIds}
+          onChange={(ids) => {
+            setSessionIds(ids);
+            setError(null);
+          }}
+        />
+      )}
+
+      {!interestOnly && !appointment && pickOneSlot && slots.length > 0 && (
         <Modal
           open={slotPickerOpen}
           onClose={() => setSlotPickerOpen(false)}

@@ -50,6 +50,7 @@ type AssignCore = {
   method: AssignChargeMethod;
   markPaid: boolean;
   weeklySlotId?: string | null;
+  sessionId?: string | null;
   receiptLabelId?: string | null;
 };
 
@@ -132,7 +133,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity, title, billing_months, pick_one_slot, interest_only")
+        .select("id, capacity, title, billing_months, pick_one_slot, booking_mode, interest_only")
         .eq("id", input.classId)
         .maybeSingle(),
       childIds.length > 0
@@ -161,9 +162,30 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     return { success: false, error: "החוג לא נמצא." };
   }
 
+  const isAppointment = cls.booking_mode === "appointment";
   let weeklySlotId: string | null = input.weeklySlotId ?? null;
+  let sessionId: string | null = input.sessionId ?? null;
   if (cls.interest_only) {
     weeklySlotId = null;
+    sessionId = null;
+  } else if (isAppointment) {
+    if (!sessionId) {
+      return { success: false, error: "נא לבחור תור לשיבוץ." };
+    }
+    if (participants.length !== 1) {
+      return { success: false, error: "לתור לטיפול משבצים מתאמן אחד." };
+    }
+    const { data: session } = await supabase
+      .from("class_sessions")
+      .select("id, weekly_slot_id, status")
+      .eq("id", sessionId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+    if (!session || session.status !== "scheduled") {
+      return { success: false, error: "התור שנבחר אינו זמין." };
+    }
+    sessionId = session.id;
+    weeklySlotId = session.weekly_slot_id;
   } else if (cls.pick_one_slot) {
     if (!weeklySlotId) {
       return { success: false, error: "נא לבחור מועד לשיבוץ." };
@@ -216,7 +238,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     if (row.child_id) return childIds.includes(row.child_id);
     return includeSelf;
   });
-  if (holdingExisting.length > 0) {
+  if (!isAppointment && holdingExisting.length > 0) {
     const names = holdingExisting
       .map((row) =>
         row.child_id
@@ -274,6 +296,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         child_id: childId,
         class_id: input.classId,
         weekly_slot_id: weeklySlotId,
+        session_id: sessionId,
         type: "class" as const,
         status: "active" as const,
         payment_status: cls.interest_only
@@ -287,7 +310,13 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     .select("id, child_id");
 
   if (enrollmentError || !created || created.length === 0) {
-    return { success: false, error: "יצירת ההרשמות נכשלה. נסו שוב." };
+    return {
+      success: false,
+      error:
+        enrollmentError?.code === "23505"
+          ? "התור כבר תפוס."
+          : "יצירת ההרשמות נכשלה. נסו שוב.",
+    };
   }
 
   let checkoutUrl: string | null = null;

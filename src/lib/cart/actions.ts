@@ -358,7 +358,11 @@ export async function checkoutCart(input: {
         .select("id, child_id");
 
       if (enrollmentError || !enrollments?.length) {
-        throw new Error(`לא הצלחנו לשמור את ${line.title}.`);
+        throw new Error(
+          enrollmentError?.code === "23505"
+            ? `אחד מהתורים ב${line.title} כבר תפוס. רעננו ובחרו תור אחר.`
+            : `לא הצלחנו לשמור את ${line.title}.`
+        );
       }
       createdEnrollmentIds.push(...enrollments.map((row) => row.id));
 

@@ -30,6 +30,7 @@ export type ClassPreviewForm = {
   price: string;
   price_mode?: "period" | "monthly";
   pick_one_slot?: boolean;
+  booking_mode?: PublicClass["booking_mode"];
   billing_months?: string;
   planned_session_count?: string;
   interest_only?: boolean;

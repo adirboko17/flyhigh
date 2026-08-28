@@ -7,9 +7,11 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { DAYS_OF_WEEK } from "@/lib/constants";
 import { CLASS_GENDER_POLICY, type ClassGenderPolicy } from "@/lib/class-audience";
 import {
+  duplicateWeeklySlotIndexes,
   formatWeeklySlotLabel,
   groupSessionsByWeeklySlot,
   nextWeeklySessionDate,
+  nextWeeklySlotTimes,
   parseSessionCount,
   formatScheduleSummary,
   refreshWeeklySessions,
@@ -50,6 +52,7 @@ export function ClassScheduleEditor({
   const activeCount = value.sessions.filter((s) => s.status !== "cancelled").length;
   const weekly = value.scheduleType === "weekly";
   const showNotes = moreOpen || value.weeklySlots.some((slot) => Boolean(slot.note?.trim()));
+  const duplicateSlotIndexes = duplicateWeeklySlotIndexes(value.weeklySlots);
 
   function commit(next: ClassScheduleState) {
     onChange(next.scheduleType === "weekly" ? refreshWeeklySessions(next) : next);
@@ -62,14 +65,15 @@ export function ClassScheduleEditor({
 
   function addWeeklySlot() {
     const last = value.weeklySlots[value.weeklySlots.length - 1];
+    const times = nextWeeklySlotTimes(last);
     commit({
       ...value,
       weeklySlots: [
         ...value.weeklySlots,
         {
           dayOfWeek: last?.dayOfWeek ?? 1,
-          startTime: last?.startTime || "16:00",
-          endTime: last?.endTime || "16:45",
+          startTime: times.startTime,
+          endTime: times.endTime,
           genderPolicy: last?.genderPolicy ?? "mixed",
           instructorId: last?.instructorId,
         },
@@ -170,7 +174,12 @@ export function ClassScheduleEditor({
             {value.weeklySlots.map((slot, index) => (
               <div
                 key={slot.id ?? `new-${index}`}
-                className="space-y-2 rounded-2xl border border-ink-100 bg-white p-3"
+                className={cn(
+                  "space-y-2 rounded-2xl border bg-white p-3",
+                  duplicateSlotIndexes.has(index)
+                    ? "border-red-300"
+                    : "border-ink-100"
+                )}
               >
                 <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(6.5rem,1fr)_1fr_1fr_minmax(6.5rem,1fr)_auto] sm:gap-3">
                   <Field label="יום">
@@ -277,6 +286,12 @@ export function ClassScheduleEditor({
                       disabled={disabled}
                     />
                   </Field>
+                )}
+                {duplicateSlotIndexes.has(index) && (
+                  <p className="text-sm font-medium text-red-600">
+                    יש מועד נוסף באותו יום ובאותה שעת התחלה. שנו את השעה או מחקו
+                    כפיל.
+                  </p>
                 )}
               </div>
             ))}

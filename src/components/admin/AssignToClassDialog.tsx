@@ -30,6 +30,7 @@ import {
 } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import {
   calculateOrderTotal,
   loadFamilyDiscountSettings,
@@ -44,7 +45,7 @@ import {
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
-import { calcAge, formatCurrency } from "@/utils/format";
+import { calcAge, formatCurrency, formatDate, formatTime } from "@/utils/format";
 
 function participantCountOf(childIds: string[], includeSelf: boolean) {
   return childIds.length + (includeSelf ? 1 : 0);
@@ -134,9 +135,14 @@ export function AssignToClassDialog({
   const [includeSelf, setIncludeSelf] = useState(
     isWaitlist && !mode.entry.child_id
   );
+  const appointment = isAppointmentClass(cls);
   const [weeklySlotId, setWeeklySlotId] = useState(
     isWaitlist ? mode.entry.weekly_slot_id ?? "" : ""
   );
+  const [sessionId, setSessionId] = useState("");
+  const [sessions, setSessions] = useState<
+    { id: string; session_date: string; start_time: string; end_time: string }[]
+  >([]);
   const [slots, setSlots] = useState<
     {
       id: string;
@@ -181,6 +187,11 @@ export function AssignToClassDialog({
       .eq("class_id", cls.id)
       .then(({ data }) => {
         if (!active) return;
+        if (isAppointmentClass(cls)) {
+          setUnitPrice(Number(cls.price) || 0);
+          setProrationNote(null);
+          return;
+        }
         const proration = prorateClassPrice(
           classPeriodTotal(Number(cls.price), cls.billing_months),
           data ?? [],
@@ -196,7 +207,19 @@ export function AssignToClassDialog({
         );
       });
 
-    if (cls.pick_one_slot) {
+    if (isAppointmentClass(cls)) {
+      supabase
+        .from("class_sessions")
+        .select("id, session_date, start_time, end_time")
+        .eq("class_id", cls.id)
+        .eq("status", "scheduled")
+        .gte("session_date", todayInIsrael())
+        .order("session_date")
+        .order("start_time")
+        .then(({ data }) => {
+          if (active) setSessions(data ?? []);
+        });
+    } else if (cls.pick_one_slot) {
       supabase
         .from("class_weekly_slots")
         .select("id, day_of_week, start_time, end_time, gender_policy")
@@ -323,8 +346,16 @@ export function AssignToClassDialog({
       setError("נא לבחור לקוח ולפחות מתאמן או מתאמנת.");
       return;
     }
-    if (!cls.interest_only && cls.pick_one_slot && !weeklySlotId) {
+    if (appointment && !sessionId) {
+      setError("נא לבחור תור לשיבוץ.");
+      return;
+    }
+    if (!cls.interest_only && !appointment && cls.pick_one_slot && !weeklySlotId) {
       setError("נא לבחור מועד לשיבוץ.");
+      return;
+    }
+    if (appointment && participantCount !== 1) {
+      setError("לתור לטיפול משבצים מתאמן אחד.");
       return;
     }
     if (
@@ -365,6 +396,7 @@ export function AssignToClassDialog({
           childIds,
           includeSelf,
           weeklySlotId: weeklySlotId || null,
+          sessionId: sessionId || null,
           ...payload,
         });
 
@@ -445,7 +477,23 @@ export function AssignToClassDialog({
           )}
         </div>
 
-        {!cls.interest_only && cls.pick_one_slot && (
+        {appointment && (
+          <Field label="תור" required>
+            <Select
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              required
+            >
+              <option value="">בחרו תאריך ושעה...</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {formatDate(session.session_date)} · {formatTime(session.start_time)}–{formatTime(session.end_time)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {!cls.interest_only && !appointment && cls.pick_one_slot && (
           <Field label="מועד" required>
             <Select
               value={weeklySlotId}

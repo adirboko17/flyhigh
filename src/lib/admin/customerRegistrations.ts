@@ -49,7 +49,7 @@ export async function loadCustomerRegistrations(
     supabase
       .from("enrollments")
       .select(
-        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes), payments(status, payment_method, external_reference)"
+        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, session_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), class_sessions(session_date, start_time, end_time), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes), payments(status, payment_method, external_reference)"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),
@@ -94,12 +94,16 @@ export async function loadCustomerRegistrations(
     const details: string[] = [];
 
     if (kind === "class") {
-      const schedule =
-        scheduleLabel(
-          slot?.day_of_week ?? row.classes?.day_of_week,
-          slot?.start_time ?? row.classes?.start_time,
-          slot?.end_time ?? row.classes?.end_time
-        ) ?? (row.classes?.interest_only ? "הרשמת עניין" : null);
+      const bookedSession = Array.isArray(row.class_sessions)
+        ? row.class_sessions[0]
+        : row.class_sessions;
+      const schedule = bookedSession?.session_date
+        ? `${bookedSession.session_date} · ${String(bookedSession.start_time).slice(0, 5)}`
+        : scheduleLabel(
+            slot?.day_of_week ?? row.classes?.day_of_week,
+            slot?.start_time ?? row.classes?.start_time,
+            slot?.end_time ?? row.classes?.end_time
+          ) ?? (row.classes?.interest_only ? "הרשמת עניין" : null);
       if (schedule) details.push(schedule);
     } else if (kind === "membership") {
       if (row.ends_on) details.push(`בתוקף עד ${formatDate(row.ends_on)}`);

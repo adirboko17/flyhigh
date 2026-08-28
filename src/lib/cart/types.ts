@@ -15,6 +15,7 @@ export type CartItem = {
   participantNames: string[];
   weeklySlotId?: string | null;
   weeklySlotLabel?: string | null;
+  sessionIds?: string[];
   quantity?: number;
   programKind?: ProgramKind | null;
   entriesCount?: number | null;
@@ -26,12 +27,19 @@ export const CART_MAX_ITEMS = 20;
 
 export function cartItemKey(item: Pick<
   CartItem,
-  "kind" | "productId" | "childIds" | "includeSelf" | "weeklySlotId" | "quantity"
+  | "kind"
+  | "productId"
+  | "childIds"
+  | "includeSelf"
+  | "weeklySlotId"
+  | "sessionIds"
+  | "quantity"
 >) {
   const children = [...item.childIds].filter(Boolean).sort().join(",");
   const slot = item.weeklySlotId ?? "";
+  const sessions = [...(item.sessionIds ?? [])].filter(Boolean).sort().join(",");
   const qty = item.quantity ?? 1;
-  return `${item.kind}:${item.productId}:${slot}:${item.includeSelf ? 1 : 0}:${children}:${qty}`;
+  return `${item.kind}:${item.productId}:${slot}:${sessions}:${item.includeSelf ? 1 : 0}:${children}:${qty}`;
 }
 
 export function newCartItemId() {

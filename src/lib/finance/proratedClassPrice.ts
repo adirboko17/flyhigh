@@ -64,6 +64,29 @@ export function billableClassSessions<T extends ClassSessionForProration>(
     .sort(compareSessions);
 }
 
+/** מחיר לטיפול בודד — בלי פרו-רייט של סדרה. */
+export function appointmentClassPrice(
+  price: number,
+  remainingCount: number,
+  billableCount: number
+): ProratedClassPrice {
+  const unit = safePrice(price);
+  const billable = Math.max(0, Math.floor(billableCount));
+  const remaining = Math.max(0, Math.floor(remainingCount));
+  return {
+    fullPrice: unit,
+    unitPrice: unit,
+    pricePerSession: unit,
+    billableCount: billable,
+    remainingCount: remaining,
+    elapsedCount: Math.max(0, billable - remaining),
+    firstSessionNumber: 1,
+    firstRemainingDate: null,
+    isLate: false,
+    hasEnded: billable > 0 && remaining <= 0,
+  };
+}
+
 export function prorateClassPriceFromCounts(
   fullPrice: number,
   billableCount: number,

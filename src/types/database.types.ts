@@ -417,6 +417,7 @@ export type Database = {
           age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           billing_months: number | null
+          booking_mode: Database["public"]["Enums"]["class_booking_mode"]
           capacity: number | null
           category: string | null
           created_at: string
@@ -447,6 +448,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
+          booking_mode?: Database["public"]["Enums"]["class_booking_mode"]
           capacity?: number | null
           category?: string | null
           created_at?: string
@@ -477,6 +479,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
+          booking_mode?: Database["public"]["Enums"]["class_booking_mode"]
           capacity?: number | null
           category?: string | null
           created_at?: string
@@ -672,6 +675,7 @@ export type Database = {
           pool_pass_id: string | null
           private_lesson_id: string | null
           program_id: string | null
+          session_id: string | null
           starts_on: string | null
           status: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
@@ -692,6 +696,7 @@ export type Database = {
           pool_pass_id?: string | null
           private_lesson_id?: string | null
           program_id?: string | null
+          session_id?: string | null
           starts_on?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
@@ -710,6 +715,7 @@ export type Database = {
           pool_pass_id?: string | null
           private_lesson_id?: string | null
           program_id?: string | null
+          session_id?: string | null
           starts_on?: string | null
           status?: Database["public"]["Enums"]["enrollment_status"]
           type?: Database["public"]["Enums"]["enrollment_type"]
@@ -728,6 +734,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "class_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -1692,6 +1705,8 @@ export type Database = {
           status: Database["public"]["Enums"]["class_session_status"]
           substitute_instructor_name: string
           weekly_slot_id: string | null
+          taken_count: number
+          available: number
         }[]
       }
       list_public_class_slots: {
@@ -1742,6 +1757,7 @@ export type Database = {
           taken_count: number
           title: string
           interest_only: boolean
+          booking_mode: Database["public"]["Enums"]["class_booking_mode"]
         }[]
       }
       list_public_weekly_slots: {
@@ -1795,6 +1811,7 @@ export type Database = {
     }
     Enums: {
       attendance_status: "present" | "absent" | "late"
+      class_booking_mode: "series" | "appointment"
       class_audience_type: "age" | "grade" | "open"
       class_gender_policy: "male" | "female" | "mixed"
       class_session_status: "scheduled" | "cancelled" | "completed"
@@ -1960,6 +1977,7 @@ export const Constants = {
   public: {
     Enums: {
       attendance_status: ["present", "absent", "late"],
+      class_booking_mode: ["series", "appointment"],
       class_audience_type: ["age", "grade", "open"],
       class_gender_policy: ["male", "female", "mixed"],
       class_session_status: ["scheduled", "cancelled", "completed"],

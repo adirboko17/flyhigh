@@ -6,11 +6,13 @@ import { cn } from "@/utils/cn";
 export function classPriceLabel(
   proration: ProratedClassPrice,
   billingMonths?: number | null,
-  interestOnly?: boolean
+  interestOnly?: boolean,
+  appointment?: boolean
 ): string {
   if (interestOnly) {
     return proration.fullPrice > 0 ? "מחיר מתוכנן" : "הרשמה";
   }
+  if (appointment) return "מחיר לטיפול";
   if (proration.hasEnded) return "החוג הסתיים";
   if (proration.isLate) return "מחיר מעכשיו";
   if (parseBillingMonths(billingMonths)) return "מחיר לחודש";
@@ -23,12 +25,14 @@ export function ClassPriceAmount({
   size = "card",
   billingMonths,
   interestOnly = false,
+  appointment = false,
 }: {
   proration: ProratedClassPrice;
   soldOut?: boolean;
   size?: "card" | "panel";
   billingMonths?: number | null;
   interestOnly?: boolean;
+  appointment?: boolean;
 }) {
   const months = parseBillingMonths(billingMonths);
   const amountClass =
@@ -39,12 +43,12 @@ export function ClassPriceAmount({
     ? Math.round((proration.fullPrice / months) * 100) / 100
     : null;
 
-  if (interestOnly) {
+  if (interestOnly || appointment) {
     return (
       <p className={cn(amountClass, soldOut ? "text-ink-400" : "text-brand-700")}>
-        {proration.fullPrice > 0
-          ? formatCurrency(proration.fullPrice)
-          : "ללא תשלום"}
+        {interestOnly && proration.fullPrice <= 0
+          ? "ללא תשלום"
+          : formatCurrency(proration.unitPrice)}
       </p>
     );
   }
@@ -99,13 +103,23 @@ export function ClassPriceNote({
   compact = false,
   billingMonths,
   interestOnly = false,
+  appointment = false,
 }: {
   proration: ProratedClassPrice;
   compact?: boolean;
   billingMonths?: number | null;
   interestOnly?: boolean;
+  appointment?: boolean;
 }) {
   const months = parseBillingMonths(billingMonths);
+
+  if (appointment) {
+    return (
+      <p className={cn("text-ink-500", compact ? "text-xs leading-snug" : "text-sm")}>
+        לטיפול אחד · אפשר לבחור כמה תורים
+      </p>
+    );
+  }
 
   if (interestOnly) {
     const sessions =

@@ -18,7 +18,8 @@ import {
 } from "@/lib/finance/siblingDiscount";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { isInterestClass } from "@/lib/classes/interest";
-import type { PublicClass, PublicClassSlot } from "@/types";
+import { isAppointmentClass } from "@/lib/classes/bookingMode";
+import type { PublicClass, PublicClassSession, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import {
   ClassEnrollmentActions,
@@ -37,6 +38,7 @@ interface ClassEnrollmentPanelProps {
   soldOut: boolean;
   proration: ProratedClassPrice;
   slots?: PublicClassSlot[];
+  sessions?: PublicClassSession[];
 }
 
 export function ClassEnrollmentPanelFallback() {
@@ -56,9 +58,11 @@ export async function ClassEnrollmentPanel({
   soldOut,
   proration,
   slots = [],
+  sessions = [],
 }: ClassEnrollmentPanelProps) {
   await connection();
   const interestOnly = isInterestClass(cls);
+  const appointment = isAppointmentClass(cls);
   const registrationClosed = soldOut || (!interestOnly && proration.hasEnded);
   const profile = await getSessionProfile();
 
@@ -170,7 +174,9 @@ export async function ClassEnrollmentPanel({
           siblingTiers={siblingTiers}
           categorySiblingIds={categorySiblingIds}
           pickOneSlot={cls.pick_one_slot}
+          bookingMode={cls.booking_mode}
           slots={slots}
+          sessions={sessions}
           classGenderPolicy={cls.gender_policy}
         />
       );
@@ -181,7 +187,7 @@ export async function ClassEnrollmentPanel({
     <aside className="lg:sticky lg:top-24 lg:self-start">
       <div className="rounded-3xl border border-ink-100 bg-white p-5 shadow-card sm:p-6">
         <p className="text-sm text-ink-500">
-          {classPriceLabel(proration, cls.billing_months, interestOnly)}
+          {classPriceLabel(proration, cls.billing_months, interestOnly, appointment)}
         </p>
         <div className="mt-1">
           <ClassPriceAmount
@@ -190,6 +196,7 @@ export async function ClassEnrollmentPanel({
             size="panel"
             billingMonths={cls.billing_months}
             interestOnly={interestOnly}
+            appointment={appointment}
           />
         </div>
         <div className="mt-1">
@@ -197,6 +204,7 @@ export async function ClassEnrollmentPanel({
             proration={proration}
             billingMonths={cls.billing_months}
             interestOnly={interestOnly}
+            appointment={appointment}
           />
         </div>
         {!interestOnly && (proration.isLate || proration.hasEnded) && (
@@ -207,7 +215,9 @@ export async function ClassEnrollmentPanel({
 
         {soldOut && (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            החוג מלא. אפשר להצטרף לרשימת המתנה.
+            {appointment
+              ? "אין תורים פנויים כרגע."
+              : "החוג מלא. אפשר להצטרף לרשימת המתנה."}
           </div>
         )}
 
@@ -225,11 +235,12 @@ export async function ClassEnrollmentPanel({
           {cls.audience_type === "grade" && (
             <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           )}
+          {appointment && <Badge tone="info">טיפול לפי תור</Badge>}
           {interestOnly && <Badge tone="info">הרשמת עניין</Badge>}
           {interestOnly && cls.session_count > 0 && (
             <Badge tone="neutral">{cls.session_count} מפגשים מתוכננים</Badge>
           )}
-          {!interestOnly && proration.billableCount > 0 && (
+          {!interestOnly && !appointment && proration.billableCount > 0 && (
             <Badge tone="neutral">
               {proration.isLate
                 ? `${proration.remainingCount} מתוך ${proration.billableCount} מפגשים`

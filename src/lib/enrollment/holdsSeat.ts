@@ -78,7 +78,8 @@ const SEAT_SELECT =
 export async function countHeldSeats(
   supabase: SupabaseClient<Database>,
   classId: string,
-  weeklySlotId?: string | null
+  weeklySlotId?: string | null,
+  sessionId?: string | null
 ): Promise<number> {
   let query = supabase
     .from("enrollments")
@@ -86,7 +87,9 @@ export async function countHeldSeats(
     .eq("class_id", classId)
     .in("status", ["active", "pending"]);
 
-  if (weeklySlotId) {
+  if (sessionId) {
+    query = query.eq("session_id", sessionId);
+  } else if (weeklySlotId) {
     query = query.eq("weekly_slot_id", weeklySlotId);
   }
 

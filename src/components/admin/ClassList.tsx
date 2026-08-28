@@ -75,6 +75,12 @@ export type AdminClassEnrollment = {
   status: keyof typeof ENROLLMENT_STATUS;
   payment_status: keyof typeof ENROLLMENT_PAYMENT_STATUS;
   weekly_slot_id: string | null;
+  session_id?: string | null;
+  class_sessions?: {
+    session_date: string;
+    start_time: string;
+    end_time: string;
+  } | null;
   created_at: string;
   children: { full_name: string; birth_date: string | null } | null;
   profiles: { full_name: string; phone: string | null } | null;
@@ -136,6 +142,7 @@ export type AdminClassRow = {
   price: number;
   billing_months: number | null;
   pick_one_slot: boolean;
+  booking_mode?: "series" | "appointment";
   capacity: number | null;
   status: keyof typeof CLASS_STATUS;
   schedule_type: Enums<"schedule_type">;
@@ -238,12 +245,18 @@ function attendanceRate(item: AdminClassRow) {
 }
 
 function adminClassPriceLabel(
-  item: Pick<AdminClassRow, "price" | "billing_months" | "interest_only">
+  item: Pick<
+    AdminClassRow,
+    "price" | "billing_months" | "interest_only" | "booking_mode"
+  >
 ) {
   if (item.interest_only) {
     return item.price > 0
       ? `${formatCurrency(item.price)} · מתוכנן`
       : "ללא תשלום";
+  }
+  if (item.booking_mode === "appointment") {
+    return `${formatCurrency(item.price)} לטיפול`;
   }
   const months = parseBillingMonths(item.billing_months);
   if (!months) return formatCurrency(item.price);
@@ -263,6 +276,9 @@ function scheduleLabel(item: AdminClassRow) {
     return item.planned_session_count
       ? `${item.planned_session_count} מפגשים מתוכננים`
       : "ללא מועד עדיין";
+  }
+  if (item.booking_mode === "appointment") {
+    return "טיפול לפי תור";
   }
   if (item.day_of_week === null && !item.start_time) return "לוח זמנים לא הוגדר";
   const day = item.day_of_week === null ? null : `יום ${dayLabel(item.day_of_week)}`;
@@ -447,6 +463,11 @@ function ClassCard({
             {cls.interest_only && (
               <Badge tone="info" className="shadow-soft">
                 הרשמת עניין
+              </Badge>
+            )}
+            {cls.booking_mode === "appointment" && (
+              <Badge tone="info" className="shadow-soft">
+                תורים לטיפול
               </Badge>
             )}
             {featuredRank && (
@@ -1346,6 +1367,13 @@ function EnrollmentRow({
         {parentLine && (
           <p className="mt-0.5 truncate text-xs text-ink-500">
             {parentLine}
+          </p>
+        )}
+        {enrollment.class_sessions && (
+          <p className="mt-0.5 truncate text-xs text-ink-500">
+            {enrollment.class_sessions.session_date} ·{" "}
+            {enrollment.class_sessions.start_time.slice(0, 5)}–
+            {enrollment.class_sessions.end_time.slice(0, 5)}
           </p>
         )}
       </div>

@@ -49,6 +49,11 @@ import { createSessionReadClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanKind } from "@/lib/enrollment/planActions";
 import type { Database } from "@/types/database.types";
+import {
+  loadBookableAppointmentSessions,
+  uniqueSessionIds,
+} from "@/lib/enrollment/appointmentSessions";
+import { appointmentSessionLabel } from "@/lib/classes/bookingMode";
 
 type EnrollmentInsert = Database["public"]["Tables"]["enrollments"]["Insert"];
 
@@ -180,7 +185,7 @@ async function prepareClassLine(
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
+          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -211,6 +216,103 @@ async function prepareClassLine(
     return {
       success: false,
       error: `ההרשמה ל${cls.title} היא ללא תשלום. רעננו את העמוד ונסו שוב.`,
+    };
+  }
+
+  if (cls.booking_mode === "appointment") {
+    if (participants.length !== 1) {
+      return {
+        success: false,
+        error: `ל${cls.title} בוחרים מתאמן אחד לכל הזמנה.`,
+      };
+    }
+
+    const booked = await loadBookableAppointmentSessions(
+      supabase,
+      classId,
+      uniqueSessionIds(item.sessionIds)
+    );
+    if ("error" in booked) {
+      return { success: false, error: booked.error };
+    }
+
+    const reservedSessions = reserved.classSpots;
+    for (const session of booked.sessions) {
+      const key = `${classId}:session:${session.id}`;
+      if ((reservedSessions.get(key) ?? 0) > 0) {
+        return {
+          success: false,
+          error: `התור ${appointmentSessionLabel(session.session_date, session.start_time, session.end_time)} כבר נמצא בסל.`,
+        };
+      }
+    }
+
+    const appointmentChildren = children ?? [];
+    if (appointmentChildren.length !== uniqueChildIds.length) {
+      return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+    }
+    const eligibilityError = childrenEligibilityError(cls, appointmentChildren, []);
+    if (eligibilityError) return { success: false, error: eligibilityError };
+    if (includeSelf) {
+      const parentError = parentGenderError(
+        profile.full_name,
+        profile.gender,
+        cls.gender_policy,
+        []
+      );
+      if (parentError) return { success: false, error: parentError };
+    }
+
+    const healthError = await requireHealthDeclarations(
+      reads,
+      profile.id,
+      appointmentChildren
+    );
+    if (healthError) return { success: false, error: healthError };
+
+    const unitPrice = Number(cls.price) || 0;
+    const listTotal = unitPrice * booked.sessions.length;
+    const names = [
+      ...appointmentChildren.map((child) => child.full_name),
+      ...(includeSelf ? [profile.full_name] : []),
+    ];
+    const participantId = participants[0] ?? null;
+
+    for (const session of booked.sessions) {
+      reservedSessions.set(`${classId}:session:${session.id}`, 1);
+    }
+
+    return {
+      success: true,
+      line: {
+        itemId: item.id,
+        kind: "class",
+        title: cls.title,
+        listTotal,
+        participantNames: names,
+        installmentsMax: null,
+        chargeDescription: chargeDescriptionForCheckout({
+          productTitle: cls.title,
+          participantCount: booked.sessions.length,
+          kind: "class",
+          customLabel: null,
+        }),
+        enrollmentRows: booked.sessions.map((session) => ({
+          parent_id: profile.id,
+          child_id: participantId,
+          class_id: classId,
+          weekly_slot_id: session.weekly_slot_id,
+          session_id: session.id,
+          type: "class" as const,
+          status: "active" as const,
+          discount_percent: 0,
+        })),
+        paymentChildIds: booked.sessions.map(() => participantId),
+        paymentAmounts: booked.sessions.map(() => unitPrice),
+        privateLessonQuantity: null,
+        activityQuantity: null,
+        planId: null,
+      },
     };
   }
 

@@ -10,7 +10,7 @@ import type {
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 
 const ENROLLMENT_SELECT =
-  "id, class_id, parent_id, child_id, weekly_slot_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference)";
+  "id, class_id, parent_id, child_id, weekly_slot_id, session_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference), class_sessions(session_date, start_time, end_time)";
 
 const WAITLIST_SELECT =
   "id, class_id, parent_id, child_id, weekly_slot_id, status, created_at, children(full_name), profiles(full_name, phone)";
@@ -44,7 +44,7 @@ export async function loadClassRoster(classId: string): Promise<{
 }
 
 const CLASS_SUMMARY_SELECT =
-  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)";
+  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, booking_mode, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)";
 
 /** מטא־דאטה + ספירות לחלון הקיצור (נרשמים ונוכחות נטענים בנפרד). */
 export async function loadAdminClassSummary(

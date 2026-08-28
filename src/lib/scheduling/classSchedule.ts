@@ -29,6 +29,85 @@ export function weeklySlotKey(slot: Pick<WeeklySlot, "dayOfWeek" | "startTime">)
   return `${slot.dayOfWeek}|${slot.startTime.slice(0, 5)}`;
 }
 
+function parseClockMinutes(time: string): number | null {
+  const [hours, minutes] = time.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function formatClockMinutes(total: number): string {
+  const wrapped = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = Math.floor(wrapped / 60);
+  const minutes = wrapped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/** מועד חדש מתחיל כשהקודם נגמר, באותו אורך — כדי לא ליצור כפיל של אותו יום+שעה. */
+export function nextWeeklySlotTimes(
+  last?: Pick<WeeklySlot, "startTime" | "endTime"> | null,
+  fallbackDurationMinutes = 45
+): { startTime: string; endTime: string } {
+  const start = last ? parseClockMinutes(last.startTime) : null;
+  const end = last ? parseClockMinutes(last.endTime) : null;
+  const duration =
+    start != null && end != null && end > start
+      ? end - start
+      : fallbackDurationMinutes;
+  if (end == null) {
+    return {
+      startTime: "16:00",
+      endTime: formatClockMinutes(16 * 60 + duration),
+    };
+  }
+  return {
+    startTime: formatClockMinutes(end),
+    endTime: formatClockMinutes(end + duration),
+  };
+}
+
+export function firstDuplicateWeeklySlot(
+  slots: WeeklySlot[]
+): WeeklySlot | null {
+  const seen = new Set<string>();
+  for (const slot of slots) {
+    if (!slot.startTime.trim()) continue;
+    const key = weeklySlotKey(slot);
+    if (seen.has(key)) return slot;
+    seen.add(key);
+  }
+  return null;
+}
+
+export function duplicateWeeklySlotIndexes(slots: WeeklySlot[]): Set<number> {
+  const firstByKey = new Map<string, number>();
+  const duplicates = new Set<number>();
+  slots.forEach((slot, index) => {
+    if (!slot.startTime.trim()) return;
+    const key = weeklySlotKey(slot);
+    const first = firstByKey.get(key);
+    if (first === undefined) {
+      firstByKey.set(key, index);
+      return;
+    }
+    duplicates.add(first);
+    duplicates.add(index);
+  });
+  return duplicates;
+}
+
+export function firstDuplicateSession(
+  sessions: ClassSessionDraft[]
+): ClassSessionDraft | null {
+  const seen = new Set<string>();
+  for (const session of sessions) {
+    if (!session.sessionDate || !session.startTime) continue;
+    const key = `${session.sessionDate}|${session.startTime.slice(0, 5)}`;
+    if (seen.has(key)) return session;
+    seen.add(key);
+  }
+  return null;
+}
+
 export function formatWeeklySlotLabel(
   dayOfWeek: number,
   startTime: string,
@@ -126,14 +205,22 @@ export function generateWeeklySessions(
   const usableSlots = slots.filter(
     (slot) => slot.startTime.trim() && slot.endTime.trim()
   );
-  if (usableSlots.length === 0) return [];
+  const uniqueSlots: WeeklySlot[] = [];
+  const seenSlotKeys = new Set<string>();
+  for (const slot of usableSlots) {
+    const key = weeklySlotKey(slot);
+    if (seenSlotKeys.has(key)) continue;
+    seenSlotKeys.add(key);
+    uniqueSlots.push(slot);
+  }
+  if (uniqueSlots.length === 0) return [];
 
   const start = parseLocalDate(rangeStart);
   const count = parseSessionCount(sessionCount);
   const sessions: ClassSessionDraft[] = [];
 
   if (count) {
-    for (const slot of usableSlots) {
+    for (const slot of uniqueSlots) {
       const cursor = firstOnOrAfter(start, slot.dayOfWeek);
       for (let i = 0; i < count; i++) {
         sessions.push({
@@ -153,7 +240,7 @@ export function generateWeeklySessions(
     const cursor = new Date(start);
     while (cursor <= end) {
       const dayOfWeek = cursor.getDay();
-      const daySlots = usableSlots.filter((slot) => slot.dayOfWeek === dayOfWeek);
+      const daySlots = uniqueSlots.filter((slot) => slot.dayOfWeek === dayOfWeek);
       for (const slot of daySlots) {
         sessions.push({
           sessionDate: formatLocalDate(cursor),
@@ -520,6 +607,7 @@ export function formToPreviewClass(
     price_mode?: "period" | "monthly";
     pick_one_slot?: boolean;
     interest_only?: boolean;
+    booking_mode?: PublicClass["booking_mode"];
   },
   schedule: ClassScheduleState,
   imageUrl: string | null,
@@ -530,6 +618,8 @@ export function formToPreviewClass(
   const capacity =
     form.capacity_limited === false ? null : Number(form.capacity) || 10;
   const interestOnly = Boolean(form.interest_only);
+  const bookingMode = interestOnly ? "series" : form.booking_mode ?? "series";
+  const appointment = bookingMode === "appointment";
   const legacy = syncLegacyClassFields(
     schedule.scheduleType,
     schedule.weeklySlots,
@@ -538,11 +628,12 @@ export function formToPreviewClass(
   const activeSessions = interestOnly
     ? []
     : schedule.sessions.filter((s) => s.status !== "cancelled");
-  const billingMonths = interestOnly
-    ? null
-    : form.price_mode === "monthly"
-      ? parseBillingMonths(Number(form.billing_months))
-      : null;
+  const billingMonths =
+    interestOnly || appointment
+      ? null
+      : form.price_mode === "monthly"
+        ? parseBillingMonths(Number(form.billing_months))
+        : null;
   const plannedSessions = interestOnly
     ? parseSessionCount(form.planned_session_count)
     : null;
@@ -583,7 +674,8 @@ export function formToPreviewClass(
     grade_max: isGrade && form.grade_max ? Number(form.grade_max) : 0,
     capacity,
     billing_months: billingMonths,
-    pick_one_slot: interestOnly ? false : form.pick_one_slot ?? true,
+    pick_one_slot: interestOnly || appointment ? false : form.pick_one_slot ?? true,
+    booking_mode: bookingMode,
     price: Number(form.price) || 0,
     start_date: interestOnly ? "" : legacy.start_date ?? "",
     end_date: interestOnly ? "" : legacy.end_date ?? "",
@@ -595,9 +687,11 @@ export function formToPreviewClass(
     instructor_name: instructorName ?? "",
     instructor_gender: instructorGender,
     taken_count: 0,
-    available: isUnlimitedCapacity(capacity)
-      ? UNLIMITED_AVAILABLE_SENTINEL
-      : capacity ?? 0,
+    available: appointment
+      ? proration.remainingCount
+      : isUnlimitedCapacity(capacity)
+        ? UNLIMITED_AVAILABLE_SENTINEL
+        : capacity ?? 0,
     schedule_type: schedule.scheduleType,
     schedule_days: interestOnly
       ? ""
