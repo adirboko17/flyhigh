@@ -26,6 +26,7 @@ export type CustomerWithChildren = {
   address: string | null;
   receipt_name: string | null;
   receipt_id_number: string | null;
+  admin_note: string | null;
   created_at: string;
   children: CustomerChild[];
 };

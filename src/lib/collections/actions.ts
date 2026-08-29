@@ -13,6 +13,7 @@ import {
   isCardcomConfigured,
 } from "@/lib/integrations/cardcom";
 import { resolveReceiptLabelForCheckout } from "@/lib/enrollment/receiptLabel";
+import { composeReceiptLine } from "@/lib/receipt-labels";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -50,6 +51,7 @@ type ChargeRow = {
   parent_id: string;
   payment_method: Enums<"payment_method"> | null;
   receipt_description: string | null;
+  receipt_custom_text: string | null;
   enrollments: {
     type: Enums<"enrollment_type">;
     children: { full_name: string } | null;
@@ -62,7 +64,7 @@ type ChargeRow = {
 };
 
 const CHARGE_SELECT =
-  "id, amount, parent_id, payment_method, receipt_description, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
+  "id, amount, parent_id, payment_method, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
 
 function remainingOf(charge: ChargeRow) {
   const paid = (charge.payment_receipts ?? []).reduce(
@@ -73,11 +75,11 @@ function remainingOf(charge: ChargeRow) {
 }
 
 function chargeProduct(charge: ChargeRow) {
-  return (
-    charge.receipt_description?.trim() ||
-    subjectLabel(charge.enrollments) ||
-    "גבייה"
-  );
+  return composeReceiptLine({
+    base: charge.receipt_description,
+    customText: charge.receipt_custom_text,
+    fallback: subjectLabel(charge.enrollments) || "גבייה",
+  });
 }
 
 async function loadDeferredCharge(
@@ -397,6 +399,33 @@ export async function updatePaymentReceiptLabel(input: {
 
   if (error) {
     return { success: false, error: "עדכון תווית הקבלה נכשל. נסו שוב." };
+  }
+
+  revalidatePath("/admin/collections");
+  return { success: true };
+}
+
+/** טקסט מותאם לחיוב הזה בלבד — לא נוסף לרשימת התוויות. */
+export async function updatePaymentReceiptCustomText(input: {
+  paymentId: string;
+  customText: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const { error } = await supabase
+    .from("payments")
+    .update({ receipt_custom_text: input.customText.trim() || null })
+    .eq("id", input.paymentId);
+
+  if (error) {
+    return { success: false, error: "עדכון הטקסט המותאם לקבלה נכשל. נסו שוב." };
   }
 
   revalidatePath("/admin/collections");

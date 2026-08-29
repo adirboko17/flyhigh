@@ -28,7 +28,7 @@ export default async function AdminCollectionsPage() {
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_labels(id, label), profiles(full_name, phone, email), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
       )
       .in("payment_method", [...DEFERRED_PAYMENT_METHODS])
       .or(
@@ -94,6 +94,8 @@ export default async function AdminCollectionsPage() {
       enrollmentCancelled: enrollment?.status === "cancelled",
       receiptLabelId: charge.receipt_label_id,
       receiptLabel,
+      receiptDescription: charge.receipt_description?.trim() || null,
+      receiptCustomText: charge.receipt_custom_text?.trim() || null,
       receipts,
     };
 
@@ -108,6 +110,11 @@ export default async function AdminCollectionsPage() {
         name: charge.profiles?.full_name ?? "לקוח לא ידוע",
         phone: charge.profiles?.phone ?? null,
         email: charge.profiles?.email ?? null,
+        adminNote: (() => {
+          const note = charge.profiles?.customer_admin_notes;
+          const row = Array.isArray(note) ? note[0] : note;
+          return row?.body?.trim() || null;
+        })(),
         charges: [entry],
         openAmount: remaining,
         paidAmount: amountPaid,

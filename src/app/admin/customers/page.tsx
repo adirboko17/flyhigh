@@ -9,7 +9,7 @@ export default async function AdminCustomersPage() {
   const { data: parents } = await supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, birth_date, gender, city, address, receipt_name, receipt_id_number, created_at, children(id, full_name, birth_date, gender, school_grade, grade_school_year, notes, created_at, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
+      "id, full_name, email, phone, birth_date, gender, city, address, receipt_name, receipt_id_number, created_at, customer_admin_notes(body), children(id, full_name, birth_date, gender, school_grade, grade_school_year, notes, created_at, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
     )
     .eq("role", "parent")
     .order("created_at", { ascending: false });
@@ -25,6 +25,12 @@ export default async function AdminCustomersPage() {
     address: p.address,
     receipt_name: p.receipt_name,
     receipt_id_number: p.receipt_id_number,
+    admin_note: (() => {
+      const note = Array.isArray(p.customer_admin_notes)
+        ? p.customer_admin_notes[0]
+        : p.customer_admin_notes;
+      return note?.body?.trim() || null;
+    })(),
     created_at: p.created_at,
     children: (p.children ?? [])
       .sort(

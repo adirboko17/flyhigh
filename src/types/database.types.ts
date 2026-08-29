@@ -660,6 +660,32 @@ export type Database = {
           },
         ]
       }
+      customer_admin_notes: {
+        Row: {
+          body: string
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_admin_notes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrollments: {
         Row: {
           admin_assigned: boolean
@@ -1104,6 +1130,7 @@ export type Database = {
           paid_at: string | null
           parent_id: string
           payment_method: Database["public"]["Enums"]["payment_method"] | null
+          receipt_custom_text: string | null
           receipt_description: string | null
           receipt_label_id: string | null
           status: Database["public"]["Enums"]["payment_status"]
@@ -1118,6 +1145,7 @@ export type Database = {
           paid_at?: string | null
           parent_id: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_custom_text?: string | null
           receipt_description?: string | null
           receipt_label_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
@@ -1132,6 +1160,7 @@ export type Database = {
           paid_at?: string | null
           parent_id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_custom_text?: string | null
           receipt_description?: string | null
           receipt_label_id?: string | null
           status?: Database["public"]["Enums"]["payment_status"]

@@ -118,6 +118,7 @@ export function CustomerForm({
   const [email, setEmail] = useState(existing?.email ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [adminNote, setAdminNote] = useState(existing?.admin_note ?? "");
   const [wantsDifferentReceipt, setWantsDifferentReceipt] = useState(
     Boolean(existing?.receipt_name || existing?.receipt_id_number)
   );
@@ -210,12 +211,14 @@ export function CustomerForm({
           email,
           password: password || undefined,
           children: payloadChildren(),
+          adminNote,
         })
       : await createCustomer({
           profile: profileInput,
           email,
           password,
           children: payloadChildren(),
+          adminNote,
         });
 
     setLoading(false);
@@ -355,6 +358,20 @@ export function CustomerForm({
             </Field>
           </div>
         )}
+
+        <Field
+          label="הערת מנהל"
+          htmlFor="customerAdminNote"
+          hint="רק צוות הניהול רואה את ההערה. הלקוח לא."
+        >
+          <Textarea
+            id="customerAdminNote"
+            value={adminNote}
+            onChange={(e) => setAdminNote(e.target.value)}
+            placeholder="לדוגמה: להוציא קבלה על שם..."
+            rows={3}
+          />
+        </Field>
       </section>
 
       <section className="space-y-4">

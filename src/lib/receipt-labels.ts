@@ -32,3 +32,16 @@ export function buildReceiptDescription(input: {
 
   return `רכישת ${input.productTitle} (${input.participantCount} משתתפים)`;
 }
+
+/** שם סופי על הקבלה: תווית או תיאור רגיל, ובנוסף טקסט מותאם לחיוב הזה. */
+export function composeReceiptLine(input: {
+  base: string | null | undefined;
+  customText?: string | null;
+  fallback: string;
+}): string {
+  const custom = input.customText?.trim() || "";
+  const base = input.base?.trim() || "";
+  if (custom && base && custom !== base) return `${base} · ${custom}`;
+  if (custom) return custom;
+  return base || input.fallback;
+}

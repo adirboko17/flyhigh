@@ -15,9 +15,13 @@ import {
   deletePaymentReceipt,
   settleChargeRemaining,
   settleParentCharges,
+  updatePaymentReceiptCustomText,
   updatePaymentReceiptLabel,
 } from "@/lib/collections/actions";
-import type { ReceiptLabelOption } from "@/lib/receipt-labels";
+import {
+  composeReceiptLine,
+  type ReceiptLabelOption,
+} from "@/lib/receipt-labels";
 import {
   DEFERRED_PAYMENT_METHODS,
   PAYMENT_METHOD,
@@ -52,6 +56,8 @@ export type CollectionCharge = {
   /** תווית קבלה שנבחרה — null אם נשאר שם המוצר כרגיל. */
   receiptLabelId: string | null;
   receiptLabel: string | null;
+  receiptDescription: string | null;
+  receiptCustomText: string | null;
   receipts: CollectionReceipt[];
 };
 
@@ -60,6 +66,7 @@ export type CollectionParent = {
   name: string;
   phone: string | null;
   email: string | null;
+  adminNote: string | null;
   charges: CollectionCharge[];
   openAmount: number;
   paidAmount: number;
@@ -87,6 +94,14 @@ function normalize(value: string | null) {
   return (value ?? "").toLowerCase().trim().replace(/[\s\-()]/g, "");
 }
 
+function receiptPreview(charge: CollectionCharge) {
+  return composeReceiptLine({
+    base: charge.receiptDescription ?? charge.receiptLabel,
+    customText: charge.receiptCustomText,
+    fallback: charge.subject,
+  });
+}
+
 function todayDateInput() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
@@ -110,6 +125,7 @@ export function CollectionsList({
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeCharge, setActiveCharge] = useState<CollectionCharge | null>(null);
+  const [noteParent, setNoteParent] = useState<CollectionParent | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const totals = useMemo(() => {
@@ -131,7 +147,8 @@ export function CollectionsList({
           q === "" ||
           normalize(parent.name).includes(q) ||
           normalize(parent.phone).includes(q) ||
-          normalize(parent.email).includes(q);
+          normalize(parent.email).includes(q) ||
+          normalize(parent.adminNote).includes(q);
 
         const charges = parent.charges.filter((charge) => {
           if (statusFilter === "open" && !isOpen(charge)) return false;
@@ -144,7 +161,8 @@ export function CollectionsList({
             parentMatches ||
             normalize(charge.childName).includes(q) ||
             normalize(charge.subject).includes(q) ||
-            normalize(charge.receiptLabel).includes(q)
+            normalize(charge.receiptLabel).includes(q) ||
+            normalize(charge.receiptCustomText).includes(q)
           );
         });
 
@@ -301,9 +319,15 @@ export function CollectionsList({
               busyId={busyId}
               disabled={isPending}
               onOpenCharge={setActiveCharge}
+              onOpenNote={() => setNoteParent(parent)}
               onChangeLabel={(paymentId, receiptLabelId) =>
                 runAction(`label:${paymentId}`, () =>
                   updatePaymentReceiptLabel({ paymentId, receiptLabelId })
+                )
+              }
+              onChangeCustomText={(paymentId, customText) =>
+                runAction(`custom:${paymentId}`, () =>
+                  updatePaymentReceiptCustomText({ paymentId, customText })
                 )
               }
               onSettleAll={() =>
@@ -336,7 +360,28 @@ export function CollectionsList({
               updatePaymentReceiptLabel({ paymentId, receiptLabelId })
             )
           }
+          onChangeCustomText={(paymentId, customText) =>
+            runAction(`custom:${paymentId}`, () =>
+              updatePaymentReceiptCustomText({ paymentId, customText })
+            )
+          }
         />
+      )}
+
+      {noteParent?.adminNote && (
+        <Modal
+          open
+          onClose={() => setNoteParent(null)}
+          title={`הערה · ${noteParent.name}`}
+          description="הערת מנהל פנימית. הלקוח לא רואה את זה."
+          className="max-w-lg"
+        >
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-800">
+              {noteParent.adminNote}
+            </p>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -348,7 +393,9 @@ function ParentCard({
   busyId,
   disabled,
   onOpenCharge,
+  onOpenNote,
   onChangeLabel,
+  onChangeCustomText,
   onSettleAll,
 }: {
   parent: CollectionParent;
@@ -356,7 +403,9 @@ function ParentCard({
   busyId: string | null;
   disabled: boolean;
   onOpenCharge: (charge: CollectionCharge) => void;
+  onOpenNote: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
+  onChangeCustomText: (paymentId: string, customText: string) => void;
   onSettleAll: () => void;
 }) {
   const openCharges = parent.charges.filter(isOpen);
@@ -368,9 +417,22 @@ function ParentCard({
         <div className="flex min-w-0 items-center gap-3">
           <Avatar name={parent.name} />
           <div className="min-w-0">
-            <p className="truncate font-display font-bold text-ink-900">
-              {parent.name}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate font-display font-bold text-ink-900">
+                {parent.name}
+              </p>
+              {parent.adminNote && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                  onClick={onOpenNote}
+                >
+                  הערה
+                </Button>
+              )}
+            </div>
             {parent.email ? (
               <a
                 href={`mailto:${parent.email}`}
@@ -433,6 +495,7 @@ function ParentCard({
             disabled={disabled}
             onOpen={() => onOpenCharge(charge)}
             onChangeLabel={onChangeLabel}
+            onChangeCustomText={onChangeCustomText}
           />
         ))}
       </ul>
@@ -446,12 +509,14 @@ function ChargeRow({
   disabled,
   onOpen,
   onChangeLabel,
+  onChangeCustomText,
 }: {
   charge: CollectionCharge;
   receiptLabels: ReceiptLabelOption[];
   disabled: boolean;
   onOpen: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
+  onChangeCustomText: (paymentId: string, customText: string) => void;
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
@@ -484,6 +549,11 @@ function ChargeRow({
               קבלה: כרגיל
             </Badge>
           )}
+          {charge.receiptCustomText && (
+            <Badge tone="warning" className="text-sm">
+              מותאם: {charge.receiptCustomText}
+            </Badge>
+          )}
         </div>
 
         <p className="mt-2 break-words font-medium text-ink-900">
@@ -495,13 +565,21 @@ function ChargeRow({
             ` · ${charge.receipts.length} תקבולים`}
         </p>
         {open && (
-          <ReceiptLabelSelect
-            charge={charge}
-            labels={receiptLabels}
-            disabled={disabled}
-            compact
-            onChange={(labelId) => onChangeLabel(charge.id, labelId)}
-          />
+          <>
+            <ReceiptLabelSelect
+              charge={charge}
+              labels={receiptLabels}
+              disabled={disabled}
+              compact
+              onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+            />
+            <ReceiptCustomTextField
+              charge={charge}
+              disabled={disabled}
+              compact
+              onSave={(text) => onChangeCustomText(charge.id, text)}
+            />
+          </>
         )}
       </div>
 
@@ -548,6 +626,7 @@ function ChargeReceiptDialog({
   onBusy,
   onDone,
   onChangeLabel,
+  onChangeCustomText,
 }: {
   charge: CollectionCharge;
   receiptLabels: ReceiptLabelOption[];
@@ -559,6 +638,7 @@ function ChargeReceiptDialog({
   onBusy: (id: string | null) => void;
   onDone: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
+  onChangeCustomText: (paymentId: string, customText: string) => void;
 }) {
   const open = isOpen(charge);
   const [amount, setAmount] = useState(
@@ -643,7 +723,7 @@ function ChargeReceiptDialog({
         <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
           <p className="text-xs text-ink-500">שם על הקבלה</p>
           <p className="mt-0.5 font-semibold text-ink-900">
-            {charge.receiptLabel ?? `כרגיל — ${charge.subject}`}
+            {receiptPreview(charge)}
           </p>
         </div>
         <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
@@ -722,6 +802,11 @@ function ChargeReceiptDialog({
               labels={receiptLabels}
               disabled={busy}
               onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+            />
+            <ReceiptCustomTextField
+              charge={charge}
+              disabled={busy}
+              onSave={(text) => onChangeCustomText(charge.id, text)}
             />
             <p className="text-xs leading-relaxed text-ink-500">
               עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
@@ -865,6 +950,92 @@ function ReceiptLabelSelect({
       hint="הטקסט יופיע על החשבונית שמופקת בקארדקום."
     >
       {select}
+    </Field>
+  );
+}
+
+function ReceiptCustomTextField({
+  charge,
+  disabled,
+  compact = false,
+  onSave,
+}: {
+  charge: CollectionCharge;
+  disabled: boolean;
+  compact?: boolean;
+  onSave: (text: string) => void;
+}) {
+  const [value, setValue] = useState(charge.receiptCustomText ?? "");
+
+  useEffect(() => {
+    setValue(charge.receiptCustomText ?? "");
+  }, [charge.id, charge.receiptCustomText]);
+
+  const saved = (charge.receiptCustomText ?? "").trim();
+  const current = value.trim();
+  const dirty = current !== saved;
+
+  function save() {
+    if (!dirty) return;
+    onSave(value);
+  }
+
+  function clear() {
+    setValue("");
+    if (saved) onSave("");
+  }
+
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        size="sm"
+        disabled={disabled || !dirty}
+        onClick={save}
+      >
+        שמור
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled || (!saved && !current)}
+        onClick={clear}
+      >
+        נקה
+      </Button>
+    </div>
+  );
+
+  const input = (
+    <Input
+      value={value}
+      disabled={disabled}
+      placeholder="לדוגמה: על שם חברה / שם שלא בתוויות"
+      onChange={(e) => setValue(e.target.value)}
+      className={compact ? "h-9 text-sm" : undefined}
+      aria-label="טקסט מותאם לקבלה"
+    />
+  );
+
+  if (compact) {
+    return (
+      <div className="mt-2 max-w-sm space-y-2">
+        {input}
+        {actions}
+      </div>
+    );
+  }
+
+  return (
+    <Field
+      label="טקסט מותאם אישית"
+      hint="נוסף לתווית שנבחרה, רק לחיוב הזה. לא נשמר ברשימת התוויות."
+    >
+      <div className="space-y-2">
+        {input}
+        {actions}
+      </div>
     </Field>
   );
 }

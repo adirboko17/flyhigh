@@ -195,11 +195,65 @@ function refreshCustomerPaths(profileId?: string) {
   if (profileId) revalidateTag(`profile:${profileId}`);
 }
 
+async function syncCustomerAdminNote(
+  admin: ReturnType<typeof createAdminClient>,
+  profileId: string,
+  body: string
+): Promise<string | null> {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    const { error } = await admin
+      .from("customer_admin_notes")
+      .delete()
+      .eq("profile_id", profileId);
+    return error ? "שמירת ההערה נכשלה." : null;
+  }
+
+  const { error } = await admin.from("customer_admin_notes").upsert({
+    profile_id: profileId,
+    body: trimmed,
+    updated_at: new Date().toISOString(),
+  });
+  return error ? "שמירת ההערה נכשלה." : null;
+}
+
+export async function saveCustomerAdminNote(input: {
+  profileId: string;
+  body: string;
+}): Promise<CustomerActionResult> {
+  const caller = await requireAdminCaller();
+  if (!caller.ok) return { success: false, error: caller.error };
+
+  const client = requireAdminClient();
+  if (!client.ok) return { success: false, error: client.error };
+
+  const { data: target } = await client.admin
+    .from("profiles")
+    .select("id, role")
+    .eq("id", input.profileId)
+    .maybeSingle();
+
+  if (!target || target.role !== "parent") {
+    return { success: false, error: "הלקוח לא נמצא." };
+  }
+
+  const noteError = await syncCustomerAdminNote(
+    client.admin,
+    target.id,
+    input.body
+  );
+  if (noteError) return { success: false, error: noteError };
+
+  refreshCustomerPaths(target.id);
+  return { success: true };
+}
+
 export async function createCustomer(input: {
   profile: CustomerProfileInput;
   email: string;
   password: string;
   children: CustomerChildInput[];
+  adminNote?: string;
 }): Promise<CustomerActionResult> {
   const caller = await requireAdminCaller();
   if (!caller.ok) return { success: false, error: caller.error };
@@ -278,6 +332,16 @@ export async function createCustomer(input: {
     }
   }
 
+  const noteError = await syncCustomerAdminNote(
+    admin,
+    userId,
+    input.adminNote ?? ""
+  );
+  if (noteError) {
+    await admin.auth.admin.deleteUser(userId);
+    return { success: false, error: noteError };
+  }
+
   refreshCustomerPaths(userId);
   return { success: true };
 }
@@ -288,6 +352,7 @@ export async function updateCustomer(input: {
   email: string;
   password?: string;
   children: CustomerChildInput[];
+  adminNote?: string;
 }): Promise<CustomerActionResult> {
   const caller = await requireAdminCaller();
   if (!caller.ok) return { success: false, error: caller.error };
@@ -416,6 +481,13 @@ export async function updateCustomer(input: {
   if (profileErrorDb) {
     return { success: false, error: "עדכון פרטי הלקוח נכשל. נסו שוב." };
   }
+
+  const noteError = await syncCustomerAdminNote(
+    admin,
+    target.id,
+    input.adminNote ?? ""
+  );
+  if (noteError) return { success: false, error: noteError };
 
   refreshCustomerPaths(target.id);
   return { success: true };

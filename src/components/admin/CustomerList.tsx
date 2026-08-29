@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
@@ -20,11 +20,12 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Input } from "@/components/ui/Input";
+import { Icon } from "@/components/icons/Icon";
+import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
-import { deleteCustomer } from "@/lib/admin/customerActions";
+import { deleteCustomer, saveCustomerAdminNote } from "@/lib/admin/customerActions";
 import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
 import { declarationSchoolYear } from "@/lib/health-declaration";
 import { formatSchoolGrade } from "@/lib/school-grade";
@@ -46,7 +47,8 @@ function matchesCustomer(customer: CustomerWithChildren, query: string) {
   return (
     normalizeSearch(customer.full_name).includes(q) ||
     normalizeSearch(customer.email ?? "").includes(q) ||
-    normalizeSearch(customer.phone ?? "").includes(q)
+    normalizeSearch(customer.phone ?? "").includes(q) ||
+    normalizeSearch(customer.admin_note ?? "").includes(q)
   );
 }
 
@@ -159,6 +161,11 @@ export function CustomerList({ customers }: CustomerListProps) {
                       <span className="max-w-[9rem] truncate font-semibold text-ink-900 sm:max-w-none">
                         {customer.full_name}
                       </span>
+                      {customer.admin_note && (
+                        <Badge tone="warning" className="shrink-0">
+                          הערה
+                        </Badge>
+                      )}
                     </div>
                   </TD>
                   <TD dir="ltr" className="whitespace-nowrap text-right text-ink-600">
@@ -252,7 +259,7 @@ function CustomerSearchBar({
       <div className="border-b border-ink-100 bg-[var(--brand-gradient-soft)] px-5 py-4">
         <p className="text-sm font-medium text-ink-600">חיפוש לקוחות</p>
         <p className="mt-0.5 text-xs text-ink-400">
-          לפי שם, טלפון או דוא״ל
+          לפי שם, טלפון, דוא״ל או הערת מנהל
         </p>
       </div>
       <div className="p-4">
@@ -405,6 +412,11 @@ function CustomerDetail({
             </CardContent>
           </Card>
 
+          <CustomerAdminNoteCard
+            profileId={customer.id}
+            note={customer.admin_note}
+          />
+
           <div>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-lg font-bold text-ink-900">
@@ -453,6 +465,92 @@ function CustomerDetail({
 
           <CustomerDocuments parentId={customer.id} />
     </div>
+  );
+}
+
+function CustomerAdminNoteCard({
+  profileId,
+  note,
+}: {
+  profileId: string;
+  note: string | null;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(note ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setValue(note ?? "");
+    setSaved(false);
+    setError(null);
+  }, [note, profileId]);
+
+  const dirty = value.trim() !== (note ?? "").trim();
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const result = await saveCustomerAdminNote({ profileId, body: value });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    setSaved(true);
+    router.refresh();
+  }
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/70">
+      <CardHeader className="py-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon name="badge" size={18} />
+          הערת מנהל
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <p className="text-xs text-ink-500">
+          רק צוות הניהול רואה את ההערה. הלקוח לא.
+        </p>
+        <Textarea
+          id={`admin-note-${profileId}`}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="לדוגמה: להוציא קבלה על שם שלא מופיע בתווית"
+          rows={3}
+        />
+        {error && (
+          <p className="text-sm font-medium text-red-600" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-ink-500">
+            {saved && !dirty
+              ? "ההערה נשמרה"
+              : dirty
+                ? "יש שינויים שלא נשמרו"
+                : note
+                  ? "אין שינויים"
+                  : "אין הערה עדיין"}
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => void save()}
+            disabled={saving || !dirty}
+          >
+            {saving ? "שומר..." : "שמירת הערה"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
