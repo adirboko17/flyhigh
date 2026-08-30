@@ -202,7 +202,7 @@ async function prepareClassLine(
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)

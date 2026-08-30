@@ -169,8 +169,10 @@ export const PAYMENT_STATUS: Record<
 export function isAbandonedCardcomCharge(
   status: Enums<"payment_status">,
   paymentMethod: Enums<"payment_method"> | null | undefined,
-  cardcomReference?: string | null
+  cardcomReference?: string | null,
+  officeCollection?: boolean | null
 ): boolean {
+  if (officeCollection) return false;
   return (
     paymentMethod === "credit_card" &&
     (status === "pending" || status === "failed") &&
@@ -182,10 +184,16 @@ export function isAbandonedCardcomCharge(
 export function isCollectibleOpenCharge(
   status: Enums<"payment_status">,
   paymentMethod: Enums<"payment_method"> | null | undefined,
-  cardcomReference?: string | null
+  cardcomReference?: string | null,
+  officeCollection?: boolean | null
 ): boolean {
   if (status !== "pending" && status !== "partial") return false;
-  return !isAbandonedCardcomCharge(status, paymentMethod, cardcomReference);
+  return !isAbandonedCardcomCharge(
+    status,
+    paymentMethod,
+    cardcomReference,
+    officeCollection
+  );
 }
 
 /**
@@ -270,6 +278,24 @@ export function isDeferredPaymentMethod(
   return (
     method !== null &&
     (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(method)
+  );
+}
+
+/** אמצעי תשלום שאפשר לנהל בעמוד הגבייה — כולל מעבר לאשראי על חיוב משרדי. */
+export const COLLECTION_PAYMENT_METHODS = [
+  ...DEFERRED_PAYMENT_METHODS,
+  "credit_card",
+] as const satisfies readonly Enums<"payment_method">[];
+
+export type CollectionPaymentMethod =
+  (typeof COLLECTION_PAYMENT_METHODS)[number];
+
+export function isCollectionPaymentMethod(
+  method: Enums<"payment_method"> | null
+): method is CollectionPaymentMethod {
+  return (
+    method !== null &&
+    (COLLECTION_PAYMENT_METHODS as readonly string[]).includes(method)
   );
 }
 

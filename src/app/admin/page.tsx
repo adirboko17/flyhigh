@@ -72,7 +72,7 @@ export default async function AdminDashboard() {
     supabase
       .from("payments")
       .select(
-        "amount, status, payment_method, external_reference, payment_receipts(amount)"
+        "amount, status, payment_method, external_reference, office_collection, payment_receipts(amount)"
       )
       .in("status", ["pending", "partial"]),
     supabase
@@ -92,7 +92,7 @@ export default async function AdminDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "class_id, status, payment_status, payments(status, payment_method, external_reference)"
+        "class_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("type", "class")
       .eq("status", "active")
@@ -164,7 +164,8 @@ export default async function AdminDashboard() {
     isCollectibleOpenCharge(
       payment.status,
       payment.payment_method,
-      payment.external_reference
+      payment.external_reference,
+      payment.office_collection
     )
   );
   const openAmount = openCharges.reduce((sum, payment) => {

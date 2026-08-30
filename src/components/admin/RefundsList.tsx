@@ -10,8 +10,12 @@ import { Field, Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
-import { PAYMENT_STATUS } from "@/lib/constants";
-import { refundCardcomPayment } from "@/lib/payments/refundActions";
+import { PAYMENT_METHOD, PAYMENT_STATUS } from "@/lib/constants";
+import {
+  dismissPendingRefund,
+  issuePaymentRefund,
+  refundCardcomPayment,
+} from "@/lib/payments/refundActions";
 import type { Enums } from "@/types/database.types";
 import { formatCurrency, formatDate } from "@/utils/format";
 
@@ -23,6 +27,23 @@ export type RefundLine = {
   documentNumber: string | null;
   documentUrl: string | null;
   sentToEmail: string | null;
+};
+
+export type PendingRefund = {
+  id: string;
+  paymentId: string;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  parentName: string;
+  phone: string | null;
+  email: string | null;
+  subject: string;
+  childName: string | null;
+  paymentMethod: Enums<"payment_method"> | null;
+  paymentAmount: number;
+  remaining: number;
+  cardcomReference: string | null;
 };
 
 export type RefundTransaction = {
@@ -62,13 +83,19 @@ function refundBadge(transaction: RefundTransaction): {
 
 interface RefundsListProps {
   transactions: RefundTransaction[];
+  pendingRefunds: PendingRefund[];
   monthTitle: string;
 }
 
-export function RefundsList({ transactions, monthTitle }: RefundsListProps) {
+export function RefundsList({
+  transactions,
+  pendingRefunds,
+  monthTitle,
+}: RefundsListProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<RefundTransaction | null>(null);
+  const [activePending, setActivePending] = useState<PendingRefund | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,8 +127,100 @@ export function RefundsList({ transactions, monthTitle }: RefundsListProps) {
     ? (transactions.find((row) => row.id === active.id) ?? active)
     : null;
 
+  const currentPending = activePending
+    ? (pendingRefunds.find((row) => row.id === activePending.id) ?? activePending)
+    : null;
+
   return (
     <div className="space-y-6">
+      {pendingRefunds.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 bg-amber-50/70 px-4 py-4 sm:px-5">
+            <div>
+              <h2 className="font-display text-lg font-bold text-ink-900">
+                זיכויים בהמתנה
+              </h2>
+              <p className="text-sm text-ink-500">
+                לקוחות שהוסרו אחרי תשלום — אפשר להוציא זיכוי או למחוק מהרשימה
+              </p>
+            </div>
+            <Badge tone="warning">{pendingRefunds.length}</Badge>
+          </div>
+          <ul className="divide-y divide-ink-100">
+            {pendingRefunds.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink-900">{row.parentName}</p>
+                  <p className="mt-0.5 truncate text-sm text-ink-500">
+                    {row.subject}
+                    {row.childName ? ` · ${row.childName}` : ""}
+                  </p>
+                  {row.note && (
+                    <p className="mt-0.5 text-xs text-ink-400">{row.note}</p>
+                  )}
+                </div>
+                <div className="text-end">
+                  <p className="font-display text-lg font-bold tabular-nums text-ink-900">
+                    {formatCurrency(row.amount)}
+                  </p>
+                  <p className="text-xs text-ink-400">
+                    {row.paymentMethod
+                      ? PAYMENT_METHOD[row.paymentMethod]
+                      : "תשלום"}
+                    {" · "}
+                    {formatDate(row.createdAt)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busyId !== null}
+                    onClick={() => {
+                      setError(null);
+                      setActivePending(row);
+                    }}
+                  >
+                    הוצאת זיכוי
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-red-200 text-red-700 hover:bg-red-50"
+                    disabled={busyId !== null}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          "להסיר את הזיכוי בהמתנה בלי להוציא זיכוי?"
+                        )
+                      ) {
+                        return;
+                      }
+                      setBusyId(`dismiss:${row.id}`);
+                      void dismissPendingRefund({ pendingRefundId: row.id }).then(
+                        (result) => {
+                          setBusyId(null);
+                          if (!result.success) {
+                            setError(result.error ?? "המחיקה נכשלה.");
+                            return;
+                          }
+                          router.refresh();
+                        }
+                      );
+                    }}
+                  >
+                    {busyId === `dismiss:${row.id}` ? "מוחק..." : "הסרה"}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label="עסקאות אשראי"
@@ -249,7 +368,157 @@ export function RefundsList({ transactions, monthTitle }: RefundsListProps) {
           }}
         />
       )}
+
+      {currentPending && (
+        <PendingRefundDialog
+          pending={currentPending}
+          busy={busyId !== null}
+          onClose={() => setActivePending(null)}
+          onBusy={setBusyId}
+          onError={setError}
+          onDone={() => {
+            setActivePending(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function PendingRefundDialog({
+  pending,
+  busy,
+  onClose,
+  onBusy,
+  onError,
+  onDone,
+}: {
+  pending: PendingRefund;
+  busy: boolean;
+  onClose: () => void;
+  onBusy: (id: string | null) => void;
+  onError: (message: string | null) => void;
+  onDone: () => void;
+}) {
+  const suggested = Math.min(pending.amount, pending.remaining);
+  const [amount, setAmount] = useState(String(suggested));
+  const [note, setNote] = useState(pending.note ?? "");
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  async function submit() {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setLocalError("נא להזין סכום זיכוי חיובי.");
+      return;
+    }
+    if (value > pending.remaining) {
+      setLocalError(
+        `לא ניתן לזכות יותר מהיתרה (${formatCurrency(pending.remaining)}).`
+      );
+      return;
+    }
+
+    setLocalError(null);
+    onError(null);
+    onBusy(pending.id);
+    const result = await issuePaymentRefund({
+      paymentId: pending.paymentId,
+      amount: value,
+      note: note.trim() || null,
+      pendingRefundId: pending.id,
+    });
+    onBusy(null);
+
+    if (!result.success) {
+      const message = result.error ?? "הזיכוי נכשל. נסו שוב.";
+      setLocalError(message);
+      onError(message);
+      return;
+    }
+    if (result.warning) {
+      onError(result.warning);
+    }
+    onDone();
+  }
+
+  const methodLabel = pending.paymentMethod
+    ? PAYMENT_METHOD[pending.paymentMethod]
+    : "תשלום";
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="הוצאת זיכוי בהמתנה"
+      description={`${pending.parentName} · ${pending.subject}`}
+    >
+      <div className="space-y-5">
+        {pending.note && (
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-ink-700">
+            {pending.note}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-ink-50 p-3 text-center">
+          <div>
+            <p className="text-xs text-ink-500">שולם</p>
+            <p className="font-display text-base font-bold tabular-nums">
+              {formatCurrency(pending.paymentAmount)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-ink-500">מוצע לזיכוי</p>
+            <p className="font-display text-base font-bold tabular-nums text-amber-700">
+              {formatCurrency(suggested)}
+            </p>
+          </div>
+        </div>
+        <Field
+          label="סכום לזיכוי (₪)"
+          required
+          hint="אפשר להשאיר את הסכום היחסי או להקליד סכום אחר, עד היתרה ששולמה."
+        >
+          <Input
+            type="number"
+            min={0.01}
+            step="0.01"
+            max={pending.remaining}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+        <Field label="הערה (אופציונלי)">
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+        <p className="text-xs text-ink-500">
+          {pending.cardcomReference
+            ? "הזיכוי יוחזר לכרטיס האשראי בקארדקום ותופק חשבונית זיכוי."
+            : `תופק חשבונית זיכוי עבור תשלום ב${methodLabel}. ההחזר הכספי עצמו יטופל מול הלקוח.`}
+        </p>
+        {localError && (
+          <p className="text-sm text-red-600" role="alert">
+            {localError}
+          </p>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+            חזרה
+          </Button>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
+            {busy ? "מוציא זיכוי..." : "הוצאת זיכוי"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

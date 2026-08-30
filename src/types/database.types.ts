@@ -1127,6 +1127,7 @@ export type Database = {
           enrollment_id: string | null
           external_reference: string | null
           id: string
+          office_collection: boolean
           paid_at: string | null
           parent_id: string
           payment_method: Database["public"]["Enums"]["payment_method"] | null
@@ -1142,6 +1143,7 @@ export type Database = {
           enrollment_id?: string | null
           external_reference?: string | null
           id?: string
+          office_collection?: boolean
           paid_at?: string | null
           parent_id: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
@@ -1157,6 +1159,7 @@ export type Database = {
           enrollment_id?: string | null
           external_reference?: string | null
           id?: string
+          office_collection?: boolean
           paid_at?: string | null
           parent_id?: string
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
@@ -1192,6 +1195,68 @@ export type Database = {
             columns: ["receipt_label_id"]
             isOneToOne: false
             referencedRelation: "receipt_labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_refunds: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          enrollment_id: string | null
+          id: string
+          note: string | null
+          parent_id: string
+          payment_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          enrollment_id?: string | null
+          id?: string
+          note?: string | null
+          parent_id: string
+          payment_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          enrollment_id?: string | null
+          id?: string
+          note?: string | null
+          parent_id?: string
+          payment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_refunds_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_refunds_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_refunds_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: true
+            referencedRelation: "payments"
             referencedColumns: ["id"]
           },
         ]

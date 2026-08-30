@@ -711,6 +711,7 @@ export async function completePlanPurchase(input: {
         paid_at: deferred || awaitingCardcom ? null : paidAt,
         receipt_label_id: receiptLabel.labelId,
         receipt_description: receiptLabel.description ?? chargeDescription,
+        office_collection: deferred,
       }))
     )
     .select("id");

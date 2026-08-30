@@ -55,7 +55,12 @@ class CardcomPaymentProvider implements PaymentProvider {
       description: input.description,
       couponRedemptionId: input.couponRedemptionId,
       installments: input.installments,
-      source: input.metadata?.cart === true ? "cart" : null,
+      source:
+        input.metadata?.cart === true
+          ? "cart"
+          : input.metadata?.collections === true
+            ? "collections"
+            : null,
     });
 
     if (!checkout.success) {

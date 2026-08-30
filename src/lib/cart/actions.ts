@@ -422,6 +422,7 @@ export async function checkoutCart(input: {
               paid_at: deferred || awaitingCardcom ? null : paidAt,
               receipt_label_id: receiptLabel.labelId,
               receipt_description: description,
+              office_collection: deferred,
             };
           })
         )

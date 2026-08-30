@@ -21,6 +21,7 @@ import {
   AssignToClassDialog,
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
+import { CancelEnrollmentButton } from "@/components/admin/CancelEnrollmentButton";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
 import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
 import { CatalogOrderDialog } from "@/components/admin/CatalogOrderDialog";
@@ -1000,6 +1001,14 @@ export function ClassDetailPanel({
     };
   }, [cls.id]);
 
+  function refreshRoster() {
+    setRosterLoading(true);
+    loadClassRoster(cls.id).then((data) => {
+      setRoster(data);
+      setRosterLoading(false);
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
     setAttendance(cls.attendance);
@@ -1308,6 +1317,8 @@ export function ClassDetailPanel({
                 enrollments={filteredEnrollments}
                 cancelled={filteredCancelled}
                 searching={Boolean(q)}
+                classTitle={cls.title}
+                onRemoved={refreshRoster}
               />
             ) : (
               <EnrollmentsTab
@@ -1315,6 +1326,8 @@ export function ClassDetailPanel({
                 cancelled={filteredCancelled}
                 totalActive={enrollments.length}
                 searching={Boolean(q)}
+                classTitle={cls.title}
+                onRemoved={refreshRoster}
               />
             )
           ) : tab === "waitlist" &&
@@ -1372,11 +1385,7 @@ export function ClassDetailPanel({
           registered={enrollments.length}
           onClose={() => {
             setAssigning(null);
-            setRosterLoading(true);
-            loadClassRoster(cls.id).then((data) => {
-              setRoster(data);
-              setRosterLoading(false);
-            });
+            refreshRoster();
           }}
         />
       )}
@@ -1438,11 +1447,15 @@ function AppointmentEnrollmentsTab({
   enrollments,
   cancelled,
   searching,
+  classTitle,
+  onRemoved,
 }: {
   sessions: AdminRosterSession[];
   enrollments: AdminClassEnrollment[];
   cancelled: AdminClassEnrollment[];
   searching: boolean;
+  classTitle: string;
+  onRemoved: () => void;
 }) {
   const bySessionId = new Map(
     enrollments
@@ -1479,6 +1492,8 @@ function AppointmentEnrollmentsTab({
                 <EnrollmentRow
                   enrollment={enrollment}
                   hideSession
+                  classTitle={classTitle}
+                  onRemoved={onRemoved}
                 />
               ) : (
                 <p className="px-4 pb-3 pt-1 text-sm text-ink-400">פנוי</p>
@@ -1508,11 +1523,15 @@ function EnrollmentsTab({
   cancelled,
   totalActive,
   searching,
+  classTitle,
+  onRemoved,
 }: {
   active: AdminClassEnrollment[];
   cancelled: AdminClassEnrollment[];
   totalActive: number;
   searching: boolean;
+  classTitle: string;
+  onRemoved: () => void;
 }) {
   if (totalActive === 0 && cancelled.length === 0 && !searching) {
     return (
@@ -1539,6 +1558,8 @@ function EnrollmentsTab({
               key={enrollment.id}
               enrollment={enrollment}
               index={index + 1}
+              classTitle={classTitle}
+              onRemoved={onRemoved}
             />
           ))}
         </ul>
@@ -1569,11 +1590,15 @@ function EnrollmentRow({
   index,
   muted = false,
   hideSession = false,
+  classTitle,
+  onRemoved,
 }: {
   enrollment: AdminClassEnrollment;
   index?: number;
   muted?: boolean;
   hideSession?: boolean;
+  classTitle?: string;
+  onRemoved?: () => void;
 }) {
   const childName = enrollment.children?.full_name;
   const displayName = participantDisplayName(
@@ -1647,6 +1672,15 @@ function EnrollmentRow({
             </>
           )}
         </div>
+        {!muted && classTitle && onRemoved && (
+          <CancelEnrollmentButton
+            enrollmentId={enrollment.id}
+            title={classTitle}
+            participantName={displayName}
+            compact
+            onRemoved={onRemoved}
+          />
+        )}
         <span className="text-[10px] tabular-nums text-ink-400">
           {formatDate(enrollment.created_at)}
         </span>

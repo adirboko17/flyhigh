@@ -310,7 +310,7 @@ export async function completeClassEnrollmentPayment(input: {
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
@@ -618,6 +618,7 @@ export async function completeClassEnrollmentPayment(input: {
         paid_at: deferred || awaitingCardcom ? null : paidAt,
         receipt_label_id: receiptLabel.labelId,
         receipt_description: receiptLabel.description ?? chargeDescription,
+        office_collection: deferred,
       }))
     )
     .select("id");
@@ -745,7 +746,7 @@ export async function registerInterestForClass(input: {
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference)"
+          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", input.classId)
         .eq("parent_id", profile.id)

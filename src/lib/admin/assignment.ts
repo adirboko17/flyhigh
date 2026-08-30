@@ -146,7 +146,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       supabase
         .from("enrollments")
         .select(
-          "id, child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference)"
+          "id, child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", input.classId)
         .eq("parent_id", input.parentId)
@@ -337,6 +337,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
           paid_at: paidAt,
           receipt_label_id: receiptLabel.labelId,
           receipt_description: receiptLabel.description ?? chargeDescription,
+          office_collection: (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(
+            input.method
+          ),
         }))
       )
       .select("id");

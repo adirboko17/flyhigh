@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
+import { CancelEnrollmentButton } from "@/components/admin/CancelEnrollmentButton";
 import { loadCustomerRegistrations } from "@/lib/admin/customerRegistrations";
 import {
   REGISTRATION_KIND_LABEL,
@@ -31,6 +32,10 @@ export function CustomerRegistrations({
       cancelled = true;
     };
   }, [parentId, parentName]);
+
+  function reload() {
+    loadCustomerRegistrations(parentId, parentName).then(setRows);
+  }
 
   const current = useMemo(
     () => (rows ?? []).filter((row) => !row.muted),
@@ -99,7 +104,11 @@ export function CustomerRegistrations({
               </div>
               <ul className="divide-y divide-ink-100">
                 {section.items.map((row) => (
-                  <RegistrationRow key={row.id} row={row} />
+                  <RegistrationRow
+                    key={row.id}
+                    row={row}
+                    onRemoved={reload}
+                  />
                 ))}
               </ul>
             </Card>
@@ -125,7 +134,15 @@ export function CustomerRegistrations({
   );
 }
 
-function RegistrationRow({ row }: { row: CustomerRegistration }) {
+function RegistrationRow({
+  row,
+  onRemoved,
+}: {
+  row: CustomerRegistration;
+  onRemoved?: () => void;
+}) {
+  const canRemove = !row.muted && row.kind !== "waitlist" && onRemoved;
+
   return (
     <li
       className={`flex items-start justify-between gap-3 px-4 py-3 ${
@@ -155,6 +172,16 @@ function RegistrationRow({ row }: { row: CustomerRegistration }) {
           <Badge tone={row.paymentTone} className="px-1.5 py-0 text-[10px]">
             {row.paymentLabel}
           </Badge>
+        )}
+        {canRemove && (
+          <CancelEnrollmentButton
+            enrollmentId={row.id}
+            title={row.title}
+            participantName={row.participant}
+            actionLabel={row.kind === "class" ? "הסרה מהחוג" : "ביטול הרשמה"}
+            compact
+            onRemoved={onRemoved}
+          />
         )}
       </div>
     </li>

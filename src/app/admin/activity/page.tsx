@@ -27,7 +27,7 @@ export default async function AdminActivityPage() {
   const { data: enrollments } = await supabase
     .from("enrollments")
     .select(
-      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference)"
+      "id, parent_id, type, status, payment_status, admin_assigned, created_at, classes(title), programs(title), pool_passes(title), private_lessons(title), children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
     )
     .order("created_at", { ascending: false })
     .limit(200);

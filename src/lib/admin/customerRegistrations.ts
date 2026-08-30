@@ -49,7 +49,7 @@ export async function loadCustomerRegistrations(
     supabase
       .from("enrollments")
       .select(
-        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, session_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), class_sessions(session_date, start_time, end_time), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes), payments(status, payment_method, external_reference)"
+        "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, session_id, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), class_sessions(session_date, start_time, end_time), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes), payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),

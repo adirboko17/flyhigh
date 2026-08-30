@@ -10,7 +10,7 @@ import type {
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 
 const ENROLLMENT_SELECT =
-  "id, class_id, parent_id, child_id, weekly_slot_id, session_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference), class_sessions(session_date, start_time, end_time)";
+  "id, class_id, parent_id, child_id, weekly_slot_id, session_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection), class_sessions(session_date, start_time, end_time)";
 
 const WAITLIST_SELECT =
   "id, class_id, parent_id, child_id, weekly_slot_id, status, created_at, children(full_name), profiles(full_name, phone)";
@@ -85,7 +85,7 @@ export async function loadAdminClassSummary(
     supabase
       .from("enrollments")
       .select(
-        "weekly_slot_id, status, payment_status, payments(status, payment_method, external_reference)"
+        "weekly_slot_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("type", "class")
       .eq("class_id", classId)

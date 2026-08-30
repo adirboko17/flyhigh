@@ -12,9 +12,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
 import {
   addPaymentReceipt,
+  deleteCollectionCharge,
   deletePaymentReceipt,
   settleChargeRemaining,
   settleParentCharges,
+  startCollectionCardcomCheckout,
+  updateCollectionPaymentMethod,
   updatePaymentReceiptCustomText,
   updatePaymentReceiptLabel,
 } from "@/lib/collections/actions";
@@ -23,10 +26,11 @@ import {
   type ReceiptLabelOption,
 } from "@/lib/receipt-labels";
 import {
-  DEFERRED_PAYMENT_METHODS,
+  COLLECTION_PAYMENT_METHODS,
   PAYMENT_METHOD,
   PAYMENT_STATUS,
-  type DeferredPaymentMethod,
+  isDeferredPaymentMethod,
+  type CollectionPaymentMethod,
 } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
 import { cn } from "@/utils/cn";
@@ -44,7 +48,7 @@ export type CollectionCharge = {
   amount: number;
   amountPaid: number;
   remaining: number;
-  method: DeferredPaymentMethod;
+  method: CollectionPaymentMethod;
   status: Enums<"payment_status">;
   paidAt: string | null;
   createdAt: string;
@@ -80,8 +84,35 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "all", label: "הכל" },
 ];
 
+function openCheckoutTab() {
+  const tab = window.open("about:blank", "cardcom-checkout");
+  if (!tab) return null;
+  try {
+    tab.document.write(
+      `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>סליקה</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center;color:#334155">פותחים את דף הסליקה...</body></html>`
+    );
+    tab.document.close();
+  } catch {
+    // אם אי אפשר לכתוב לכרטיסייה — עדיין ננווט אליה בהמשך.
+  }
+  return tab;
+}
+
+function goToCheckout(url: string, tab: Window | null) {
+  if (tab && !tab.closed) {
+    tab.location.replace(url);
+    return true;
+  }
+  window.location.assign(url);
+  return false;
+}
+
 function isOpen(charge: CollectionCharge) {
   return charge.remaining > 0;
+}
+
+function canRemoveCharge(charge: CollectionCharge) {
+  return charge.receipts.length === 0;
 }
 
 function chargeStatusBadge(charge: CollectionCharge) {
@@ -121,7 +152,7 @@ export function CollectionsList({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [methodFilter, setMethodFilter] = useState<DeferredPaymentMethod[]>([]);
+  const [methodFilter, setMethodFilter] = useState<CollectionPaymentMethod[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeCharge, setActiveCharge] = useState<CollectionCharge | null>(null);
@@ -178,7 +209,7 @@ export function CollectionsList({
     const next = parents
       .flatMap((parent) => parent.charges)
       .find((charge) => charge.id === chargeId);
-    if (next) setActiveCharge(next);
+    setActiveCharge(next ?? null);
   }, [parents, activeCharge?.id]);
 
   function runAction(
@@ -192,13 +223,14 @@ export function CollectionsList({
       setBusyId(null);
       if (!result.success) {
         setError(result.error ?? "הפעולה נכשלה. נסו שוב.");
+        router.refresh();
         return;
       }
       router.refresh();
     });
   }
 
-  function toggleMethod(method: DeferredPaymentMethod) {
+  function toggleMethod(method: CollectionPaymentMethod) {
     setMethodFilter((current) =>
       current.includes(method)
         ? current.filter((m) => m !== method)
@@ -211,7 +243,7 @@ export function CollectionsList({
       <Card className="overflow-hidden">
         <div className="bg-brand-gradient px-5 py-4 text-white">
           <p className="text-xs font-medium text-white/70">
-            תשלומים שנגבים מול המשרד — מזומן, העברה בנקאית, מכבי ועמית
+            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, או אשראי במעמד הגבייה
           </p>
           <h1 className="font-display text-2xl font-bold leading-tight">גבייה</h1>
         </div>
@@ -267,7 +299,7 @@ export function CollectionsList({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {DEFERRED_PAYMENT_METHODS.map((method) => {
+            {COLLECTION_PAYMENT_METHODS.map((method) => {
               const active = methodFilter.includes(method);
               return (
                 <button
@@ -302,7 +334,7 @@ export function CollectionsList({
       {parents.length === 0 ? (
         <EmptyState
           title="אין עדיין חיובים לגבייה"
-          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית."
+          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לאשראי ולפתוח סליקה."
         />
       ) : visibleParents.length === 0 ? (
         <EmptyState
@@ -328,6 +360,11 @@ export function CollectionsList({
               onChangeCustomText={(paymentId, customText) =>
                 runAction(`custom:${paymentId}`, () =>
                   updatePaymentReceiptCustomText({ paymentId, customText })
+                )
+              }
+              onChangeMethod={(paymentId, method) =>
+                runAction(`method:${paymentId}`, () =>
+                  updateCollectionPaymentMethod({ paymentId, method })
                 )
               }
               onSettleAll={() =>
@@ -396,6 +433,7 @@ function ParentCard({
   onOpenNote,
   onChangeLabel,
   onChangeCustomText,
+  onChangeMethod,
   onSettleAll,
 }: {
   parent: CollectionParent;
@@ -406,9 +444,13 @@ function ParentCard({
   onOpenNote: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onChangeCustomText: (paymentId: string, customText: string) => void;
+  onChangeMethod: (paymentId: string, method: CollectionPaymentMethod) => void;
   onSettleAll: () => void;
 }) {
   const openCharges = parent.charges.filter(isOpen);
+  const deferredOpen = openCharges.filter((charge) =>
+    isDeferredPaymentMethod(charge.method)
+  );
   const hasDebt = parent.openAmount > 0;
 
   return (
@@ -470,7 +512,7 @@ function ParentCard({
               {formatCurrency(parent.openAmount)}
             </p>
           </div>
-          {openCharges.length > 1 && (
+          {deferredOpen.length > 1 && (
             <Button
               type="button"
               size="sm"
@@ -496,6 +538,7 @@ function ParentCard({
             onOpen={() => onOpenCharge(charge)}
             onChangeLabel={onChangeLabel}
             onChangeCustomText={onChangeCustomText}
+            onChangeMethod={onChangeMethod}
           />
         ))}
       </ul>
@@ -510,6 +553,7 @@ function ChargeRow({
   onOpen,
   onChangeLabel,
   onChangeCustomText,
+  onChangeMethod,
 }: {
   charge: CollectionCharge;
   receiptLabels: ReceiptLabelOption[];
@@ -517,15 +561,41 @@ function ChargeRow({
   onOpen: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onChangeCustomText: (paymentId: string, customText: string) => void;
+  onChangeMethod: (paymentId: string, method: CollectionPaymentMethod) => void;
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
+  const [method, setMethod] = useState(charge.method);
+
+  useEffect(() => {
+    setMethod(charge.method);
+  }, [charge.method]);
 
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
       <div className="w-full min-w-0 sm:flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <PaymentMethodBadge method={charge.method} />
+          {open ? (
+            <select
+              value={method}
+              disabled={disabled}
+              aria-label="אמצעי תשלום"
+              onChange={(e) => {
+                const next = e.target.value as CollectionPaymentMethod;
+                setMethod(next);
+                onChangeMethod(charge.id, next);
+              }}
+              className="h-8 max-w-full cursor-pointer rounded-full border border-ink-200 bg-white px-3 text-sm font-bold text-ink-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:bg-ink-50"
+            >
+              {COLLECTION_PAYMENT_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {PAYMENT_METHOD[method]}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <PaymentMethodBadge method={charge.method} />
+          )}
           {charge.childName ? (
             <Badge tone="brand" className="gap-1.5 text-sm">
               <Icon name="child" size={14} className="shrink-0 opacity-80" />
@@ -556,9 +626,14 @@ function ChargeRow({
           )}
         </div>
 
-        <p className="mt-2 break-words font-medium text-ink-900">
-          {charge.subject}
-        </p>
+        <div className="mt-2 flex items-center gap-1.5">
+          <p className="min-w-0 break-words font-medium text-ink-900">
+            {charge.subject}
+          </p>
+          {canRemoveCharge(charge) && (
+            <RemoveChargeButton charge={charge} disabled={disabled} iconOnly />
+          )}
+        </div>
         <p className="mt-0.5 text-xs text-ink-400">
           נרשם {formatDate(charge.createdAt)}
           {charge.receipts.length > 0 &&
@@ -656,6 +731,7 @@ function ChargeReceiptDialog({
   }, [charge.id, charge.remaining, open]);
 
   const busy = disabled || busyId !== null;
+  const isCard = charge.method === "credit_card";
 
   function run(
     key: string,
@@ -709,6 +785,36 @@ function ChargeReceiptDialog({
         note: note.trim() || null,
       })
     );
+  }
+
+  function submitCardcom() {
+    if (!open) return;
+    const tab = openCheckoutTab();
+    setLocalError(null);
+    onError(null);
+    onBusy(`cardcom:${charge.id}`);
+    void (async () => {
+      const result = await startCollectionCardcomCheckout({
+        paymentId: charge.id,
+      });
+      onBusy(null);
+      if (!result.success || !result.checkoutUrl) {
+        try {
+          tab?.close();
+        } catch {
+          // הכרטיסייה אולי כבר נסגרה.
+        }
+        const message = result.success
+          ? "לא הצלחנו לפתוח את דף הסליקה."
+          : (result.error ?? "לא הצלחנו לפתוח את דף הסליקה.");
+        setLocalError(message);
+        onError(message);
+        return;
+      }
+      goToCheckout(result.checkoutUrl, tab);
+      onDone();
+      onClose();
+    })();
   }
 
   return (
@@ -766,52 +872,74 @@ function ChargeReceiptDialog({
 
         {open && (
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="סכום שהתקבל (₪)" required>
-                <Input
-                  type="number"
-                  min={0.01}
-                  step="0.01"
-                  max={charge.remaining}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+            {isCard ? (
+              <>
+                <ReceiptLabelSelect
+                  charge={charge}
+                  labels={receiptLabels}
                   disabled={busy}
-                  required
+                  onChange={(labelId) => onChangeLabel(charge.id, labelId)}
                 />
-              </Field>
-              <Field label="תאריך קבלה" required>
-                <Input
-                  type="date"
-                  value={receivedDate}
-                  onChange={(e) => setReceivedDate(e.target.value)}
+                <ReceiptCustomTextField
+                  charge={charge}
                   disabled={busy}
-                  required
+                  onSave={(text) => onChangeCustomText(charge.id, text)}
                 />
-              </Field>
-            </div>
-            <Field label="הערה (אופציונלי)">
-              <Input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="למשל: מזומן במשרד"
-                disabled={busy}
-              />
-            </Field>
-            <ReceiptLabelSelect
-              charge={charge}
-              labels={receiptLabels}
-              disabled={busy}
-              onChange={(labelId) => onChangeLabel(charge.id, labelId)}
-            />
-            <ReceiptCustomTextField
-              charge={charge}
-              disabled={busy}
-              onSave={(text) => onChangeCustomText(charge.id, text)}
-            />
-            <p className="text-xs leading-relaxed text-ink-500">
-              עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
-              תישלח למייל הלקוח, ותישלח התראה גם אליכם.
-            </p>
+                <p className="text-xs leading-relaxed text-ink-500">
+                  רישום התקבול יפתח את דף הסליקה של קארדקום על היתרה
+                  ({formatCurrency(charge.remaining)}) עבור הלקוח הזה.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="סכום שהתקבל (₪)" required>
+                    <Input
+                      type="number"
+                      min={0.01}
+                      step="0.01"
+                      max={charge.remaining}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      disabled={busy}
+                      required
+                    />
+                  </Field>
+                  <Field label="תאריך קבלה" required>
+                    <Input
+                      type="date"
+                      value={receivedDate}
+                      onChange={(e) => setReceivedDate(e.target.value)}
+                      disabled={busy}
+                      required
+                    />
+                  </Field>
+                </div>
+                <Field label="הערה (אופציונלי)">
+                  <Input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="למשל: מזומן במשרד"
+                    disabled={busy}
+                  />
+                </Field>
+                <ReceiptLabelSelect
+                  charge={charge}
+                  labels={receiptLabels}
+                  disabled={busy}
+                  onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+                />
+                <ReceiptCustomTextField
+                  charge={charge}
+                  disabled={busy}
+                  onSave={(text) => onChangeCustomText(charge.id, text)}
+                />
+                <p className="text-xs leading-relaxed text-ink-500">
+                  עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
+                  תישלח למייל הלקוח, ותישלח התראה גם אליכם.
+                </p>
+              </>
+            )}
 
             {localError && (
               <p role="alert" className="text-sm font-medium text-red-600">
@@ -820,23 +948,37 @@ function ChargeReceiptDialog({
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                disabled={busy}
-                onClick={() => submitReceipt(false)}
-              >
-                {busyId === `add:${charge.id}` ? "רושם..." : "רישום תקבול"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={() => submitReceipt(true)}
-              >
-                {busyId === `settle:${charge.id}`
-                  ? "סוגר..."
-                  : `סגירת יתרה (${formatCurrency(charge.remaining)})`}
-              </Button>
+              {isCard ? (
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={submitCardcom}
+                >
+                  {busyId === `cardcom:${charge.id}`
+                    ? "פותח סליקה..."
+                    : "רישום תקבול"}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => submitReceipt(false)}
+                  >
+                    {busyId === `add:${charge.id}` ? "רושם..." : "רישום תקבול"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => submitReceipt(true)}
+                  >
+                    {busyId === `settle:${charge.id}`
+                      ? "סוגר..."
+                      : `סגירת יתרה (${formatCurrency(charge.remaining)})`}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -883,6 +1025,19 @@ function ChargeReceiptDialog({
             </ul>
           )}
         </div>
+
+        {canRemoveCharge(charge) && (
+          <div className="border-t border-ink-100 pt-4">
+            <p className="mb-2 text-xs text-ink-500">
+              חיוב שנפתח בטעות אפשר להסיר כל עוד לא נרשמו תקבולים.
+            </p>
+            <RemoveChargeButton
+              charge={charge}
+              disabled={busy}
+              onRemoved={onClose}
+            />
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -1041,16 +1196,17 @@ function ReceiptCustomTextField({
 }
 
 const METHOD_BADGE: Record<
-  DeferredPaymentMethod,
+  CollectionPaymentMethod,
   { tone: "warning" | "info" | "brand" | "success"; ring: string }
 > = {
   cash: { tone: "warning", ring: "ring-amber-200" },
   bank_transfer: { tone: "info", ring: "ring-sky-200" },
   maccabi: { tone: "brand", ring: "ring-brand-200" },
   amit: { tone: "success", ring: "ring-aqua-200" },
+  credit_card: { tone: "brand", ring: "ring-violet-200" },
 };
 
-function PaymentMethodBadge({ method }: { method: DeferredPaymentMethod }) {
+function PaymentMethodBadge({ method }: { method: CollectionPaymentMethod }) {
   const style = METHOD_BADGE[method];
 
   return (
@@ -1089,6 +1245,115 @@ function StatTile({
         {value}
       </p>
     </div>
+  );
+}
+
+function RemoveChargeButton({
+  charge,
+  disabled,
+  iconOnly = false,
+  onRemoved,
+}: {
+  charge: CollectionCharge;
+  disabled: boolean;
+  iconOnly?: boolean;
+  onRemoved?: () => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRemove() {
+    setLoading(true);
+    setError(null);
+    const result = await deleteCollectionCharge({ paymentId: charge.id });
+    setLoading(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setOpen(false);
+    onRemoved?.();
+    router.refresh();
+  }
+
+  const who = charge.childName
+    ? `${charge.subject} · ${charge.childName}`
+    : charge.subject;
+
+  function openConfirm() {
+    setError(null);
+    setOpen(true);
+  }
+
+  return (
+    <>
+      {iconOnly ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={openConfirm}
+          aria-label="הסרת חיוב מהגבייה"
+          title="הסרה"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-50"
+        >
+          <Icon name="trash" size={16} />
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-red-700 hover:bg-red-50"
+          disabled={disabled}
+          onClick={openConfirm}
+        >
+          <Icon name="trash" size={15} />
+          הסרת חיוב
+        </Button>
+      )}
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!loading) setOpen(false);
+        }}
+        title="הסרת חיוב מהגבייה"
+        description={who}
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-ink-600">
+            החיוב יוסר מרשימת הגבייה. אם יש הרשמה מקושרת שעדיין פעילה, היא
+            תבוטל גם כן — למשל שיבוץ שנעשה בטעות.
+          </p>
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setOpen(false)}
+            >
+              חזרה
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={loading}
+              onClick={() => void handleRemove()}
+            >
+              {loading ? "מסיר..." : "הסרת החיוב"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

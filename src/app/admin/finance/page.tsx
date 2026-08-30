@@ -126,7 +126,7 @@ export default async function AdminFinancePage({
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, office_collection, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
       )
       // חלון המגמה, ובנוסף כל חוב פתוח/חלקי בלי תלות בתאריך.
       .or(
@@ -229,7 +229,8 @@ export default async function AdminFinancePage({
     isCollectibleOpenCharge(
       p.status,
       p.payment_method,
-      p.external_reference
+      p.external_reference,
+      p.office_collection
     )
   );
   const openTotal = openCharges.reduce((sum, p) => {
@@ -248,7 +249,8 @@ export default async function AdminFinancePage({
       !isAbandonedCardcomCharge(
         p.status,
         p.payment_method,
-        p.external_reference
+        p.external_reference,
+        p.office_collection
       )
   );
 

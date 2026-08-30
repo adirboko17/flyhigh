@@ -4,7 +4,10 @@ import {
   type CollectionParent,
   type CollectionReceipt,
 } from "@/components/admin/CollectionsList";
-import { DEFERRED_PAYMENT_METHODS, isDeferredPaymentMethod } from "@/lib/constants";
+import {
+  DEFERRED_PAYMENT_METHODS,
+  isCollectionPaymentMethod,
+} from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
 import type { ReceiptLabelOption } from "@/lib/receipt-labels";
 import { addDays, todayInIsrael } from "@/lib/scheduling/monthGrid";
@@ -28,9 +31,11 @@ export default async function AdminCollectionsPage() {
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
+        "id, amount, payment_method, office_collection, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
       )
-      .in("payment_method", [...DEFERRED_PAYMENT_METHODS])
+      .or(
+        `payment_method.in.(${DEFERRED_PAYMENT_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
+      )
       .or(
         `status.in.(pending,partial),and(status.eq.paid,paid_at.gte.${paidSince})`
       )
@@ -48,7 +53,13 @@ export default async function AdminCollectionsPage() {
   const byParent = new Map<string, CollectionParent>();
 
   for (const charge of charges ?? []) {
-    if (!isDeferredPaymentMethod(charge.payment_method)) continue;
+    if (!isCollectionPaymentMethod(charge.payment_method)) continue;
+    if (
+      charge.payment_method === "credit_card" &&
+      charge.office_collection !== true
+    ) {
+      continue;
+    }
 
     const enrollment = charge.enrollments;
     const amount = Number(charge.amount);

@@ -5,7 +5,9 @@ import { getSessionProfile } from "@/lib/auth";
 import {
   DEFERRED_PAYMENT_METHODS,
   PAYMENT_METHOD,
+  isCollectionPaymentMethod,
   isDeferredPaymentMethod,
+  type CollectionPaymentMethod,
 } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
 import {
@@ -13,15 +15,21 @@ import {
   isCardcomConfigured,
 } from "@/lib/integrations/cardcom";
 import { resolveReceiptLabelForCheckout } from "@/lib/enrollment/receiptLabel";
+import {
+  cancelAdminEnrollment,
+  revalidateAfterEnrollmentChange,
+} from "@/lib/admin/enrollmentActions";
+import { paymentHasRecordedMoney } from "@/lib/payments/recordedMoney";
 import { composeReceiptLine } from "@/lib/receipt-labels";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
+import { getPaymentProvider } from "@/lib/integrations/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database.types";
 
 export type CollectionActionResult =
-  | { success: true }
+  | { success: true; checkoutUrl?: string }
   | { success: false; error: string };
 
 const NOT_ALLOWED: CollectionActionResult = {
@@ -50,6 +58,8 @@ type ChargeRow = {
   amount: number;
   parent_id: string;
   payment_method: Enums<"payment_method"> | null;
+  office_collection: boolean;
+  checkout_id: string | null;
   receipt_description: string | null;
   receipt_custom_text: string | null;
   enrollments: {
@@ -64,7 +74,7 @@ type ChargeRow = {
 };
 
 const CHARGE_SELECT =
-  "id, amount, parent_id, payment_method, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
+  "id, amount, parent_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
 
 function remainingOf(charge: ChargeRow) {
   const paid = (charge.payment_receipts ?? []).reduce(
@@ -82,7 +92,7 @@ function chargeProduct(charge: ChargeRow) {
   });
 }
 
-async function loadDeferredCharge(
+async function loadCollectionCharge(
   supabase: Awaited<ReturnType<typeof createClient>>,
   paymentId: string
 ): Promise<{ charge: ChargeRow } | { error: string }> {
@@ -95,11 +105,45 @@ async function loadDeferredCharge(
   if (!charge) {
     return { error: "החיוב לא נמצא." };
   }
-  if (!isDeferredPaymentMethod(charge.payment_method)) {
+  if (!isCollectionManagedCharge(charge)) {
     return { error: "חיוב זה אינו מנוהל דרך רשימת הגבייה." };
   }
 
   return { charge: charge as ChargeRow };
+}
+
+function isCollectionManagedCharge(charge: {
+  payment_method: Enums<"payment_method"> | null;
+  office_collection?: boolean | null;
+}) {
+  if (isDeferredPaymentMethod(charge.payment_method)) return true;
+  return (
+    charge.payment_method === "credit_card" && charge.office_collection === true
+  );
+}
+
+async function unlinkPendingCheckout(checkoutId: string | null) {
+  if (!checkoutId) return;
+  const admin = createAdminClient();
+  const { data: checkout } = await admin
+    .from("payment_checkouts")
+    .select("id, status")
+    .eq("id", checkoutId)
+    .maybeSingle();
+  if (!checkout || checkout.status !== "pending") return;
+
+  await admin
+    .from("payments")
+    .update({ checkout_id: null })
+    .eq("checkout_id", checkout.id);
+
+  await admin
+    .from("payment_checkouts")
+    .update({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", checkout.id);
 }
 
 async function issueCollectionDocument(input: {
@@ -232,9 +276,16 @@ export async function addPaymentReceipt(input: {
   }
 
   const supabase = await createClient();
-  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
   if ("error" in loaded) {
     return { success: false, error: loaded.error };
+  }
+
+  if (loaded.charge.payment_method === "credit_card") {
+    return {
+      success: false,
+      error: "לחיוב באשראי יש לפתוח סליקה בקארדקום, לא לרשום תקבול מזומן.",
+    };
   }
 
   const remaining = remainingOf(loaded.charge);
@@ -275,7 +326,7 @@ export async function deletePaymentReceipt(input: {
   const supabase = await createClient();
   const { data: receipt } = await supabase
     .from("payment_receipts")
-    .select("id, payment_id, payments(payment_method)")
+    .select("id, payment_id, payments(payment_method, office_collection)")
     .eq("id", input.receiptId)
     .maybeSingle();
 
@@ -283,8 +334,7 @@ export async function deletePaymentReceipt(input: {
     return { success: false, error: "התקבול לא נמצא." };
   }
 
-  const method = receipt.payments?.payment_method ?? null;
-  if (!isDeferredPaymentMethod(method)) {
+  if (!isCollectionManagedCharge(receipt.payments ?? {})) {
     return { success: false, error: "תקבול זה אינו מנוהל דרך רשימת הגבייה." };
   }
 
@@ -310,7 +360,7 @@ export async function settleChargeRemaining(input: {
   if (!profile) return NOT_ALLOWED;
 
   const supabase = await createClient();
-  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
   if ("error" in loaded) {
     return { success: false, error: loaded.error };
   }
@@ -376,7 +426,7 @@ export async function updatePaymentReceiptLabel(input: {
   if (!profile) return NOT_ALLOWED;
 
   const supabase = await createClient();
-  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
   if ("error" in loaded) {
     return { success: false, error: loaded.error };
   }
@@ -414,7 +464,7 @@ export async function updatePaymentReceiptCustomText(input: {
   if (!profile) return NOT_ALLOWED;
 
   const supabase = await createClient();
-  const loaded = await loadDeferredCharge(supabase, input.paymentId);
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
   if ("error" in loaded) {
     return { success: false, error: loaded.error };
   }
@@ -431,3 +481,186 @@ export async function updatePaymentReceiptCustomText(input: {
   revalidatePath("/admin/collections");
   return { success: true };
 }
+
+/**
+ * מוחק חיוב שנפתח בטעות בגבייה — רק אם לא נרשמו תקבולים ולא הופקה חשבונית.
+ * אם יש הרשמה מקושרת, היא מבוטלת גם כן.
+ */
+export async function deleteCollectionCharge(input: {
+  paymentId: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const { data: charge } = await supabase
+    .from("payments")
+    .select(
+      "id, status, payment_method, office_collection, enrollment_id, external_reference, payment_receipts(id), payment_refunds(id)"
+    )
+    .eq("id", input.paymentId)
+    .maybeSingle();
+
+  if (!charge) {
+    return { success: false, error: "החיוב לא נמצא." };
+  }
+  if (!isCollectionManagedCharge(charge)) {
+    return { success: false, error: "חיוב זה אינו מנוהל דרך רשימת הגבייה." };
+  }
+
+  const { data: documents } = await supabase
+    .from("receipts")
+    .select("id")
+    .eq("payment_id", charge.id);
+
+  if (
+    paymentHasRecordedMoney({
+      ...charge,
+      documentIds: (documents ?? []).map((row) => row.id),
+    })
+  ) {
+    return {
+      success: false,
+      error:
+        "לא ניתן להסיר חיוב שכבר נרשמו לו תקבולים או הופקה חשבונית. מחקו תקבולים רק אם זו טעות בספרים, או השאירו לתיעוד.",
+    };
+  }
+
+  if (charge.enrollment_id) {
+    return cancelAdminEnrollment(charge.enrollment_id);
+  }
+
+  const { error } = await supabase.from("payments").delete().eq("id", charge.id);
+  if (error) {
+    return { success: false, error: "הסרת החיוב נכשלה. נסו שוב." };
+  }
+
+  await revalidateAfterEnrollmentChange();
+  return { success: true };
+}
+
+/** מעדכן את אמצעי התשלום של חיוב פתוח בגבייה. */
+export async function updateCollectionPaymentMethod(input: {
+  paymentId: string;
+  method: CollectionPaymentMethod;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  if (!isCollectionPaymentMethod(input.method)) {
+    return { success: false, error: "אמצעי התשלום שנבחר אינו תקין." };
+  }
+
+  if (input.method === "credit_card" && !isCardcomConfigured()) {
+    return {
+      success: false,
+      error: "קארדקום אינו מוגדר — לא ניתן לעבור לתשלום באשראי.",
+    };
+  }
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  if (remainingOf(loaded.charge) <= 0) {
+    return { success: false, error: "לא ניתן לשנות אמצעי תשלום לחיוב שכבר שולם." };
+  }
+
+  if (loaded.charge.payment_method === input.method) {
+    return { success: true };
+  }
+
+  const switchingAwayFromCard =
+    loaded.charge.payment_method === "credit_card" &&
+    input.method !== "credit_card";
+
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      payment_method: input.method,
+      office_collection: true,
+      ...(switchingAwayFromCard ? { checkout_id: null } : {}),
+    })
+    .eq("id", input.paymentId);
+
+  if (error) {
+    return { success: false, error: "עדכון אמצעי התשלום נכשל. נסו שוב." };
+  }
+
+  if (switchingAwayFromCard) {
+    await unlinkPendingCheckout(loaded.charge.checkout_id);
+  }
+
+  revalidatePath("/admin/collections");
+  return { success: true };
+}
+
+/**
+ * פותח דף סליקה של קארדקום על יתרת חיוב בגבייה שעודכן לאשראי.
+ */
+export async function startCollectionCardcomCheckout(input: {
+  paymentId: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  if (!isCardcomConfigured()) {
+    return { success: false, error: "קארדקום אינו מוגדר — לא ניתן לפתוח סליקה." };
+  }
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  if (loaded.charge.payment_method !== "credit_card") {
+    return {
+      success: false,
+      error: "יש לבחור אשראי כאמצעי התשלום לפני הסליקה.",
+    };
+  }
+
+  const remaining = remainingOf(loaded.charge);
+  if (remaining <= 0) {
+    return { success: false, error: "החיוב כבר שולם במלואו." };
+  }
+
+  if (loaded.charge.checkout_id) {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("payment_checkouts")
+      .select("id, status, amount, payment_url")
+      .eq("id", loaded.charge.checkout_id)
+      .maybeSingle();
+    if (
+      existing?.status === "pending" &&
+      existing.payment_url &&
+      Math.abs(Number(existing.amount) - remaining) <= 0.05
+    ) {
+      return { success: true, checkoutUrl: existing.payment_url };
+    }
+  }
+
+  const charge = await getPaymentProvider().createCharge({
+    amount: remaining,
+    description: chargeProduct(loaded.charge),
+    parentId: loaded.charge.parent_id,
+    method: "credit_card",
+    paymentIds: [loaded.charge.id],
+    metadata: { collections: true },
+  });
+
+  if (!charge.success || !charge.redirectUrl) {
+    return {
+      success: false,
+      error: charge.error || "לא הצלחנו לפתוח את דף התשלום. נסו שוב.",
+    };
+  }
+
+  revalidatePath("/admin/collections");
+  return { success: true, checkoutUrl: charge.redirectUrl };
+}
+

@@ -130,7 +130,12 @@ export default async function ParentDashboard() {
   );
 
   const openPayments = allPayments.filter((p) =>
-    isCollectibleOpenCharge(p.status, p.payment_method, p.external_reference)
+    isCollectibleOpenCharge(
+      p.status,
+      p.payment_method,
+      p.external_reference,
+      p.office_collection
+    )
   );
   const openAmount = sumAmount(openPayments);
   const paidAmount = sumAmount(allPayments.filter((p) => p.status === "paid"));

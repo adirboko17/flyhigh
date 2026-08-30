@@ -6,6 +6,7 @@ export type SeatPayment = {
   status: Enums<"payment_status">;
   payment_method: Enums<"payment_method"> | null;
   external_reference?: string | null;
+  office_collection?: boolean | null;
 };
 
 export type SeatEnrollment = {
@@ -36,7 +37,8 @@ export function isAbandonedCardcomEnrollment(
     isAbandonedCardcomCharge(
       payment.status,
       payment.payment_method,
-      payment.external_reference
+      payment.external_reference,
+      payment.office_collection
     )
   );
 }
@@ -62,18 +64,29 @@ export function enrollmentHoldsSeat(enrollment: SeatEnrollment): boolean {
   return (enrollment.payments ?? []).some((payment) => {
     if (payment.status === "paid" || payment.status === "partial") return true;
     if (payment.status !== "pending") return false;
-    if (isAbandonedCardcomCharge(payment.status, payment.payment_method, payment.external_reference)) {
+    if (
+      isAbandonedCardcomCharge(
+        payment.status,
+        payment.payment_method,
+        payment.external_reference,
+        payment.office_collection
+      )
+    ) {
       return false;
     }
     return (
       isDeferredPaymentMethod(payment.payment_method) ||
+      payment.office_collection === true ||
       payment.payment_method !== "credit_card"
     );
   });
 }
 
+export const SEAT_PAYMENT_FIELDS =
+  "status, payment_method, external_reference, office_collection";
+
 const SEAT_SELECT =
-  "id, status, payment_status, payments(status, payment_method, external_reference)";
+  `id, status, payment_status, payments(${SEAT_PAYMENT_FIELDS})`;
 
 export async function countHeldSeats(
   supabase: SupabaseClient<Database>,

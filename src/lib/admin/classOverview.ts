@@ -94,7 +94,7 @@ export async function loadClassOverview(): Promise<ClassOverviewData> {
     supabase
       .from("enrollments")
       .select(
-        "id, class_id, weekly_slot_id, session_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference), class_sessions(session_date, start_time, end_time)"
+        "id, class_id, weekly_slot_id, session_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection), class_sessions(session_date, start_time, end_time)"
       )
       .eq("type", "class")
       .in("status", ["active", "pending"])

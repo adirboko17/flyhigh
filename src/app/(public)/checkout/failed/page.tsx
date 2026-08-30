@@ -22,11 +22,12 @@ export default async function CheckoutFailedPage({
 
   const checkoutId = extractCardcomCheckoutId(query);
   const fromCart = query.get("from") === "cart";
+  const fromCollections = query.get("from") === "collections";
 
   if (checkoutId) {
     if (fromCart) {
       await releaseAbandonedCartCheckout(checkoutId).catch(() => null);
-    } else {
+    } else if (!fromCollections) {
       await voidUnpaidCardcomCheckout({ checkoutId }).catch(() => null);
     }
   }
@@ -43,11 +44,25 @@ export default async function CheckoutFailedPage({
         <p className="mt-2 text-sm text-ink-500">
           {fromCart
             ? "לא בוצע חיוב. הפריטים נשארו בסל — אפשר לנסות שוב."
-            : "לא בוצע חיוב, וההרשמה לא נשמרה. אפשר לנסות שוב מההתחלה."}
+            : fromCollections
+              ? "לא בוצע חיוב. אפשר לסגור את החלון ולנסות שוב מעמוד הגבייה."
+              : "לא בוצע חיוב, וההרשמה לא נשמרה. אפשר לנסות שוב מההתחלה."}
         </p>
         <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <ButtonLink href={fromCart ? "/cart" : "/parent/dashboard"}>
-            {fromCart ? "חזרה לסל" : "לניסיון תשלום נוסף"}
+          <ButtonLink
+            href={
+              fromCart
+                ? "/cart"
+                : fromCollections
+                  ? "/admin/collections"
+                  : "/parent/dashboard"
+            }
+          >
+            {fromCart
+              ? "חזרה לסל"
+              : fromCollections
+                ? "חזרה לגבייה"
+                : "לניסיון תשלום נוסף"}
           </ButtonLink>
           <ButtonLink href="/contact" variant="outline">
             צור קשר

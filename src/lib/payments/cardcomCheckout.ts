@@ -27,6 +27,17 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function remainingOfPayment(payment: {
+  amount: number;
+  payment_receipts?: { amount: number }[] | null;
+}) {
+  const paid = (payment.payment_receipts ?? []).reduce(
+    (sum, receipt) => sum + Number(receipt.amount),
+    0
+  );
+  return round2(Math.max(0, Number(payment.amount) - paid));
+}
+
 export async function loadCustomer(parentId: string): Promise<CardcomCustomer> {
   const admin = createAdminClient();
   const { data } = await admin
@@ -56,7 +67,7 @@ export async function startCardcomCheckout(input: {
   description: string;
   couponRedemptionId?: string | null;
   installments?: CardcomInstallments | null;
-  source?: "cart" | null;
+  source?: "cart" | "collections" | null;
 }): Promise<CardcomCheckoutResult> {
   const amount = round2(input.amount);
   const paymentIds = [...new Set(input.paymentIds.filter(Boolean))];
@@ -68,7 +79,7 @@ export async function startCardcomCheckout(input: {
   const admin = createAdminClient();
   const { data: payments, error: paymentsError } = await admin
     .from("payments")
-    .select("id, amount, status, parent_id")
+    .select("id, amount, status, parent_id, payment_receipts(amount)")
     .in("id", paymentIds);
 
   if (paymentsError || !payments || payments.length !== paymentIds.length) {
@@ -79,13 +90,13 @@ export async function startCardcomCheckout(input: {
     return { success: false, error: "החיובים אינם שייכים ללקוח שנבחר." };
   }
 
-  const open = payments.filter((payment) => payment.status === "pending");
+  const open = payments.filter((payment) => remainingOfPayment(payment) > 0);
   if (open.length === 0) {
     return { success: false, error: "החיובים האלה כבר שולמו." };
   }
 
   const openAmount = round2(
-    open.reduce((sum, payment) => sum + Number(payment.amount), 0)
+    open.reduce((sum, payment) => sum + remainingOfPayment(payment), 0)
   );
   if (Math.abs(openAmount - amount) > 0.05) {
     return { success: false, error: "סכום החיוב אינו תואם את התשלומים הפתוחים." };
@@ -258,16 +269,21 @@ export async function settleCardcomCheckout(input: {
   const documentUrl = cardcomDocumentUrl(result);
   const { data: payments } = await admin
     .from("payments")
-    .select("id, amount, status, parent_id, enrollment_id")
+    .select("id, amount, status, parent_id, enrollment_id, payment_receipts(amount)")
     .eq("checkout_id", checkout.id);
 
-  const pending = (payments ?? []).filter((payment) => payment.status === "pending");
+  const toSettle = (payments ?? [])
+    .map((payment) => ({
+      ...payment,
+      remaining: remainingOfPayment(payment),
+    }))
+    .filter((payment) => payment.remaining > 0);
 
-  if (pending.length > 0) {
+  if (toSettle.length > 0) {
     const { error: receiptError } = await admin.from("payment_receipts").insert(
-      pending.map((payment) => ({
+      toSettle.map((payment) => ({
         payment_id: payment.id,
-        amount: Number(payment.amount),
+        amount: payment.remaining,
         note: "סליקת קארדקום",
       }))
     );
@@ -284,10 +300,10 @@ export async function settleCardcomCheckout(input: {
       })
       .in(
         "id",
-        pending.map((payment) => payment.id)
+        toSettle.map((payment) => payment.id)
       );
 
-    const receiptRows = pending.map((payment) => ({
+    const receiptRows = toSettle.map((payment) => ({
       parent_id: payment.parent_id,
       payment_id: payment.id,
       receipt_number: documentNumber,
@@ -301,7 +317,7 @@ export async function settleCardcomCheckout(input: {
 
     const enrollmentIds = [
       ...new Set(
-        pending
+        toSettle
           .map((payment) => payment.enrollment_id)
           .filter((id): id is string => Boolean(id))
       ),
@@ -391,7 +407,9 @@ export async function voidUnpaidCardcomCheckout(input: {
 
   const { data: payments } = await admin
     .from("payments")
-    .select("id, enrollment_id, status, payment_method, external_reference")
+    .select(
+      "id, enrollment_id, status, payment_method, external_reference, office_collection"
+    )
     .eq("checkout_id", checkout.id);
 
   const rows = payments ?? [];
@@ -416,7 +434,8 @@ export async function voidUnpaidCardcomCheckout(input: {
         !isAbandonedCardcomCharge(
           payment.status,
           payment.payment_method,
-          payment.external_reference
+          payment.external_reference,
+          payment.office_collection
         )
     )
   ) {

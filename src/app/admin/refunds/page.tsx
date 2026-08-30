@@ -1,4 +1,4 @@
-import { RefundsList, type RefundTransaction } from "@/components/admin/RefundsList";
+import { RefundsList, type PendingRefund, type RefundTransaction } from "@/components/admin/RefundsList";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { subjectLabel } from "@/lib/finance/subject";
@@ -36,17 +36,25 @@ export default async function AdminRefundsPage({
   const monthTitle = monthLabel(month);
 
   const supabase = await createAdminDataClient();
-  const { data: payments } = await supabase
-    .from("payments")
-    .select(
-      "id, amount, status, paid_at, created_at, parent_id, external_reference, receipt_description, profiles(full_name, phone, email), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_checkouts(transaction_id), payment_refunds(id, amount, created_at, note, document_number, document_url, sent_to_email)"
-    )
-    .eq("payment_method", "credit_card")
-    .in("status", ["paid", "refunded", "partial"])
-    .or(
-      `and(paid_at.gte.${queryStart}T00:00:00,paid_at.lte.${queryEnd}T23:59:59),and(paid_at.is.null,created_at.gte.${queryStart}T00:00:00,created_at.lte.${queryEnd}T23:59:59)`
-    )
-    .order("paid_at", { ascending: false, nullsFirst: false });
+  const [{ data: payments }, { data: pendingRows }] = await Promise.all([
+    supabase
+      .from("payments")
+      .select(
+        "id, amount, status, paid_at, created_at, parent_id, external_reference, receipt_description, profiles(full_name, phone, email), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_checkouts(transaction_id), payment_refunds(id, amount, created_at, note, document_number, document_url, sent_to_email)"
+      )
+      .eq("payment_method", "credit_card")
+      .in("status", ["paid", "refunded", "partial"])
+      .or(
+        `and(paid_at.gte.${queryStart}T00:00:00,paid_at.lte.${queryEnd}T23:59:59),and(paid_at.is.null,created_at.gte.${queryStart}T00:00:00,created_at.lte.${queryEnd}T23:59:59)`
+      )
+      .order("paid_at", { ascending: false, nullsFirst: false }),
+    supabase
+      .from("pending_refunds")
+      .select(
+        "id, amount, note, created_at, payment_id, payments(amount, payment_method, status, external_reference, receipt_description, profiles(full_name, phone, email), payment_checkouts(transaction_id), payment_refunds(amount), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)))"
+      )
+      .order("created_at", { ascending: false }),
+  ]);
 
   const transactions: RefundTransaction[] = (payments ?? [])
     .map((payment) => {
@@ -97,11 +105,46 @@ export default async function AdminRefundsPage({
     .filter((payment) => israelDateOf(payment.occurredAt).startsWith(month))
     .filter((payment) => Boolean(payment.cardcomReference));
 
+  const pendingRefunds: PendingRefund[] = (pendingRows ?? []).flatMap((row) => {
+    const payment = row.payments;
+    if (!payment) return [];
+    const alreadyRefunded = round2(
+      (payment.payment_refunds ?? []).reduce(
+        (sum, refund) => sum + Number(refund.amount),
+        0
+      )
+    );
+    const paymentAmount = Number(payment.amount);
+    return [
+      {
+        id: row.id,
+        paymentId: row.payment_id,
+        amount: Number(row.amount),
+        note: row.note,
+        createdAt: row.created_at,
+        parentName: payment.profiles?.full_name ?? "לקוח לא ידוע",
+        phone: payment.profiles?.phone ?? null,
+        email: payment.profiles?.email ?? null,
+        subject:
+          payment.receipt_description?.trim() ||
+          subjectLabel(payment.enrollments),
+        childName: payment.enrollments?.children?.full_name ?? null,
+        paymentMethod: payment.payment_method,
+        paymentAmount,
+        remaining: round2(Math.max(0, paymentAmount - alreadyRefunded)),
+        cardcomReference:
+          payment.external_reference?.trim() ||
+          payment.payment_checkouts?.transaction_id?.trim() ||
+          null,
+      },
+    ];
+  });
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="זיכויים"
-        description={`עסקאות אשראי שנסלקו · ${monthTitle}`}
+        description={`זיכויים בהמתנה ועסקאות אשראי · ${monthTitle}`}
         action={
           <MonthSwitcher
             month={month}
@@ -110,7 +153,11 @@ export default async function AdminRefundsPage({
           />
         }
       />
-      <RefundsList transactions={transactions} monthTitle={monthTitle} />
+      <RefundsList
+        transactions={transactions}
+        pendingRefunds={pendingRefunds}
+        monthTitle={monthTitle}
+      />
     </div>
   );
 }
