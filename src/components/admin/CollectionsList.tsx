@@ -1030,7 +1030,7 @@ function ReceiptCustomTextField({
   return (
     <Field
       label="טקסט מותאם אישית"
-      hint="נוסף לתווית שנבחרה, רק לחיוב הזה. לא נשמר ברשימת התוויות."
+      hint="מחליף את שם הקבלה לחיוב הזה בלבד. לא נשמר ברשימת התוויות."
     >
       <div className="space-y-2">
         {input}
