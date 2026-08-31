@@ -77,6 +77,7 @@ export const ADMIN_NAV: NavEntry[] = [
       { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
     ],
   },
+  { href: "/admin/waitlist-requests", label: "רשימת המתנה", icon: "⏳" },
   { href: "/admin/settings", label: "הגדרות", icon: "⚙️" },
 ];
 

@@ -375,6 +375,48 @@ export type Database = {
           },
         ]
       }
+      class_waitlist_requests: {
+        Row: {
+          child_age: number
+          child_gender: Database["public"]["Enums"]["gender_type"]
+          child_name: string
+          created_at: string
+          desired_class_name: string
+          full_name: string
+          id: string
+          phone: string
+          preferred_times: string
+          skill_level: Database["public"]["Enums"]["class_waitlist_skill_level"]
+          status: Database["public"]["Enums"]["class_waitlist_request_status"]
+        }
+        Insert: {
+          child_age: number
+          child_gender: Database["public"]["Enums"]["gender_type"]
+          child_name: string
+          created_at?: string
+          desired_class_name: string
+          full_name: string
+          id?: string
+          phone: string
+          preferred_times: string
+          skill_level: Database["public"]["Enums"]["class_waitlist_skill_level"]
+          status?: Database["public"]["Enums"]["class_waitlist_request_status"]
+        }
+        Update: {
+          child_age?: number
+          child_gender?: Database["public"]["Enums"]["gender_type"]
+          child_name?: string
+          created_at?: string
+          desired_class_name?: string
+          full_name?: string
+          id?: string
+          phone?: string
+          preferred_times?: string
+          skill_level?: Database["public"]["Enums"]["class_waitlist_skill_level"]
+          status?: Database["public"]["Enums"]["class_waitlist_request_status"]
+        }
+        Relationships: []
+      }
       class_weekly_slots: {
         Row: {
           class_id: string
@@ -1924,6 +1966,8 @@ export type Database = {
       attendance_status: "present" | "absent" | "late"
       class_booking_mode: "series" | "appointment"
       class_audience_type: "age" | "grade" | "open"
+      class_waitlist_request_status: "pending" | "contacted" | "closed"
+      class_waitlist_skill_level: "beginner" | "advanced"
       class_gender_policy: "male" | "female" | "mixed"
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
@@ -2091,6 +2135,8 @@ export const Constants = {
       attendance_status: ["present", "absent", "late"],
       class_booking_mode: ["series", "appointment"],
       class_audience_type: ["age", "grade", "open"],
+      class_waitlist_request_status: ["pending", "contacted", "closed"],
+      class_waitlist_skill_level: ["beginner", "advanced"],
       class_gender_policy: ["male", "female", "mixed"],
       class_session_status: ["scheduled", "cancelled", "completed"],
       class_status: ["active", "inactive", "full"],

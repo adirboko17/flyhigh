@@ -73,12 +73,10 @@ export function ClassAttendanceForm({
           child.weekly_slot_id === selectedSession.weekly_slot_id
       )
     : students;
-  const allMarked =
-    sessionStudents.length > 0 &&
-    sessionStudents.every((child) => marks[child.id] !== undefined);
-  const unmarkedCount = sessionStudents.filter(
-    (child) => marks[child.id] === undefined
+  const markedCount = sessionStudents.filter(
+    (child) => marks[child.id] !== undefined
   ).length;
+  const unmarkedCount = sessionStudents.length - markedCount;
 
   useEffect(() => {
     let cancelled = false;
@@ -241,7 +239,14 @@ export function ClassAttendanceForm({
                           key={opt.value}
                           type="button"
                           onClick={() =>
-                            setMarks((m) => ({ ...m, [child.id]: opt.value }))
+                            setMarks((m) => {
+                              if (m[child.id] === opt.value) {
+                                const next = { ...m };
+                                delete next[child.id];
+                                return next;
+                              }
+                              return { ...m, [child.id]: opt.value };
+                            })
                           }
                           className={cn(
                             "min-h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors md:flex-none md:px-3.5",
@@ -264,13 +269,19 @@ export function ClassAttendanceForm({
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={save}
-                disabled={saving || loading || sessionsLoading || !date || !allMarked}
+                disabled={
+                  saving || loading || sessionsLoading || !date || markedCount === 0
+                }
               >
                 {saving ? "שומר..." : "שמירת נוכחות"}
               </Button>
-              {!allMarked && !loading && !sessionsLoading && sessions.length > 0 && (
-                <span className="text-sm text-amber-600">
-                  נותרו {unmarkedCount} {traineeNoun(genderPolicy, unmarkedCount)} לסימון
+              {unmarkedCount > 0 &&
+                !loading &&
+                !sessionsLoading &&
+                sessions.length > 0 && (
+                <span className="text-sm text-ink-500">
+                  {unmarkedCount} {traineeNoun(genderPolicy, unmarkedCount)} טרם
+                  סומנו — אפשר לשמור ולחזור להשלים
                 </span>
               )}
               {saved && (

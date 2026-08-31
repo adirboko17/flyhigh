@@ -1842,7 +1842,8 @@ function AttendanceTab({
               סימון נוכחות
             </h3>
             <p className="mt-0.5 text-sm text-ink-500">
-              בחרו מפגש וסמנו נוכחות לכל {traineeNoun(genderPolicy, 1)}.
+              בחרו מפגש וסמנו נוכחות. אפשר לשמור גם בלי לסמן את כולם, ולחזור
+              להשלים או לשנות.
             </p>
           </div>
           <ClassAttendanceForm

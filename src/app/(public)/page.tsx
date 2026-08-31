@@ -1,4 +1,5 @@
 import { ClassCard } from "@/components/classes/ClassCard";
+import { ClassWaitlistCard } from "@/components/classes/ClassWaitlistCard";
 import { HeroSection } from "@/components/home/HeroSection";
 import { HomeIntroBand } from "@/components/home/HomeIntroBand";
 import { HomePlansGrid } from "@/components/home/HomePlansGrid";
@@ -94,6 +95,10 @@ export default async function HomePage() {
         ) : (
           <EmptyMini text="אין מסלולים, כניסות או שיעורים פרטיים פעילים כרגע" />
         )}
+      </section>
+
+      <section className="container-page pb-16">
+        <ClassWaitlistCard />
       </section>
     </>
   );

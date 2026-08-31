@@ -336,6 +336,35 @@ export function isCollectionPaymentMethod(
   );
 }
 
+export const CLASS_WAITLIST_SKILL_LEVEL: Record<
+  Enums<"class_waitlist_skill_level">,
+  string
+> = {
+  beginner: "מתחילים",
+  advanced: "מתקדמים",
+};
+
+export const CLASS_WAITLIST_REQUEST_STATUS: Record<
+  Enums<"class_waitlist_request_status">,
+  { label: string; tone: BadgeTone }
+> = {
+  pending: { label: "חדש", tone: "warning" },
+  contacted: { label: "יצרנו קשר", tone: "info" },
+  closed: { label: "טופל", tone: "success" },
+};
+
+export function isClassWaitlistSkillLevel(
+  value: string | null | undefined
+): value is Enums<"class_waitlist_skill_level"> {
+  return value === "beginner" || value === "advanced";
+}
+
+export function isClassWaitlistRequestStatus(
+  value: string | null | undefined
+): value is Enums<"class_waitlist_request_status"> {
+  return value === "pending" || value === "contacted" || value === "closed";
+}
+
 export const WAITLIST_STATUS: Record<
   Enums<"waitlist_status">,
   { label: string; tone: BadgeTone }

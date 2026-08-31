@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import { ClassesCatalog } from "@/components/classes/ClassesCatalog";
+import { ClassWaitlistCard } from "@/components/classes/ClassWaitlistCard";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { sortByCatalogOrder } from "@/lib/classes/catalogOrder";
@@ -82,6 +83,10 @@ export default async function ClassesPage() {
             </div>
           </aside>
         </ScrollReveal>
+
+        <div className="mt-8 sm:mt-10">
+          <ClassWaitlistCard />
+        </div>
       </div>
     </div>
   );

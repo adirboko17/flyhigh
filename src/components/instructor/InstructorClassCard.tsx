@@ -12,10 +12,7 @@ import {
   type AttendanceRecord,
 } from "@/components/instructor/ClassAttendanceHistory";
 import type { AttendanceStudent } from "@/lib/attendance/students";
-import {
-  traineeNoun,
-  type ClassGenderPolicy,
-} from "@/lib/class-audience";
+import { type ClassGenderPolicy } from "@/lib/class-audience";
 import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { CLASS_STATUS, DAY_ABBR, dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
@@ -230,7 +227,7 @@ export function InstructorClassCard({
         open={attendanceOpen}
         onClose={() => setAttendanceOpen(false)}
         title={`סימון נוכחות — ${title}`}
-        description={`נווטו בין המפגשים וסמנו נוכחות לכל ${traineeNoun(classData.genderPolicy, 1)}`}
+        description="נווטו בין המפגשים וסמנו נוכחות. אפשר לשמור גם בלי לסמן את כולם, ולחזור להשלים או לשנות."
         className="max-w-xl"
       >
         <ClassAttendanceForm
