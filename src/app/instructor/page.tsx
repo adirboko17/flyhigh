@@ -27,6 +27,11 @@ import {
   todayInIsrael,
 } from "@/lib/scheduling/monthGrid";
 import { cn } from "@/utils/cn";
+import {
+  attendanceRecordName,
+  attendanceRecordKey,
+  attendanceStudentsFromEnrollments,
+} from "@/lib/attendance/students";
 import { formatCurrency, formatTime } from "@/utils/format";
 
 export const metadata = { title: "דשבורד מדריכה" };
@@ -89,7 +94,7 @@ export default async function InstructorDashboard() {
   const counts = new Map<string, number>();
   const studentsByClass = new Map<
     string,
-    { id: string; full_name: string; weekly_slot_id?: string | null }[]
+    ReturnType<typeof attendanceStudentsFromEnrollments>
   >();
   const historyByClass = new Map<string, AttendanceRecord[]>();
 
@@ -97,36 +102,49 @@ export default async function InstructorDashboard() {
     const [{ data: enrollments }, { data: attendanceRows }] = await Promise.all([
       supabase
         .from("enrollments")
-        .select("class_id, weekly_slot_id, children(id, full_name)")
+        .select(
+          "class_id, weekly_slot_id, child_id, parent_id, children(id, full_name), profiles(full_name)"
+        )
         .in("class_id", classIds)
         .eq("status", "active"),
       supabase
         .from("attendance")
-        .select("class_id, child_id, date, status, children(full_name)")
+        .select(
+          "class_id, child_id, parent_id, date, status, children(full_name), profiles(full_name)"
+        )
         .in("class_id", classIds)
         .order("date", { ascending: false })
         .limit(ATTENDANCE_LIMIT),
     ]);
 
+    const enrollmentsByClass = new Map<
+      string,
+      NonNullable<typeof enrollments>
+    >();
     (enrollments ?? []).forEach((e) => {
-      if (!e.class_id || !e.children) return;
-      counts.set(e.class_id, (counts.get(e.class_id) ?? 0) + 1);
-      const list = studentsByClass.get(e.class_id) ?? [];
-      list.push({
-        id: e.children.id,
-        full_name: e.children.full_name,
-        weekly_slot_id: e.weekly_slot_id,
-      });
-      studentsByClass.set(e.class_id, list);
+      if (!e.class_id) return;
+      const list = enrollmentsByClass.get(e.class_id) ?? [];
+      list.push(e);
+      enrollmentsByClass.set(e.class_id, list);
     });
+    for (const [classId, rows] of enrollmentsByClass) {
+      const students = attendanceStudentsFromEnrollments(rows);
+      studentsByClass.set(classId, students);
+      counts.set(classId, students.length);
+    }
 
     (attendanceRows ?? []).forEach((row) => {
-      if (!row.class_id || !row.children) return;
+      const participantId = attendanceRecordKey(row);
+      const name = attendanceRecordName(
+        row.children?.full_name,
+        row.profiles?.full_name
+      );
+      if (!row.class_id || !participantId || name === "—") return;
       const list = historyByClass.get(row.class_id) ?? [];
       list.push({
         date: row.date,
-        childId: row.child_id,
-        childName: row.children.full_name,
+        childId: participantId,
+        childName: name,
         status: row.status,
       });
       historyByClass.set(row.class_id, list);
@@ -155,6 +173,7 @@ export default async function InstructorDashboard() {
         studentCount: counts.get(c.id) ?? 0,
         students: studentsByClass.get(c.id) ?? [],
         attendanceHistory: historyByClass.get(c.id) ?? [],
+        genderPolicy: c.gender_policy,
         isToday: dayOfWeek === todayWeekday && c.status === "active",
       };
     })

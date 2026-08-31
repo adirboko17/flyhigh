@@ -156,7 +156,9 @@ export async function loadClassAttendance(
   const supabase = await createAdminDataClient();
   const { data } = await supabase
     .from("attendance")
-    .select("id, class_id, date, status, children(full_name), instructors(full_name)")
+    .select(
+      "id, class_id, date, status, children(full_name), profiles(full_name), instructors(full_name)"
+    )
     .eq("class_id", classId)
     .order("date", { ascending: false });
 

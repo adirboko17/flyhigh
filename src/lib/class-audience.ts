@@ -198,3 +198,14 @@ export function pickOneSlotTraineeShort(gender: ClassGenderPolicy): string {
   if (gender === "male") return "המתאמן מגיע לאחד מהם כל שבוע";
   return "מתאמן או מתאמנת מגיעים לאחד מהם כל שבוע";
 }
+
+/** שם המתאמנים לפי מגדר החוג — יחיד או רבים. */
+export function traineeNoun(
+  gender: ClassGenderPolicy | null | undefined,
+  count = 2
+): string {
+  const plural = count !== 1;
+  if (gender === "female") return plural ? "מתאמנות" : "מתאמנת";
+  if (gender === "male") return plural ? "מתאמנים" : "מתאמן";
+  return plural ? "מתאמנים" : "מתאמן או מתאמנת";
+}

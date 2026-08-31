@@ -11,6 +11,11 @@ import {
   ClassAttendanceHistory,
   type AttendanceRecord,
 } from "@/components/instructor/ClassAttendanceHistory";
+import type { AttendanceStudent } from "@/lib/attendance/students";
+import {
+  traineeNoun,
+  type ClassGenderPolicy,
+} from "@/lib/class-audience";
 import { formatClassOccupancy, isUnlimitedCapacity } from "@/lib/classes/capacity";
 import { CLASS_STATUS, DAY_ABBR, dayLabel } from "@/lib/constants";
 import { cn } from "@/utils/cn";
@@ -26,8 +31,9 @@ export interface InstructorClassData {
   endTime: string | null;
   capacity: number | null;
   studentCount: number;
-  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
+  students: AttendanceStudent[];
   attendanceHistory: AttendanceRecord[];
+  genderPolicy: ClassGenderPolicy;
   /** האם החוג מתקיים היום — הכרטיס מודגש והפעולה הופכת לראשית. */
   isToday: boolean;
 }
@@ -224,13 +230,14 @@ export function InstructorClassCard({
         open={attendanceOpen}
         onClose={() => setAttendanceOpen(false)}
         title={`סימון נוכחות — ${title}`}
-        description="נווטו בין המפגשים וסמנו נוכחות לכל תלמיד"
+        description={`נווטו בין המפגשים וסמנו נוכחות לכל ${traineeNoun(classData.genderPolicy, 1)}`}
         className="max-w-xl"
       >
         <ClassAttendanceForm
           classId={classData.id}
           instructorId={instructorId}
           students={students}
+          genderPolicy={classData.genderPolicy}
         />
       </Modal>
 

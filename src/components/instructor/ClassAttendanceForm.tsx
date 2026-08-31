@@ -10,6 +10,14 @@ import {
   defaultSessionIndex,
   type ClassSessionOption,
 } from "@/components/instructor/SessionNavigator";
+import {
+  attendanceRecordKey,
+  type AttendanceStudent,
+} from "@/lib/attendance/students";
+import {
+  traineeNoun,
+  type ClassGenderPolicy,
+} from "@/lib/class-audience";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { cn } from "@/utils/cn";
 import type { Enums } from "@/types";
@@ -26,13 +34,14 @@ interface ClassAttendanceFormProps {
   classId: string;
   /** מדריכת החוג; אצל מנהל יכול להיות null אם אין שיוך. */
   instructorId: string | null;
-  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
+  students: AttendanceStudent[];
   /** כשמוגדר — מציגים רק מפגשים של המועד הזה. */
   weeklySlotId?: string | null;
   /** מפגש מועדף (למשל התאריך שנלחץ בלוח השנה). */
   preferredDate?: string | null;
   /** הודעה כשאין מפגשים — ברירת מחדל מתאימה למדריכה. */
   emptySessionsHint?: string;
+  genderPolicy?: ClassGenderPolicy | null;
   onSaved?: () => void;
 }
 
@@ -43,6 +52,7 @@ export function ClassAttendanceForm({
   weeklySlotId = null,
   preferredDate = null,
   emptySessionsHint = "לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.",
+  genderPolicy = null,
   onSaved,
 }: ClassAttendanceFormProps) {
   const router = useRouter();
@@ -112,7 +122,7 @@ export function ClassAttendanceForm({
       const supabase = createClient();
       let query = supabase
         .from("attendance")
-        .select("child_id, status")
+        .select("child_id, parent_id, status")
         .eq("class_id", classId)
         .eq("date", date);
       if (selectedSession?.id) {
@@ -124,7 +134,8 @@ export function ClassAttendanceForm({
 
       const existing: Record<string, Status> = {};
       (data ?? []).forEach((row) => {
-        existing[row.child_id] = row.status;
+        const key = attendanceRecordKey(row);
+        if (key) existing[key] = row.status;
       });
       setMarks(existing);
       setLoading(false);
@@ -150,7 +161,8 @@ export function ClassAttendanceForm({
       .filter((child) => marks[child.id] !== undefined)
       .map((child) => ({
         class_id: classId,
-        child_id: child.id,
+        child_id: child.childId,
+        parent_id: child.parentId,
         instructor_id: instructorId,
         date,
         session_id: selectedSession?.id ?? null,
@@ -202,7 +214,7 @@ export function ClassAttendanceForm({
 
           {sessionStudents.length === 0 ? (
             <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
-              אין תלמידים רשומים למועד זה.
+              אין נרשמים למועד זה.
             </p>
           ) : loading ? (
             <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
@@ -258,7 +270,7 @@ export function ClassAttendanceForm({
               </Button>
               {!allMarked && !loading && !sessionsLoading && sessions.length > 0 && (
                 <span className="text-sm text-amber-600">
-                  נותרו {unmarkedCount} תלמידים לסימון
+                  נותרו {unmarkedCount} {traineeNoun(genderPolicy, unmarkedCount)} לסימון
                 </span>
               )}
               {saved && (

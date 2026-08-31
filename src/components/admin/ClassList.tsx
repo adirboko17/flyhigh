@@ -28,6 +28,11 @@ import { CatalogOrderDialog } from "@/components/admin/CatalogOrderDialog";
 import { ClassArrangementChooser } from "@/components/admin/ClassArrangementChooser";
 import { FeaturedClassesDialog } from "@/components/admin/FeaturedClassesDialog";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
+import {
+  attendanceRecordName,
+  attendanceStudentsFromEnrollments,
+  type AttendanceStudent,
+} from "@/lib/attendance/students";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
   participantDisplayName,
@@ -53,6 +58,7 @@ import { setClassStatus } from "@/lib/admin/classStatus";
 import {
   formatClassAudience,
   formatClassGenderPolicy,
+  traineeNoun,
 } from "@/lib/class-audience";
 import {
   ATTENDANCE_STATUS,
@@ -119,6 +125,7 @@ export type AdminClassAttendance = {
   date: string;
   status: keyof typeof ATTENDANCE_STATUS;
   children: { full_name: string } | null;
+  profiles: { full_name: string } | null;
   instructors: { full_name: string } | null;
 };
 
@@ -1124,20 +1131,10 @@ export function ClassDetailPanel({
     [rosterClass, weeklySlotId]
   );
 
-  const students = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { id: string; full_name: string; weekly_slot_id: string | null }[] = [];
-    for (const e of enrollments) {
-      if (!e.child_id || !e.children?.full_name || seen.has(e.child_id)) continue;
-      seen.add(e.child_id);
-      list.push({
-        id: e.child_id,
-        full_name: e.children.full_name,
-        weekly_slot_id: e.weekly_slot_id,
-      });
-    }
-    return list;
-  }, [enrollments]);
+  const students = useMemo(
+    () => attendanceStudentsFromEnrollments(enrollments),
+    [enrollments]
+  );
 
   const tabs: { id: PanelTab; label: string; count: number | null }[] = [
     { id: "enrollments", label: "נרשמים", count: enrollments.length },
@@ -1758,7 +1755,7 @@ function AttendanceTab({
 }: {
   cls: AdminClassRow;
   attendance: AdminClassAttendance[];
-  students: { id: string; full_name: string; weekly_slot_id?: string | null }[];
+  students: AttendanceStudent[];
   weeklySlotId?: string | null;
   initialSessionDate?: string | null;
   mode: AttendanceMode;
@@ -1768,11 +1765,18 @@ function AttendanceTab({
   const records = attendance;
   const notesByDate = useClassSessionNotesByDate(cls.id);
   const q = normalizeSearch(query);
+  const genderPolicy =
+    (weeklySlotId
+      ? cls.slots.find((slot) => slot.id === weeklySlotId)?.gender_policy
+      : null) ?? cls.gender_policy;
 
   const byDate = useMemo(() => {
     const filtered = q
       ? records.filter((r) =>
-          personSearchHaystack(r.children?.full_name).includes(q)
+          personSearchHaystack(
+            r.children?.full_name,
+            r.profiles?.full_name
+          ).includes(q)
         )
       : records;
 
@@ -1788,8 +1792,14 @@ function AttendanceTab({
       .map(([date, rows]) => [
         date,
         [...rows].sort((a, b) =>
-          (a.children?.full_name ?? "").localeCompare(
-            b.children?.full_name ?? "",
+          attendanceRecordName(
+            a.children?.full_name,
+            a.profiles?.full_name
+          ).localeCompare(
+            attendanceRecordName(
+              b.children?.full_name,
+              b.profiles?.full_name
+            ),
             "he"
           )
         ),
@@ -1832,7 +1842,7 @@ function AttendanceTab({
               סימון נוכחות
             </h3>
             <p className="mt-0.5 text-sm text-ink-500">
-              בחרו מפגש וסמנו נוכחות לכל תלמיד רשום.
+              בחרו מפגש וסמנו נוכחות לכל {traineeNoun(genderPolicy, 1)}.
             </p>
           </div>
           <ClassAttendanceForm
@@ -1840,6 +1850,7 @@ function AttendanceTab({
             instructorId={cls.instructor_id}
             students={students}
             weeklySlotId={weeklySlotId}
+            genderPolicy={genderPolicy}
             preferredDate={initialSessionDate}
             emptySessionsHint="לא נמצאו מפגשים מתוכננים. עדכנו את לוח המפגשים בעריכת החוג."
           />
@@ -1900,7 +1911,10 @@ function AttendanceTab({
                       className="flex items-center justify-between gap-3 px-3 py-1.5"
                     >
                       <span className="min-w-0 truncate text-sm text-ink-800">
-                        {record.children?.full_name ?? "—"}
+                        {attendanceRecordName(
+                          record.children?.full_name,
+                          record.profiles?.full_name
+                        )}
                       </span>
                       <Badge
                         tone={ATTENDANCE_STATUS[record.status].tone}

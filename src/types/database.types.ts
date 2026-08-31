@@ -90,35 +90,38 @@ export type Database = {
       }
       attendance: {
         Row: {
-          child_id: string
+          child_id: string | null
           class_id: string
           created_at: string
           date: string
           id: string
           instructor_id: string | null
           notes: string | null
+          parent_id: string | null
           session_id: string | null
           status: Database["public"]["Enums"]["attendance_status"]
         }
         Insert: {
-          child_id: string
+          child_id?: string | null
           class_id: string
           created_at?: string
           date?: string
           id?: string
           instructor_id?: string | null
           notes?: string | null
+          parent_id?: string | null
           session_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
         }
         Update: {
-          child_id?: string
+          child_id?: string | null
           class_id?: string
           created_at?: string
           date?: string
           id?: string
           instructor_id?: string | null
           notes?: string | null
+          parent_id?: string | null
           session_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
         }
@@ -142,6 +145,20 @@ export type Database = {
             columns: ["instructor_id"]
             isOneToOne: false
             referencedRelation: "instructors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "class_sessions"
             referencedColumns: ["id"]
           },
         ]
