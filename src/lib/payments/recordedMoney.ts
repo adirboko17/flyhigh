@@ -1,4 +1,4 @@
-import { isAbandonedCardcomCharge } from "@/lib/constants";
+import { isAbandonedCardcomCharge, isPoolPassPaymentMethod } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
 
 export type RecordedMoneyPayment = {
@@ -17,6 +17,12 @@ export function paymentHasRecordedMoney(payment: RecordedMoneyPayment): boolean 
   if ((payment.payment_receipts ?? []).length > 0) return true;
   if ((payment.payment_refunds ?? []).length > 0) return true;
   if ((payment.documentIds ?? []).length > 0) return true;
+  if (
+    isPoolPassPaymentMethod(payment.payment_method) &&
+    (payment.status === "paid" || payment.status === "refunded")
+  ) {
+    return true;
+  }
   if (payment.payment_method === "credit_card") {
     if (payment.external_reference?.trim()) return true;
     if (payment.status === "paid" || payment.status === "partial") return true;

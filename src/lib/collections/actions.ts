@@ -7,6 +7,7 @@ import {
   PAYMENT_METHOD,
   isCollectionPaymentMethod,
   isManualReceiptMethod,
+  isPoolPassPaymentMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
@@ -56,7 +57,9 @@ async function requireAdminProfile() {
 type ChargeRow = {
   id: string;
   amount: number;
+  status: Enums<"payment_status">;
   parent_id: string;
+  enrollment_id: string | null;
   payment_method: Enums<"payment_method"> | null;
   office_collection: boolean;
   checkout_id: string | null;
@@ -74,9 +77,12 @@ type ChargeRow = {
 };
 
 const CHARGE_SELECT =
-  "id, amount, parent_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
+  "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
 
 function remainingOf(charge: ChargeRow) {
+  if (isPoolPassPaymentMethod(charge.payment_method) && charge.status === "paid") {
+    return 0;
+  }
   const paid = (charge.payment_receipts ?? []).reduce(
     (sum, receipt) => sum + Number(receipt.amount),
     0
@@ -117,6 +123,7 @@ function isCollectionManagedCharge(charge: {
   office_collection?: boolean | null;
 }) {
   if (isManualReceiptMethod(charge.payment_method)) return true;
+  if (isPoolPassPaymentMethod(charge.payment_method)) return true;
   return (
     charge.payment_method === "credit_card" && charge.office_collection === true
   );
@@ -285,6 +292,13 @@ export async function addPaymentReceipt(input: {
     return {
       success: false,
       error: "לחיוב באשראי יש לפתוח סליקה בקארדקום, לא לרשום תקבול מזומן.",
+    };
+  }
+
+  if (isPoolPassPaymentMethod(loaded.charge.payment_method)) {
+    return {
+      success: false,
+      error: "לחיוב בכרטיסייה יש לאשר בלי להפיק קבלה.",
     };
   }
 
@@ -568,6 +582,16 @@ export async function updateCollectionPaymentMethod(input: {
     return { success: false, error: "לא ניתן לשנות אמצעי תשלום לחיוב שכבר שולם." };
   }
 
+  if (
+    isPoolPassPaymentMethod(input.method) &&
+    remainingOf(loaded.charge) < round2(Number(loaded.charge.amount))
+  ) {
+    return {
+      success: false,
+      error: "לא ניתן לעבור לכרטיסייה אחרי שנרשמו תקבולים.",
+    };
+  }
+
   if (loaded.charge.payment_method === input.method) {
     return { success: true };
   }
@@ -662,5 +686,77 @@ export async function startCollectionCardcomCheckout(input: {
 
   revalidatePath("/admin/collections");
   return { success: true, checkoutUrl: charge.redirectUrl };
+}
+
+/**
+ * מאשר חיוב בכרטיסייה — מסמן כשולם בלי קבלה, חשבונית או תקבול.
+ */
+export async function approveCollectionPassCharge(input: {
+  paymentId: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  if (!isPoolPassPaymentMethod(loaded.charge.payment_method)) {
+    return {
+      success: false,
+      error: "יש לבחור כרטיסייה כאמצעי התשלום לפני האישור.",
+    };
+  }
+
+  if (remainingOf(loaded.charge) <= 0) {
+    return { success: false, error: "החיוב כבר אושר." };
+  }
+
+  if ((loaded.charge.payment_receipts ?? []).length > 0) {
+    return {
+      success: false,
+      error: "לחיוב הזה כבר נרשמו תקבולים. לא ניתן לאשר ככרטיסייה.",
+    };
+  }
+
+  const paidAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      status: "paid",
+      paid_at: paidAt,
+      office_collection: true,
+      checkout_id: null,
+    })
+    .eq("id", loaded.charge.id);
+
+  if (error) {
+    return { success: false, error: "אישור התשלום בכרטיסייה נכשל. נסו שוב." };
+  }
+
+  if (loaded.charge.enrollment_id) {
+    const { error: enrollmentError } = await supabase
+      .from("enrollments")
+      .update({ payment_status: "paid" })
+      .eq("id", loaded.charge.enrollment_id);
+
+    if (enrollmentError) {
+      return {
+        success: false,
+        error: "החיוב אושר אך עדכון ההרשמה נכשל. רעננו ונסו שוב.",
+      };
+    }
+  }
+
+  if (loaded.charge.checkout_id) {
+    await unlinkPendingCheckout(loaded.charge.checkout_id);
+  }
+
+  revalidatePath("/admin/collections");
+  revalidatePath("/admin/finance");
+  revalidatePath("/parent/dashboard");
+  return { success: true };
 }
 

@@ -5,8 +5,9 @@ import {
   type CollectionReceipt,
 } from "@/components/admin/CollectionsList";
 import {
-  OFFICE_RECEIPT_METHODS,
+  COLLECTION_OFFICE_METHODS,
   isCollectionPaymentMethod,
+  isPoolPassPaymentMethod,
 } from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
 import type { ReceiptLabelOption } from "@/lib/receipt-labels";
@@ -34,7 +35,7 @@ export default async function AdminCollectionsPage() {
         "id, amount, payment_method, office_collection, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
       )
       .or(
-        `payment_method.in.(${OFFICE_RECEIPT_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
+        `payment_method.in.(${COLLECTION_OFFICE_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
       )
       .or(
         `status.in.(pending,partial),and(status.eq.paid,paid_at.gte.${paidSince})`
@@ -75,10 +76,15 @@ export default async function AdminCollectionsPage() {
           new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       );
 
-    const amountPaid = round2(
-      receipts.reduce((sum, receipt) => sum + receipt.amount, 0)
-    );
-    const remaining = round2(Math.max(0, amount - amountPaid));
+    const passSettled =
+      isPoolPassPaymentMethod(charge.payment_method) &&
+      charge.status === "paid";
+    const amountPaid = passSettled
+      ? amount
+      : round2(receipts.reduce((sum, receipt) => sum + receipt.amount, 0));
+    const remaining = passSettled
+      ? 0
+      : round2(Math.max(0, amount - amountPaid));
     const receiptLabelRow = charge.receipt_labels;
     const receiptLabel =
       (receiptLabelRow && !Array.isArray(receiptLabelRow)

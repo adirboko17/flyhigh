@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
 import {
   addPaymentReceipt,
+  approveCollectionPassCharge,
   deleteCollectionCharge,
   deletePaymentReceipt,
   settleChargeRemaining,
@@ -30,6 +31,7 @@ import {
   PAYMENT_METHOD,
   PAYMENT_STATUS,
   isManualReceiptMethod,
+  isPoolPassPaymentMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
@@ -112,7 +114,7 @@ function isOpen(charge: CollectionCharge) {
 }
 
 function canRemoveCharge(charge: CollectionCharge) {
-  return charge.receipts.length === 0;
+  return charge.receipts.length === 0 && isOpen(charge);
 }
 
 function chargeStatusBadge(charge: CollectionCharge) {
@@ -243,7 +245,7 @@ export function CollectionsList({
       <Card className="overflow-hidden">
         <div className="bg-brand-gradient px-5 py-4 text-white">
           <p className="text-xs font-medium text-white/70">
-            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, פייבוקס, או אשראי במעמד הגבייה
+            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, פייבוקס, כרטיסייה, או אשראי במעמד הגבייה
           </p>
           <h1 className="font-display text-2xl font-bold leading-tight">גבייה</h1>
         </div>
@@ -334,7 +336,7 @@ export function CollectionsList({
       {parents.length === 0 ? (
         <EmptyState
           title="אין עדיין חיובים לגבייה"
-          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לפייבוקס או לאשראי ולפתוח סליקה."
+          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לפייבוקס, לכרטיסייה או לאשראי."
         />
       ) : visibleParents.length === 0 ? (
         <EmptyState
@@ -565,6 +567,7 @@ function ChargeRow({
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
+  const isPass = isPoolPassPaymentMethod(charge.method);
   const [method, setMethod] = useState(charge.method);
 
   useEffect(() => {
@@ -610,16 +613,17 @@ function ChargeRow({
           {charge.enrollmentCancelled && (
             <Badge tone="warning">ההרשמה בוטלה</Badge>
           )}
-          {charge.receiptLabel ? (
-            <Badge tone="info" className="text-sm">
-              קבלה: {charge.receiptLabel}
-            </Badge>
-          ) : (
-            <Badge tone="neutral" className="text-sm">
-              קבלה: כרגיל
-            </Badge>
-          )}
-          {charge.receiptCustomText && (
+          {!isPass &&
+            (charge.receiptLabel ? (
+              <Badge tone="info" className="text-sm">
+                קבלה: {charge.receiptLabel}
+              </Badge>
+            ) : (
+              <Badge tone="neutral" className="text-sm">
+                קבלה: כרגיל
+              </Badge>
+            ))}
+          {!isPass && charge.receiptCustomText && (
             <Badge tone="warning" className="text-sm">
               מותאם: {charge.receiptCustomText}
             </Badge>
@@ -639,7 +643,7 @@ function ChargeRow({
           {charge.receipts.length > 0 &&
             ` · ${charge.receipts.length} תקבולים`}
         </p>
-        {open && (
+        {open && !isPass && (
           <>
             <ReceiptLabelSelect
               charge={charge}
@@ -684,7 +688,7 @@ function ChargeRow({
         disabled={disabled}
         onClick={onOpen}
       >
-        {open ? "רישום תקבול" : "היסטוריה"}
+        {open ? (isPass ? "אישור" : "רישום תקבול") : "היסטוריה"}
       </Button>
     </li>
   );
@@ -732,6 +736,7 @@ function ChargeReceiptDialog({
 
   const busy = disabled || busyId !== null;
   const isCard = charge.method === "credit_card";
+  const isPass = isPoolPassPaymentMethod(charge.method);
 
   function run(
     key: string,
@@ -821,29 +826,44 @@ function ChargeReceiptDialog({
     <Modal
       open
       onClose={onClose}
-      title={open ? "רישום תקבול" : "היסטוריית תקבולים"}
+      title={
+        isPass
+          ? open
+            ? "אישור תשלום בכרטיסייה"
+            : "תשלום בכרטיסייה"
+          : open
+            ? "רישום תקבול"
+            : "היסטוריית תקבולים"
+      }
       description={`${charge.subject}${charge.childName ? ` · ${charge.childName}` : ""}`}
       className="max-w-lg"
     >
       <div className="space-y-5">
-        <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
-          <p className="text-xs text-ink-500">שם על הקבלה</p>
-          <p className="mt-0.5 font-semibold text-ink-900">
-            {receiptPreview(charge)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
-          <p className="text-xs text-ink-500">הקבלה תישלח לאימייל</p>
-          {customerEmail ? (
-            <p dir="ltr" className="mt-0.5 text-right font-semibold text-ink-900">
-              {customerEmail}
-            </p>
-          ) : (
-            <p className="mt-0.5 font-medium text-amber-700">
-              אין אימייל בחשבון הלקוח — המסמך יופק בלי שליחה
-            </p>
-          )}
-        </div>
+        {!isPass && (
+          <>
+            <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+              <p className="text-xs text-ink-500">שם על הקבלה</p>
+              <p className="mt-0.5 font-semibold text-ink-900">
+                {receiptPreview(charge)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+              <p className="text-xs text-ink-500">הקבלה תישלח לאימייל</p>
+              {customerEmail ? (
+                <p
+                  dir="ltr"
+                  className="mt-0.5 text-right font-semibold text-ink-900"
+                >
+                  {customerEmail}
+                </p>
+              ) : (
+                <p className="mt-0.5 font-medium text-amber-700">
+                  אין אימייל בחשבון הלקוח — המסמך יופק בלי שליחה
+                </p>
+              )}
+            </div>
+          </>
+        )}
         <div className="grid grid-cols-3 gap-2 rounded-2xl bg-ink-50 p-3 text-center">
           <div>
             <p className="text-xs text-ink-500">סכום חיוב</p>
@@ -872,7 +892,12 @@ function ChargeReceiptDialog({
 
         {open && (
           <div className="space-y-3">
-            {isCard ? (
+            {isPass ? (
+              <p className="text-sm leading-relaxed text-ink-600">
+                האישור מסמן שהלקוח שילם בכרטיסייה ומעביר את החיוב ל״שולם״.
+                לא מופקת קבלה, חשבונית או תקבול.
+              </p>
+            ) : isCard ? (
               <>
                 <ReceiptLabelSelect
                   charge={charge}
@@ -949,7 +974,23 @@ function ChargeReceiptDialog({
             )}
 
             <div className="flex flex-wrap gap-2">
-              {isCard ? (
+              {isPass ? (
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    run(`pass:${charge.id}`, async () => {
+                      const result = await approveCollectionPassCharge({
+                        paymentId: charge.id,
+                      });
+                      if (result.success) onClose();
+                      return result;
+                    })
+                  }
+                >
+                  {busyId === `pass:${charge.id}` ? "מאשר..." : "אישור"}
+                </Button>
+              ) : isCard ? (
                 <Button
                   type="button"
                   disabled={busy}
@@ -984,6 +1025,7 @@ function ChargeReceiptDialog({
           </div>
         )}
 
+        {!isPass && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-ink-800">
             היסטוריית תקבולים
@@ -1026,6 +1068,13 @@ function ChargeReceiptDialog({
             </ul>
           )}
         </div>
+        )}
+
+        {isPass && !open && (
+          <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+            אושר תשלום בכרטיסייה. לא הופקה קבלה או חשבונית.
+          </p>
+        )}
 
         {canRemoveCharge(charge) && (
           <div className="border-t border-ink-100 pt-4">
@@ -1205,6 +1254,7 @@ const METHOD_BADGE: Record<
   maccabi: { tone: "brand", ring: "ring-brand-200" },
   amit: { tone: "success", ring: "ring-aqua-200" },
   paybox: { tone: "brand", ring: "ring-fuchsia-200" },
+  pool_pass: { tone: "success", ring: "ring-emerald-200" },
   credit_card: { tone: "brand", ring: "ring-violet-200" },
 };
 

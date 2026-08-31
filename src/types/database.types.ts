@@ -1945,6 +1945,7 @@ export type Database = {
         | "bank_transfer"
         | "maccabi"
         | "amit"
+        | "pool_pass"
       payment_status: "pending" | "paid" | "failed" | "refunded" | "partial"
       private_lesson_slot_status:
         | "awaiting_schedule"
@@ -2111,6 +2112,7 @@ export const Constants = {
         "bank_transfer",
         "maccabi",
         "amit",
+        "pool_pass",
       ],
       payment_status: ["pending", "paid", "failed", "refunded", "partial"],
       private_lesson_slot_status: [

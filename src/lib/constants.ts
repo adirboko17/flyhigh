@@ -240,6 +240,7 @@ export const PAYMENT_METHOD: Record<Enums<"payment_method">, string> = {
   bank_transfer: "העברה בנקאית",
   maccabi: "מכבי",
   amit: "עמית",
+  pool_pass: "כרטיסייה",
   external: "חיצוני",
 };
 
@@ -301,9 +302,25 @@ export function isManualReceiptMethod(
   );
 }
 
+/**
+ * כרטיסייה — רק בעמוד הגבייה למנהל.
+ * מאשרים בלי קבלה או חשבונית; החיוב עובר ל״שולם״.
+ */
+export function isPoolPassPaymentMethod(
+  method: Enums<"payment_method"> | null | undefined
+): method is "pool_pass" {
+  return method === "pool_pass";
+}
+
+/** אמצעי תשלום משרדיים שמופיעים ברשימת הגבייה — כולל כרטיסייה בלי מסמך. */
+export const COLLECTION_OFFICE_METHODS = [
+  ...OFFICE_RECEIPT_METHODS,
+  "pool_pass",
+] as const satisfies readonly Enums<"payment_method">[];
+
 /** אמצעי תשלום שאפשר לנהל בעמוד הגבייה — כולל מעבר לאשראי על חיוב משרדי. */
 export const COLLECTION_PAYMENT_METHODS = [
-  ...OFFICE_RECEIPT_METHODS,
+  ...COLLECTION_OFFICE_METHODS,
   "credit_card",
 ] as const satisfies readonly Enums<"payment_method">[];
 

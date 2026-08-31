@@ -17,6 +17,7 @@ import {
   adminPaymentBadge,
   isAbandonedCardcomCharge,
   isCollectibleOpenCharge,
+  isPoolPassPaymentMethod,
   PAYMENT_METHOD,
 } from "@/lib/constants";
 import { reconcilePendingCardcomCheckouts } from "@/lib/payments/cardcomCheckout";
@@ -64,6 +65,7 @@ const METHOD_COLORS: Record<string, string> = {
   credit_card: "text-brand-500",
   bit: "text-violet-500",
   paybox: "text-fuchsia-500",
+  pool_pass: "text-emerald-500",
   standing_order: "text-indigo-500",
   cash: "text-emerald-500",
   bank_transfer: "text-sky-500",
@@ -171,6 +173,7 @@ export default async function AdminFinancePage({
   const revenueByMonth = new Map<string, number>();
   for (const payment of allPayments) {
     if (payment.status !== "paid" || !payment.paid_at) continue;
+    if (isPoolPassPaymentMethod(payment.payment_method)) continue;
     addToMap(
       revenueByMonth,
       israelDateOf(payment.paid_at).slice(0, 7),
@@ -242,10 +245,13 @@ export default async function AdminFinancePage({
   }, 0);
 
   const monthPayments = allPayments.filter((p) => paymentMonth(p) === month);
-  const monthPaid = monthPayments.filter((p) => p.status === "paid");
+  const monthPaid = monthPayments.filter(
+    (p) => p.status === "paid" && !isPoolPassPaymentMethod(p.payment_method)
+  );
   // אשראי שלא נסלק הוא עגלה נטושה — לא מופיע ביומן העסקאות.
   const monthTransactions = monthPayments.filter(
     (p) =>
+      !isPoolPassPaymentMethod(p.payment_method) &&
       !isAbandonedCardcomCharge(
         p.status,
         p.payment_method,
