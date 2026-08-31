@@ -5,7 +5,7 @@ import {
   type CollectionReceipt,
 } from "@/components/admin/CollectionsList";
 import {
-  DEFERRED_PAYMENT_METHODS,
+  OFFICE_RECEIPT_METHODS,
   isCollectionPaymentMethod,
 } from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
@@ -34,7 +34,7 @@ export default async function AdminCollectionsPage() {
         "id, amount, payment_method, office_collection, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
       )
       .or(
-        `payment_method.in.(${DEFERRED_PAYMENT_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
+        `payment_method.in.(${OFFICE_RECEIPT_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
       )
       .or(
         `status.in.(pending,partial),and(status.eq.paid,paid_at.gte.${paidSince})`

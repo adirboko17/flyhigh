@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import {
-  DEFERRED_PAYMENT_METHODS,
+  OFFICE_RECEIPT_METHODS,
   PAYMENT_METHOD,
   isCollectionPaymentMethod,
-  isDeferredPaymentMethod,
+  isManualReceiptMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
@@ -116,7 +116,7 @@ function isCollectionManagedCharge(charge: {
   payment_method: Enums<"payment_method"> | null;
   office_collection?: boolean | null;
 }) {
-  if (isDeferredPaymentMethod(charge.payment_method)) return true;
+  if (isManualReceiptMethod(charge.payment_method)) return true;
   return (
     charge.payment_method === "credit_card" && charge.office_collection === true
   );
@@ -391,7 +391,7 @@ export async function settleParentCharges(input: {
     .select(CHARGE_SELECT)
     .eq("parent_id", input.parentId)
     .in("status", ["pending", "partial"])
-    .in("payment_method", [...DEFERRED_PAYMENT_METHODS]);
+    .in("payment_method", [...OFFICE_RECEIPT_METHODS]);
 
   const open = (charges ?? []).filter(
     (charge) => remainingOf(charge as ChargeRow) > 0

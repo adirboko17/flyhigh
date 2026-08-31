@@ -29,7 +29,7 @@ import {
   COLLECTION_PAYMENT_METHODS,
   PAYMENT_METHOD,
   PAYMENT_STATUS,
-  isDeferredPaymentMethod,
+  isManualReceiptMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
@@ -243,7 +243,7 @@ export function CollectionsList({
       <Card className="overflow-hidden">
         <div className="bg-brand-gradient px-5 py-4 text-white">
           <p className="text-xs font-medium text-white/70">
-            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, או אשראי במעמד הגבייה
+            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, פייבוקס, או אשראי במעמד הגבייה
           </p>
           <h1 className="font-display text-2xl font-bold leading-tight">גבייה</h1>
         </div>
@@ -334,7 +334,7 @@ export function CollectionsList({
       {parents.length === 0 ? (
         <EmptyState
           title="אין עדיין חיובים לגבייה"
-          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לאשראי ולפתוח סליקה."
+          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לפייבוקס או לאשראי ולפתוח סליקה."
         />
       ) : visibleParents.length === 0 ? (
         <EmptyState
@@ -449,7 +449,7 @@ function ParentCard({
 }) {
   const openCharges = parent.charges.filter(isOpen);
   const deferredOpen = openCharges.filter((charge) =>
-    isDeferredPaymentMethod(charge.method)
+    isManualReceiptMethod(charge.method)
   );
   const hasDebt = parent.openAmount > 0;
 
@@ -935,8 +935,9 @@ function ChargeReceiptDialog({
                   onSave={(text) => onChangeCustomText(charge.id, text)}
                 />
                 <p className="text-xs leading-relaxed text-ink-500">
-                  עם הרישום תופק חשבונית מס-קבלה בקארדקום על הסכום (לא אשראי),
-                  תישלח למייל הלקוח, ותישלח התראה גם אליכם.
+                  עם הרישום תופק חשבונית מס-קבלה בקארדקום כאמצעי תשלום{" "}
+                  {PAYMENT_METHOD[charge.method]}, תישלח למייל הלקוח, ותישלח
+                  התראה גם אליכם.
                 </p>
               </>
             )}
@@ -1203,6 +1204,7 @@ const METHOD_BADGE: Record<
   bank_transfer: { tone: "info", ring: "ring-sky-200" },
   maccabi: { tone: "brand", ring: "ring-brand-200" },
   amit: { tone: "success", ring: "ring-aqua-200" },
+  paybox: { tone: "brand", ring: "ring-fuchsia-200" },
   credit_card: { tone: "brand", ring: "ring-violet-200" },
 };
 

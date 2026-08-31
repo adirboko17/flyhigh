@@ -281,9 +281,29 @@ export function isDeferredPaymentMethod(
   );
 }
 
+/**
+ * אמצעי תשלום משרדיים שנגבים בתקבול ידני (לא סליקת אשראי).
+ * פייבוקס כאן בלבד — לא בצ׳קאאוט ללקוח, רק בעמוד הגבייה למנהל (לקוחות חריגים).
+ */
+export const OFFICE_RECEIPT_METHODS = [
+  ...DEFERRED_PAYMENT_METHODS,
+  "paybox",
+] as const satisfies readonly Enums<"payment_method">[];
+
+export type OfficeReceiptMethod = (typeof OFFICE_RECEIPT_METHODS)[number];
+
+export function isManualReceiptMethod(
+  method: Enums<"payment_method"> | null
+): method is OfficeReceiptMethod {
+  return (
+    method !== null &&
+    (OFFICE_RECEIPT_METHODS as readonly string[]).includes(method)
+  );
+}
+
 /** אמצעי תשלום שאפשר לנהל בעמוד הגבייה — כולל מעבר לאשראי על חיוב משרדי. */
 export const COLLECTION_PAYMENT_METHODS = [
-  ...DEFERRED_PAYMENT_METHODS,
+  ...OFFICE_RECEIPT_METHODS,
   "credit_card",
 ] as const satisfies readonly Enums<"payment_method">[];
 
