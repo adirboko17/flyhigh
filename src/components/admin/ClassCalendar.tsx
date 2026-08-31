@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Icon } from "@/components/icons/Icon";
@@ -10,8 +11,13 @@ import {
   type AdminClassRow,
 } from "@/components/admin/ClassList";
 import { SessionSubstituteDialog } from "@/components/admin/SessionSubstituteDialog";
-import { loadAdminClassSummary } from "@/lib/admin/classRoster";
+import {
+  loadAdminClassSummary,
+  loadCalendarSessionRoster,
+  type CalendarSessionRegistrant,
+} from "@/lib/admin/classRoster";
 import { formatClassOccupancy } from "@/lib/classes/capacity";
+import type { ClassBookingMode } from "@/lib/classes/bookingMode";
 import { CLASS_SESSION_STATUS, DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { dayLabelLong, type CalendarDay } from "@/lib/scheduling/monthGrid";
 import { cn } from "@/utils/cn";
@@ -39,6 +45,8 @@ export type CalendarSession = {
   capacity: number | null;
   registered: number;
   weeklySlotId?: string | null;
+  bookingMode?: ClassBookingMode;
+  pickOneSlot?: boolean;
   /** לקוח/ילד בשיעור פרטי. */
   clientLabel?: string | null;
 };
@@ -945,6 +953,36 @@ function SessionRow({
   const isPrivate = isBookedSession(session.kind);
   const instructorLabel = sessionInstructorLabel(session);
   const showStatus = session.status !== "scheduled";
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [roster, setRoster] = useState<CalendarSessionRegistrant[] | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const rosterId = `session-roster-${session.id}`;
+
+  async function toggleRoster() {
+    if (rosterOpen) {
+      setRosterOpen(false);
+      return;
+    }
+    setRosterOpen(true);
+    if (roster || rosterLoading) return;
+    setRosterLoading(true);
+    setRosterError(null);
+    try {
+      const rows = await loadCalendarSessionRoster({
+        classId: session.classId,
+        sessionId: session.id,
+        weeklySlotId: session.weeklySlotId,
+        bookingMode: session.bookingMode,
+        pickOneSlot: session.pickOneSlot,
+      });
+      setRoster(rows);
+    } catch {
+      setRosterError("לא ניתן לטעון את רשימת הנרשמים.");
+    } finally {
+      setRosterLoading(false);
+    }
+  }
 
   return (
     <li className="flex gap-2.5 px-3 py-2.5">
@@ -994,9 +1032,15 @@ function SessionRow({
             <Badge tone="warning">החלפה</Badge>
           )}
           {!isPrivate && (
-            <span className="tabular-nums text-ink-600">
+            <button
+              type="button"
+              aria-expanded={rosterOpen}
+              aria-controls={rosterId}
+              onClick={toggleRoster}
+              className="tabular-nums text-ink-600 transition-colors hover:text-brand-700"
+            >
               {formatClassOccupancy(session.registered, session.capacity)}
-            </span>
+            </button>
           )}
           {!isPrivate && !cancelled && (
             <button
@@ -1005,6 +1049,30 @@ function SessionRow({
               className="font-semibold text-brand-600 transition-colors hover:text-brand-700"
             >
               {session.substituteInstructor ? "עדכון החלפה" : "החלפה"}
+            </button>
+          )}
+          {!isPrivate && (
+            <button
+              type="button"
+              aria-expanded={rosterOpen}
+              aria-controls={rosterId}
+              onClick={toggleRoster}
+              className={cn(
+                "inline-flex items-center gap-0.5 font-semibold transition-colors",
+                rosterOpen
+                  ? "text-brand-800"
+                  : "text-brand-600 hover:text-brand-700"
+              )}
+            >
+              נרשמים
+              <Icon
+                name="chevron"
+                size={14}
+                className={cn(
+                  "transition-transform",
+                  rosterOpen ? "rotate-90" : "-rotate-90"
+                )}
+              />
             </button>
           )}
           {isPrivate ? (
@@ -1028,6 +1096,49 @@ function SessionRow({
 
         {session.notes && (
           <p className="mt-1 truncate text-xs text-ink-400">{session.notes}</p>
+        )}
+
+        {rosterOpen && (
+          <div id={rosterId} className="mt-2">
+            {rosterLoading && (
+              <p className="px-1 py-2 text-xs text-ink-400">טוען נרשמים...</p>
+            )}
+            {rosterError && (
+              <p role="alert" className="px-1 py-2 text-xs text-red-600">
+                {rosterError}
+              </p>
+            )}
+            {!rosterLoading && !rosterError && roster && roster.length === 0 && (
+              <p className="px-1 py-2 text-xs text-ink-400">
+                אין נרשמים למועד זה.
+              </p>
+            )}
+            {!rosterLoading && roster && roster.length > 0 && (
+              <ul className="max-h-56 overflow-y-auto rounded-xl border border-ink-100 bg-ink-50/70">
+                {roster.map((person, index) => (
+                  <li
+                    key={person.id}
+                    className="flex items-center gap-2.5 border-b border-ink-100 px-2.5 py-2 last:border-b-0"
+                  >
+                    <span className="w-4 shrink-0 text-center text-[11px] font-semibold tabular-nums text-ink-300">
+                      {index + 1}
+                    </span>
+                    <Avatar name={person.name} className="h-7 w-7 text-[10px]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-ink-900">
+                        {person.name}
+                      </p>
+                      {person.parentLine && (
+                        <p className="truncate text-[11px] text-ink-500">
+                          {person.parentLine}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </li>

@@ -7,7 +7,12 @@ import type {
   AdminClassRow,
   AdminClassWaitlistEntry,
 } from "@/components/admin/ClassList";
+import type { ClassBookingMode } from "@/lib/classes/bookingMode";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
+import {
+  participantDisplayName,
+  participantSecondaryLine,
+} from "@/lib/enrollment/participant";
 
 const ENROLLMENT_SELECT =
   "id, class_id, parent_id, child_id, weekly_slot_id, session_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection), class_sessions(session_date, start_time, end_time)";
@@ -60,6 +65,59 @@ export async function loadClassRoster(classId: string): Promise<{
     waitlist: (waitlist ?? []) as AdminClassWaitlistEntry[],
     sessions: (sessions ?? []) as AdminRosterSession[],
   };
+}
+
+export type CalendarSessionRegistrant = {
+  id: string;
+  name: string;
+  parentLine: string | null;
+};
+
+/** נרשמים למועד מסוים בלוח השנה — לפי תור, מועד שבועי, או כל החוג. */
+export async function loadCalendarSessionRoster(input: {
+  classId: string;
+  sessionId: string;
+  weeklySlotId?: string | null;
+  bookingMode?: ClassBookingMode | null;
+  pickOneSlot?: boolean;
+}): Promise<CalendarSessionRegistrant[]> {
+  const supabase = await createAdminDataClient();
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select(
+      "id, child_id, parent_id, weekly_slot_id, session_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
+    )
+    .eq("type", "class")
+    .eq("class_id", input.classId)
+    .in("status", ["active", "pending"]);
+
+  if (error) throw error;
+
+  const rows = (data ?? []).filter((row) => {
+    if (!enrollmentHoldsSeat(row)) return false;
+    if (input.bookingMode === "appointment") {
+      return row.session_id === input.sessionId;
+    }
+    if (!input.weeklySlotId) return true;
+    if (row.weekly_slot_id === input.weeklySlotId) return true;
+    return !row.weekly_slot_id && !input.pickOneSlot;
+  });
+
+  return rows
+    .map((row) => ({
+      id: row.id,
+      name: participantDisplayName(
+        row.children?.full_name,
+        row.profiles?.full_name,
+        "—"
+      ),
+      parentLine: participantSecondaryLine(
+        row.children?.full_name,
+        row.profiles?.full_name,
+        row.profiles?.phone
+      ),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "he"));
 }
 
 const CLASS_SUMMARY_SELECT =

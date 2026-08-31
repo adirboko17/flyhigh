@@ -58,7 +58,7 @@ export default async function AdminCalendarPage({
     supabase
       .from("class_sessions")
       .select(
-        "id, class_id, weekly_slot_id, session_date, start_time, end_time, status, notes, substitute_instructor_id, substitute:instructors!class_sessions_substitute_instructor_id_fkey(full_name), classes(id, title, category, capacity, status, instructor_id, instructors(full_name))"
+        "id, class_id, weekly_slot_id, session_date, start_time, end_time, status, notes, substitute_instructor_id, substitute:instructors!class_sessions_substitute_instructor_id_fkey(full_name), classes(id, title, category, capacity, status, instructor_id, booking_mode, pick_one_slot, instructors(full_name))"
       )
       .gte("session_date", start)
       .lte("session_date", end)
@@ -151,6 +151,8 @@ export default async function AdminCalendarPage({
           capacity: cls.capacity,
           registered: registeredByClass.get(session.class_id) ?? 0,
           weeklySlotId: session.weekly_slot_id,
+          bookingMode: cls.booking_mode,
+          pickOneSlot: cls.pick_one_slot,
         },
       ];
     }
