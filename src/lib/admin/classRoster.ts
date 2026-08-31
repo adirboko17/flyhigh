@@ -8,6 +8,7 @@ import type {
   AdminClassWaitlistEntry,
 } from "@/components/admin/ClassList";
 import type { ClassBookingMode } from "@/lib/classes/bookingMode";
+import { enrollmentMatchesCalendarSession } from "@/lib/admin/calendarRosterMatch";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
   participantDisplayName,
@@ -93,15 +94,9 @@ export async function loadCalendarSessionRoster(input: {
 
   if (error) throw error;
 
-  const rows = (data ?? []).filter((row) => {
-    if (!enrollmentHoldsSeat(row)) return false;
-    if (input.bookingMode === "appointment") {
-      return row.session_id === input.sessionId;
-    }
-    if (!input.weeklySlotId) return true;
-    if (row.weekly_slot_id === input.weeklySlotId) return true;
-    return !row.weekly_slot_id && !input.pickOneSlot;
-  });
+  const rows = (data ?? []).filter((row) =>
+    enrollmentMatchesCalendarSession(row, input)
+  );
 
   return rows
     .map((row) => ({

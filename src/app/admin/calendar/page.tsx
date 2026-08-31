@@ -22,6 +22,7 @@ import {
   weekStartOf,
 } from "@/lib/scheduling/monthGrid";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { enrollmentMatchesCalendarSession } from "@/lib/admin/calendarRosterMatch";
 
 export const metadata = { title: "לוח שנה" };
 
@@ -66,9 +67,11 @@ export default async function AdminCalendarPage({
       .order("start_time"),
     supabase
       .from("enrollments")
-      .select("class_id")
+      .select(
+        "class_id, weekly_slot_id, session_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+      )
       .eq("type", "class")
-      .eq("status", "active")
+      .in("status", ["active", "pending"])
       .not("class_id", "is", null),
     supabase
       .from("instructors")
@@ -110,13 +113,12 @@ export default async function AdminCalendarPage({
     ])
   );
 
-  const registeredByClass = new Map<string, number>();
+  const enrollmentsByClass = new Map<string, NonNullable<typeof enrollments>>();
   for (const enrollment of enrollments ?? []) {
     if (!enrollment.class_id) continue;
-    registeredByClass.set(
-      enrollment.class_id,
-      (registeredByClass.get(enrollment.class_id) ?? 0) + 1
-    );
+    const list = enrollmentsByClass.get(enrollment.class_id);
+    if (list) list.push(enrollment);
+    else enrollmentsByClass.set(enrollment.class_id, [enrollment]);
   }
 
   const classSessions: CalendarSession[] = (sessions ?? []).flatMap(
@@ -149,7 +151,16 @@ export default async function AdminCalendarPage({
           status: session.status,
           notes: session.notes,
           capacity: cls.capacity,
-          registered: registeredByClass.get(session.class_id) ?? 0,
+          registered: (
+            enrollmentsByClass.get(session.class_id) ?? []
+          ).filter((row) =>
+            enrollmentMatchesCalendarSession(row, {
+              sessionId: session.id,
+              weeklySlotId: session.weekly_slot_id,
+              bookingMode: cls.booking_mode,
+              pickOneSlot: cls.pick_one_slot,
+            })
+          ).length,
           weeklySlotId: session.weekly_slot_id,
           bookingMode: cls.booking_mode,
           pickOneSlot: cls.pick_one_slot,
