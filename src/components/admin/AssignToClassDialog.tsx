@@ -592,8 +592,10 @@ export function AssignToClassDialog({
             method === "credit_card"
               ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
               : method === "none"
-                ? "השיבוץ ייווצר בלי רשומת חיוב."
-                : "החיוב ייפתח כחוב בעמוד הגבייה, עד לסימון כשולם."
+                ? "הלקוח ישובץ לחוג בלי רשומת חיוב — אין חוב ואין הפרש לגבייה."
+                : markPaid
+                  ? "הלקוח ישובץ לחוג לפי הסכום שהוזן בלבד. אין חיוב נוסף על ההפרש ממחיר החוג."
+                  : "ייפתח חוב בגבייה לפי הסכום שהוזן בלבד — לא על ההפרש ממחיר החוג."
           }
         >
           <Select
@@ -622,12 +624,12 @@ export function AssignToClassDialog({
             )}
 
             <Field
-              label="סכום לחיוב"
+              label="סכום סופי ללקוח"
               htmlFor="assign-amount"
               hint={
                 participantCount > 1
-                  ? `הסכום יתחלק בין ${participantCount} המשתתפים שנבחרו.`
-                  : undefined
+                  ? `הסכום הסופי יתחלק בין ${participantCount} המשתתפים. אין חיוב נוסף על ההפרש ממחיר החוג.`
+                  : "זה הסכום הסופי. אם הורדתם ממחיר החוג — זו הנחה, בלי חוב על ההפרש."
               }
               required
             >
@@ -644,6 +646,13 @@ export function AssignToClassDialog({
                 required
               />
             </Field>
+            {Number(amount || 0) < listTotal && Number(amount || 0) >= 0 && listTotal > 0 && (
+              <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
+                הנחת מנהל: יחויב {formatCurrency(Number(amount || 0))} במקום{" "}
+                {formatCurrency(listTotal)}. הלקוח ישובץ לחוג הרגיל, בלי חוב על
+                ההפרש ({formatCurrency(listTotal - Number(amount || 0))}).
+              </p>
+            )}
 
             {!isCreditCard && (
               <label className="flex items-center gap-2.5 text-sm text-ink-700">

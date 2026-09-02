@@ -12,6 +12,7 @@ import {
   classPriceFromPublicCounts,
 } from "@/lib/finance/proratedClassPrice";
 import { isAppointmentClass } from "@/lib/classes/bookingMode";
+import { offersTrialLesson } from "@/lib/classes/trialLesson";
 import { formatTime } from "@/utils/format";
 import { classIsSoldOut } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
@@ -225,6 +226,7 @@ export function ClassCard({
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {interestOnly && <InfoChip>הרשמת עניין</InfoChip>}
+          {offersTrialLesson(cls) && <InfoChip>שיעור ניסיון</InfoChip>}
           {genderLabel && <InfoChip>{genderLabel}</InfoChip>}
           {audienceLabel && <InfoChip>{audienceLabel}</InfoChip>}
           {availability && (

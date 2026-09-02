@@ -7,6 +7,7 @@ import {
 export type CalendarRosterEnrollment = SeatEnrollment & {
   session_id?: string | null;
   weekly_slot_id?: string | null;
+  is_trial?: boolean | null;
 };
 
 export type CalendarRosterSessionFilter = {
@@ -22,6 +23,9 @@ export function enrollmentMatchesCalendarSession(
   session: CalendarRosterSessionFilter
 ): boolean {
   if (!enrollmentHoldsSeat(row)) return false;
+  if (row.is_trial) {
+    return row.session_id === session.sessionId;
+  }
   if (session.bookingMode === "appointment") {
     return row.session_id === session.sessionId;
   }

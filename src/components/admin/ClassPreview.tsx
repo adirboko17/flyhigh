@@ -34,6 +34,7 @@ export type ClassPreviewForm = {
   billing_months?: string;
   planned_session_count?: string;
   interest_only?: boolean;
+  trial_lesson_price?: string;
 };
 
 export function ClassPreviewPanel({

@@ -17,7 +17,10 @@ import {
   classPeriodTotal,
 } from "@/lib/finance/classPricing";
 import { planInstallmentsMax } from "@/lib/finance/installments";
-import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
+import {
+  isElapsedClassSession,
+  prorateClassPrice,
+} from "@/lib/finance/proratedClassPrice";
 import {
   calculateOrderTotal,
   loadFamilyDiscountSettings,
@@ -54,6 +57,11 @@ import {
   uniqueSessionIds,
 } from "@/lib/enrollment/appointmentSessions";
 import { appointmentSessionLabel } from "@/lib/classes/bookingMode";
+import {
+  offersTrialLesson,
+  trialLessonAmount,
+  trialLessonTitle,
+} from "@/lib/classes/trialLesson";
 
 type EnrollmentInsert = Database["public"]["Tables"]["enrollments"]["Insert"];
 
@@ -185,7 +193,7 @@ async function prepareClassLine(
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
+          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only, trial_lesson_price"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -202,7 +210,7 @@ async function prepareClassLine(
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+          "child_id, status, payment_status, is_trial, session_id, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
@@ -217,6 +225,21 @@ async function prepareClassLine(
       success: false,
       error: `ההרשמה ל${cls.title} היא ללא תשלום. רעננו את העמוד ונסו שוב.`,
     };
+  }
+
+  if (item.isTrial) {
+    return prepareTrialClassLine(
+      supabase,
+      reads,
+      profile,
+      item,
+      cls,
+      children ?? [],
+      uniqueChildIds,
+      participants,
+      includeSelf,
+      reserved
+    );
   }
 
   if (cls.booking_mode === "appointment") {
@@ -372,8 +395,8 @@ async function prepareClassLine(
     if (parentError) return { success: false, error: parentError };
   }
 
-  const holdingEnrollments = (existingEnrollments ?? []).filter((enrollment) =>
-    enrollmentHoldsSeat(enrollment)
+  const holdingEnrollments = (existingEnrollments ?? []).filter(
+    (enrollment) => enrollmentHoldsSeat(enrollment) && !enrollment.is_trial
   );
   const alreadyEnrolled = new Set(
     holdingEnrollments.map((row) => row.child_id).filter(Boolean) as string[]
@@ -491,6 +514,217 @@ async function prepareClassLine(
       }),
       paymentChildIds: participants,
       paymentAmounts: childAmounts,
+      privateLessonQuantity: null,
+      activityQuantity: null,
+      planId: null,
+    },
+  };
+}
+
+type TrialClassRow = {
+  id: string;
+  title: string;
+  price: number;
+  billing_months: number | null;
+  pick_one_slot: boolean;
+  booking_mode: Enums<"class_booking_mode">;
+  category: string | null;
+  capacity: number | null;
+  status: Enums<"class_status">;
+  gender_policy: ClassGenderPolicy;
+  audience_type: Enums<"class_audience_type">;
+  age_min: number | null;
+  age_max: number | null;
+  grade_min: number | null;
+  grade_max: number | null;
+  interest_only: boolean;
+  trial_lesson_price: number | null;
+};
+
+async function prepareTrialClassLine(
+  supabase: Client,
+  reads: Awaited<ReturnType<typeof createSessionReadClient>>,
+  profile: CartParent,
+  item: CartItem,
+  cls: TrialClassRow,
+  children: {
+    id: string;
+    full_name: string;
+    gender: Enums<"gender_type"> | null;
+    birth_date: string | null;
+    school_grade: number | null;
+    grade_school_year: number | null;
+  }[],
+  uniqueChildIds: string[],
+  participants: (string | null)[],
+  includeSelf: boolean,
+  reserved: {
+    classSpots: Map<string, number>;
+    categoryKids: Map<string, string[]>;
+  }
+): Promise<{ success: true; line: PreparedCartLine } | { success: false; error: string }> {
+  if (!offersTrialLesson(cls)) {
+    return { success: false, error: `אין שיעור ניסיון ל${cls.title}.` };
+  }
+  if (participants.length !== 1) {
+    return {
+      success: false,
+      error: `לשיעור ניסיון ב${cls.title} בוחרים מתאמן אחד.`,
+    };
+  }
+
+  const sessionIds = uniqueSessionIds(item.sessionIds);
+  if (sessionIds.length !== 1) {
+    return { success: false, error: `נא לבחור מועד לשיעור הניסיון ב${cls.title}.` };
+  }
+
+  const { data: session } = await supabase
+    .from("class_sessions")
+    .select("id, class_id, session_date, start_time, end_time, status, weekly_slot_id")
+    .eq("id", sessionIds[0])
+    .eq("class_id", cls.id)
+    .maybeSingle();
+
+  if (!session) {
+    return { success: false, error: `המועד שנבחר ל${cls.title} אינו תקין.` };
+  }
+  if (session.status !== "scheduled") {
+    return { success: false, error: "המועד שנבחר אינו זמין." };
+  }
+  if (isElapsedClassSession(session, todayInIsrael())) {
+    return { success: false, error: "לא ניתן לקבוע שיעור ניסיון למועד שכבר עבר." };
+  }
+
+  const slotGenders: ClassGenderPolicy[] = [];
+  if (session.weekly_slot_id) {
+    const { data: slot } = await supabase
+      .from("class_weekly_slots")
+      .select("gender_policy")
+      .eq("id", session.weekly_slot_id)
+      .eq("class_id", cls.id)
+      .maybeSingle();
+    if (slot) slotGenders.push(slot.gender_policy);
+  }
+
+  if (children.length !== uniqueChildIds.length) {
+    return { success: false, error: "אחד או יותר מהילדים שנבחרו אינם תקינים." };
+  }
+  const eligibilityError = childrenEligibilityError(cls, children, slotGenders);
+  if (eligibilityError) return { success: false, error: eligibilityError };
+  if (includeSelf) {
+    const parentError = parentGenderError(
+      profile.full_name,
+      profile.gender,
+      cls.gender_policy,
+      slotGenders
+    );
+    if (parentError) return { success: false, error: parentError };
+  }
+
+  const healthError = await requireHealthDeclarations(reads, profile.id, children);
+  if (healthError) return { success: false, error: healthError };
+
+  const { data: existing } = await reads
+    .from("enrollments")
+    .select(
+      "child_id, session_id, is_trial, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+    )
+    .eq("class_id", cls.id)
+    .eq("parent_id", profile.id)
+    .neq("status", "cancelled");
+
+  const holding = (existing ?? []).filter((row) => enrollmentHoldsSeat(row));
+  const participantId = participants[0] ?? null;
+  const alreadyFull = holding.some(
+    (row) =>
+      !row.is_trial &&
+      (participantId == null ? row.child_id == null : row.child_id === participantId)
+  );
+  if (alreadyFull) {
+    return {
+      success: false,
+      error: `${children[0]?.full_name ?? profile.full_name} כבר רשום/ה ל${cls.title}.`,
+    };
+  }
+  const alreadyThisSession = holding.some(
+    (row) =>
+      row.is_trial &&
+      row.session_id === session.id &&
+      (participantId == null ? row.child_id == null : row.child_id === participantId)
+  );
+  if (alreadyThisSession) {
+    return {
+      success: false,
+      error: `כבר נקבע שיעור ניסיון במועד הזה ל${cls.title}.`,
+    };
+  }
+
+  const reservedKey = `${cls.id}:session:${session.id}`;
+  const reservedSeriesKey = `${cls.id}:${
+    cls.pick_one_slot ? session.weekly_slot_id ?? "all" : "all"
+  }`;
+  const reservedTrials = reserved.classSpots.get(reservedKey) ?? 0;
+  const reservedSeries = reserved.classSpots.get(reservedSeriesKey) ?? 0;
+  const seriesTaken = await countHeldSeats(
+    supabase,
+    cls.id,
+    cls.pick_one_slot ? session.weekly_slot_id : null
+  );
+  const sessionTaken = await countHeldSeats(supabase, cls.id, null, session.id);
+  if (cls.capacity != null) {
+    const available =
+      cls.capacity - seriesTaken - sessionTaken - reservedTrials - reservedSeries;
+    if (available < 1) {
+      return {
+        success: false,
+        error: `אין מקום במועד שנבחר לשיעור ניסיון ב${cls.title}.`,
+      };
+    }
+  }
+  reserved.classSpots.set(reservedKey, reservedTrials + 1);
+
+  const unitPrice = trialLessonAmount(cls);
+  const names = [
+    ...children.map((child) => child.full_name),
+    ...(includeSelf ? [profile.full_name] : []),
+  ];
+  const title = trialLessonTitle(cls.title);
+  const sessionLabel = appointmentSessionLabel(
+    session.session_date,
+    session.start_time,
+    session.end_time
+  );
+
+  return {
+    success: true,
+    line: {
+      itemId: item.id,
+      kind: "class",
+      title,
+      listTotal: unitPrice,
+      participantNames: names,
+      installmentsMax: null,
+      chargeDescription: chargeDescriptionForCheckout({
+        productTitle: title,
+        participantCount: 1,
+        kind: "class",
+        customLabel: `${title} · ${sessionLabel}`,
+      }),
+      enrollmentRows: [
+        {
+          parent_id: profile.id,
+          child_id: participantId,
+          class_id: cls.id,
+          weekly_slot_id: session.weekly_slot_id,
+          session_id: session.id,
+          type: "class" as const,
+          status: "active" as const,
+          discount_percent: 0,
+          is_trial: true,
+        },
+      ],
+      paymentChildIds: [participantId],
+      paymentAmounts: [unitPrice],
       privateLessonQuantity: null,
       activityQuantity: null,
       planId: null,

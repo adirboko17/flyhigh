@@ -20,7 +20,7 @@ import {
   pickOneSlotTraineeHint,
   pickOneSlotTraineeShort,
 } from "@/lib/class-audience";
-import { formatDate, formatTime } from "@/utils/format";
+import { formatCurrency, formatDate, formatTime } from "@/utils/format";
 import {
   joinClassWaitlist,
   registerInterestForClass,
@@ -75,7 +75,13 @@ type ExistingEnrollment = {
   child_id: string | null;
   status: Enums<"enrollment_status">;
   payment_status: Enums<"enrollment_payment_status">;
+  is_trial?: boolean | null;
   children: { full_name: string } | null;
+  class_sessions?: {
+    session_date: string;
+    start_time: string;
+    end_time: string;
+  } | null;
   payments?: { payment_method: Enums<"payment_method"> | null; status: Enums<"payment_status"> }[] | null;
 };
 
@@ -113,6 +119,7 @@ interface ClassEnrollmentActionsProps {
   sessions?: PublicClassSession[];
   classGenderPolicy?: Enums<"class_gender_policy">;
   interestOnly?: boolean;
+  trialLessonPrice?: number | null;
 }
 
 export function ClassEnrollmentActions({
@@ -141,8 +148,11 @@ export function ClassEnrollmentActions({
   sessions = [],
   classGenderPolicy = "mixed",
   interestOnly = false,
+  trialLessonPrice = null,
 }: ClassEnrollmentActionsProps) {
   const appointment = isAppointmentClass({ booking_mode: bookingMode });
+  const trialAvailable =
+    !appointment && !interestOnly && trialLessonPrice != null && trialLessonPrice >= 0;
   const router = useRouter();
   const { addItem } = useCart();
   const traineeGender = displayGenderPolicy(
@@ -153,7 +163,10 @@ export function ClassEnrollmentActions({
   const enrolledChildIds = useMemo(
     () =>
       new Set(
-        enrollments.map((e) => e.child_id).filter(Boolean) as string[]
+        enrollments
+          .filter((e) => !e.is_trial)
+          .map((e) => e.child_id)
+          .filter(Boolean) as string[]
       ),
     [enrollments]
   );
@@ -166,7 +179,9 @@ export function ClassEnrollmentActions({
   );
   const parentAlreadyTaken =
     !appointment &&
-    (enrollments.some((enrollment) => enrollment.child_id == null) ||
+    (enrollments.some(
+      (enrollment) => enrollment.child_id == null && !enrollment.is_trial
+    ) ||
       waitlist.some((entry) => entry.child_id == null));
   const parentTrainee = useMemo<Trainee>(
     () => ({
@@ -180,6 +195,8 @@ export function ClassEnrollmentActions({
     [parent.fullName, parent.birthDate, parent.gender]
   );
 
+  const [purchaseMode, setPurchaseMode] = useState<"full" | "trial">("full");
+  const trialMode = trialAvailable && purchaseMode === "trial";
   const [weeklySlotId, setWeeklySlotId] = useState<string>(
     () => (pickOneSlot && slots.length === 1 ? slots[0].id : "")
   );
@@ -342,17 +359,27 @@ export function ClassEnrollmentActions({
   );
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const needsSlot = pickOneSlot && slots.length > 0 && !selectedSlot;
+  const needsSlot =
+    !trialMode && pickOneSlot && slots.length > 0 && !selectedSlot;
   const slotSpots = selectedSlot ? selectedSlot.available : availableSpots;
-  const slotSoldOut = pickOneSlot
-    ? Boolean(selectedSlot && selectedSlot.available <= 0)
-    : soldOut;
+  const slotSoldOut =
+    !trialMode &&
+    (pickOneSlot
+      ? Boolean(selectedSlot && selectedSlot.available <= 0)
+      : soldOut);
 
   const maxSelectable = useMemo(() => {
-    if (appointment) return 1;
+    if (appointment || trialMode) return 1;
     if (needsSlot || slotSoldOut) return availableTrainees.length;
     return Math.min(availableTrainees.length, Math.max(0, slotSpots));
-  }, [appointment, availableTrainees.length, needsSlot, slotSoldOut, slotSpots]);
+  }, [
+    appointment,
+    trialMode,
+    availableTrainees.length,
+    needsSlot,
+    slotSoldOut,
+    slotSpots,
+  ]);
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
   const [interestConfirmOpen, setInterestConfirmOpen] = useState(false);
@@ -499,11 +526,15 @@ export function ClassEnrollmentActions({
       setInterestConfirmOpen(true);
       return;
     }
+    if (trialMode && sessionIds.length !== 1) {
+      setError("נא לבחור מועד לשיעור הניסיון.");
+      return;
+    }
     if (appointment && sessionIds.length === 0) {
       setError("נא לבחור לפחות תור אחד.");
       return;
     }
-    if (pickOneSlot && !weeklySlotId) {
+    if (!trialMode && pickOneSlot && !weeklySlotId) {
       setError("נא לבחור מועד לחוג.");
       return;
     }
@@ -533,14 +564,16 @@ export function ClassEnrollmentActions({
       return;
     }
 
-    const listTotal = appointment
-      ? classPrice * sessionIds.length
-      : calculateOrderTotal(
-          classPrice,
-          selectedIds.length,
-          siblingTiers,
-          enrolledSiblings + selectedIds.length
-        ).total;
+    const listTotal = trialMode
+      ? trialLessonPrice ?? 0
+      : appointment
+        ? classPrice * sessionIds.length
+        : calculateOrderTotal(
+            classPrice,
+            selectedIds.length,
+            siblingTiers,
+            enrolledSiblings + selectedIds.length
+          ).total;
     const sessionLabel = selectedSessions
       .map(
         (session) =>
@@ -550,14 +583,15 @@ export function ClassEnrollmentActions({
     const result = addItem({
       kind: "class",
       productId: classId,
-      title: classTitle,
+      title: trialMode ? `שיעור ניסיון · ${classTitle}` : classTitle,
       listTotal,
       childIds: selectedChildIds,
       includeSelf,
       participantNames: selectedTrainees.map((trainee) => trainee.full_name),
-      weeklySlotId: appointment ? null : weeklySlotId || null,
-      sessionIds: appointment ? sessionIds : undefined,
-      weeklySlotLabel: appointment
+      weeklySlotId: appointment || trialMode ? null : weeklySlotId || null,
+      sessionIds: appointment || trialMode ? sessionIds : undefined,
+      isTrial: trialMode,
+      weeklySlotLabel: appointment || trialMode
         ? sessionLabel
         : selectedSlot
         ? formatWeeklySlotLabel(
@@ -612,10 +646,18 @@ export function ClassEnrollmentActions({
                     <span className="min-w-0 truncate text-sm font-medium text-ink-900">
                       {e.children?.full_name ??
                         (e.child_id == null ? parent.fullName : "מתאמן/ת")}
+                      {e.is_trial && e.class_sessions && (
+                        <span className="mt-0.5 block truncate text-xs font-normal text-ink-500">
+                          שיעור ניסיון · {formatDate(e.class_sessions.session_date)}
+                        </span>
+                      )}
                     </span>
-                    <Badge tone={statusBadge.tone} className="shrink-0">
-                      {statusBadge.label}
-                    </Badge>
+                    <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      {e.is_trial && <Badge tone="info">ניסיון</Badge>}
+                      <Badge tone={statusBadge.tone}>
+                        {statusBadge.label}
+                      </Badge>
+                    </span>
                   </li>
                 );
               })}
@@ -649,13 +691,71 @@ export function ClassEnrollmentActions({
 
         {!ended && (availableTrainees.length > 0 || ineligibleTrainees.length > 0) ? (
           <div className="space-y-3">
+            {trialAvailable && !ended && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseMode("full");
+                    setSessionIds([]);
+                    setError(null);
+                  }}
+                  className={cn(
+                    "rounded-2xl border px-3 py-3 text-right transition-colors",
+                    !trialMode
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                      : "border-ink-100 bg-white hover:border-brand-200"
+                  )}
+                >
+                  <span className="block text-sm font-bold text-ink-900">
+                    הרשמה לחוג
+                  </span>
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    {formatCurrency(classPrice)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurchaseMode("trial");
+                    setWeeklySlotId(
+                      pickOneSlot && slots.length === 1 ? slots[0].id : weeklySlotId
+                    );
+                    setError(null);
+                  }}
+                  className={cn(
+                    "rounded-2xl border px-3 py-3 text-right transition-colors",
+                    trialMode
+                      ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200"
+                      : "border-ink-100 bg-white hover:border-brand-200"
+                  )}
+                >
+                  <span className="block text-sm font-bold text-ink-900">
+                    שיעור ניסיון
+                  </span>
+                  <span className="mt-0.5 block text-xs text-ink-500">
+                    מפגש אחד · {formatCurrency(trialLessonPrice ?? 0)}
+                  </span>
+                </button>
+              </div>
+            )}
             {!interestOnly && appointment && (
               <AppointmentPickerTrigger
                 selectedSessions={selectedSessions}
                 onOpen={() => setSessionPickerOpen(true)}
               />
             )}
-            {!interestOnly && !appointment && pickOneSlot && slots.length > 0 && (
+            {trialMode && (
+              <AppointmentPickerTrigger
+                selectedSessions={selectedSessions}
+                onOpen={() => setSessionPickerOpen(true)}
+                emptyTitle="בחירת מועד"
+                emptyHint="לחצו לבחירת תאריך לשיעור הניסיון"
+                selectedLabel="המועד שנבחר"
+                selectedLabelMany="המועדים שנבחרו"
+              />
+            )}
+            {!interestOnly && !appointment && !trialMode && pickOneSlot && slots.length > 0 && (
               <SlotPickerTrigger
                 slotsCount={slots.length}
                 selectedSlot={selectedSlot}
@@ -668,7 +768,9 @@ export function ClassEnrollmentActions({
               <p className="text-sm text-ink-600">
                 {appointment
                   ? "אפשר לקבוע תורים נוספים:"
-                  : "ניתן להירשם גם עבור מתאמן או מתאמנת נוספים:"}
+                  : trialMode
+                    ? "בחרו מתאמן ומועד לשיעור הניסיון:"
+                    : "ניתן להירשם גם עבור מתאמן או מתאמנת נוספים:"}
               </p>
             )}
 
@@ -720,10 +822,14 @@ export function ClassEnrollmentActions({
                 ? "שומר..."
                 : needsSlot && !interestOnly
                   ? "נא לבחור מועד"
-                  : appointment && sessionIds.length === 0
+                  : trialMode && sessionIds.length === 0
+                    ? "נא לבחור מועד"
+                    : appointment && sessionIds.length === 0
                     ? "נא לבחור תור"
                     : appointment && sessionIds.length > 1
                       ? `הוספה לסל (${sessionIds.length} טיפולים)`
+                    : trialMode
+                      ? "הוספת שיעור ניסיון לסל"
                     : slotSoldOut
                     ? `הצטרפות לרשימת המתנה (${selectedIds.length})`
                     : interestOnly
@@ -802,7 +908,7 @@ export function ClassEnrollmentActions({
         </Modal>
       )}
 
-      {appointment && (
+      {(appointment || trialMode) && (
         <AppointmentSessionPicker
           open={sessionPickerOpen}
           onClose={() => setSessionPickerOpen(false)}
@@ -812,6 +918,13 @@ export function ClassEnrollmentActions({
             setSessionIds(ids);
             setError(null);
           }}
+          mode={trialMode ? "single" : "multiple"}
+          title={trialMode ? "בחירת מועד לשיעור ניסיון" : "בחירת תורים"}
+          description={
+            trialMode
+              ? "בחרו יום בלוח ואז שעה. משלמים על מפגש אחד."
+              : "בחרו יום בלוח ואז שעה. אפשר כמה תורים יחד."
+          }
         />
       )}
 

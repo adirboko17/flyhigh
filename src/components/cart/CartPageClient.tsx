@@ -42,7 +42,7 @@ type Viewer =
   | { kind: "parent"; parentName: string };
 
 function kindLabel(item: CartItem) {
-  if (item.kind === "class") return "חוג";
+  if (item.kind === "class") return item.isTrial ? "שיעור ניסיון" : "חוג";
   if (item.kind === "private_lesson") return "שיעור פרטי";
   if (item.kind === "pool_pass") {
     return item.entriesCount === 1 ? "כניסה" : "כרטיסייה";

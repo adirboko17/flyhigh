@@ -53,7 +53,7 @@ export const getPublicClasses = unstable_cache(
       instructor_gender: genderByClass.get(cls.id) ?? null,
     }));
   },
-  ["public-classes-v5"],
+  ["public-classes-v6"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-classes"],
@@ -171,7 +171,7 @@ export const getPublicClassSessions = unstable_cache(
     if (error) throw error;
     return data ?? [];
   },
-  ["public-class-sessions-v2"],
+  ["public-class-sessions-v3"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-class-sessions"],

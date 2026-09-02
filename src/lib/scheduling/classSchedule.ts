@@ -608,6 +608,7 @@ export function formToPreviewClass(
     pick_one_slot?: boolean;
     interest_only?: boolean;
     booking_mode?: PublicClass["booking_mode"];
+    trial_lesson_price?: string;
   },
   schedule: ClassScheduleState,
   imageUrl: string | null,
@@ -706,6 +707,10 @@ export function formToPreviewClass(
       ? plannedSessions ?? 0
       : proration.remainingCount,
     interest_only: interestOnly,
+    trial_lesson_price:
+      interestOnly || appointment || form.trial_lesson_price === ""
+        ? null
+        : Number(form.trial_lesson_price),
     weekly_slots: interestOnly
       ? []
       : schedule.weeklySlots

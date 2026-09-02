@@ -77,6 +77,7 @@ export type ClassFormData = {
   schedule_type?: "weekly" | "custom";
   sibling_discount_tiers?: Json | null;
   interest_only?: boolean;
+  trial_lesson_price?: number | null;
 };
 
 interface Props {
@@ -124,6 +125,8 @@ const emptyForm = {
   instructor_id: "",
   image_url: "",
   interest_only: false,
+  trial_lesson_enabled: false,
+  trial_lesson_price: "",
 };
 
 function toFormState(existing?: ClassFormData, categories: string[] = []) {
@@ -162,6 +165,11 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
     instructor_id: existing.instructor_id ?? "",
     image_url: existing.image_url ?? "",
     interest_only: existing.interest_only ?? false,
+    trial_lesson_enabled: existing.trial_lesson_price != null,
+    trial_lesson_price:
+      existing.trial_lesson_price != null
+        ? String(existing.trial_lesson_price)
+        : "",
   };
 }
 
@@ -223,6 +231,14 @@ function toPayload(
     image_url: imageUrl,
     schedule_type: schedule.scheduleType,
     interest_only: form.interest_only,
+    trial_lesson_price:
+      form.interest_only ||
+      form.booking_mode === "appointment" ||
+      !form.trial_lesson_enabled
+        ? null
+        : form.trial_lesson_price === ""
+          ? null
+          : Number(form.trial_lesson_price),
   };
 }
 
@@ -294,6 +310,15 @@ function validatePricing(form: ReturnType<typeof toFormState>): string | null {
     !parseBillingMonths(Number(form.billing_months))
   ) {
     return "נא לבחור בין 2 ל־12 חודשים לחוג שמתומחר לפי חודש.";
+  }
+  if (
+    form.booking_mode !== "appointment" &&
+    form.trial_lesson_enabled &&
+    (form.trial_lesson_price === "" ||
+      Number(form.trial_lesson_price) < 0 ||
+      !Number.isFinite(Number(form.trial_lesson_price)))
+  ) {
+    return "נא למלא את מחיר שיעור הניסיון, או לבטל את האפשרות.";
   }
   return null;
 }
@@ -609,6 +634,7 @@ export function ClassForm({
                     price_mode: "period",
                     capacity_limited: true,
                     capacity: "1",
+                    trial_lesson_enabled: false,
                   }));
                   setError(null);
                 }}
@@ -623,6 +649,7 @@ export function ClassForm({
                     ...f,
                     interest_only: true,
                     booking_mode: "series",
+                    trial_lesson_enabled: false,
                   }));
                   setStep((current) => Math.min(current, 1));
                   setError(null);
@@ -1021,6 +1048,46 @@ export function ClassForm({
                 הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
                 {DEFAULT_CLASS_INSTALLMENTS} תשלומים בקארדקום.
               </p>
+            )}
+
+            {form.booking_mode !== "appointment" && (
+              <div className="space-y-3 rounded-2xl border border-ink-100 bg-ink-50/50 p-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500"
+                    checked={form.trial_lesson_enabled}
+                    disabled={loading}
+                    onChange={(event) =>
+                      setForm((f) => ({
+                        ...f,
+                        trial_lesson_enabled: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-ink-900">
+                      שיעור ניסיון
+                    </span>
+                    <span className="mt-0.5 block text-sm text-ink-600">
+                      הלקוח קונה כניסה למפגש אחד, בוחר מועד בלוח ומשלם מחיר נפרד.
+                    </span>
+                  </span>
+                </label>
+                {form.trial_lesson_enabled && (
+                  <Field label="מחיר שיעור ניסיון (₪)" required>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={form.trial_lesson_price}
+                      onChange={set("trial_lesson_price")}
+                      placeholder="למשל: 80"
+                      disabled={loading}
+                    />
+                  </Field>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

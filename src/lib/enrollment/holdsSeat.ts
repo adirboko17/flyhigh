@@ -13,6 +13,7 @@ export type SeatEnrollment = {
   status: Enums<"enrollment_status">;
   payment_status?: Enums<"enrollment_payment_status"> | null;
   payments?: SeatPayment[] | null;
+  is_trial?: boolean | null;
 };
 
 /**
@@ -86,7 +87,7 @@ export const SEAT_PAYMENT_FIELDS =
   "status, payment_method, external_reference, office_collection";
 
 const SEAT_SELECT =
-  `id, status, payment_status, payments(${SEAT_PAYMENT_FIELDS})`;
+  `id, status, payment_status, is_trial, payments(${SEAT_PAYMENT_FIELDS})`;
 
 export async function countHeldSeats(
   supabase: SupabaseClient<Database>,
@@ -107,5 +108,10 @@ export async function countHeldSeats(
   }
 
   const { data } = await query;
-  return (data ?? []).filter((row) => enrollmentHoldsSeat(row)).length;
+  return (data ?? []).filter((row) => {
+    if (!enrollmentHoldsSeat(row)) return false;
+    // שיעור ניסיון תופס מקום רק במפגש שלו, לא במכסת החוג/המועד.
+    if (!sessionId && row.is_trial) return false;
+    return true;
+  }).length;
 }

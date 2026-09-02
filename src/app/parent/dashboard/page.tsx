@@ -211,6 +211,16 @@ export default async function ParentDashboard() {
   const liveEnrollments = allEnrollments.filter(
     (e) => e.status === "active" || e.status === "pending"
   );
+  const fullClassIds = new Set(
+    liveEnrollments
+      .filter((e) => !e.is_trial && e.class_id)
+      .map((e) => e.class_id as string)
+  );
+  const trialSessionIds = new Set(
+    liveEnrollments
+      .filter((e) => e.is_trial && e.session_id)
+      .map((e) => e.session_id as string)
+  );
   const liveClassIds = [
     ...new Set(
       liveEnrollments
@@ -238,18 +248,30 @@ export default async function ParentDashboard() {
 
   // מי מבני הבית משתתף בכל חוג — כדי שההורה יראה למי המפגש שייך.
   const attendeesByClass = new Map<string, string[]>();
+  const trialAttendeesBySession = new Map<string, string[]>();
   for (const enrollment of liveEnrollments) {
     if (!enrollment.class_id) continue;
     const attendee = enrollment.children?.full_name ?? profile.full_name;
+    if (enrollment.is_trial && enrollment.session_id) {
+      const current = trialAttendeesBySession.get(enrollment.session_id) ?? [];
+      if (!current.includes(attendee)) current.push(attendee);
+      trialAttendeesBySession.set(enrollment.session_id, current);
+      continue;
+    }
     const current = attendeesByClass.get(enrollment.class_id) ?? [];
     if (!current.includes(attendee)) current.push(attendee);
     attendeesByClass.set(enrollment.class_id, current);
   }
 
-  const agendaSessions: AgendaSession[] = (sessionsResponse?.data ?? []).map(
-    (session) => {
+  const agendaSessions: AgendaSession[] = (sessionsResponse?.data ?? [])
+    .filter(
+      (session) =>
+        fullClassIds.has(session.class_id) || trialSessionIds.has(session.id)
+    )
+    .map((session) => {
       const substitute = session.substitute?.full_name ?? null;
       const instructor = session.classes?.instructors?.full_name ?? null;
+      const trialOnly = !fullClassIds.has(session.class_id);
 
       return {
         id: session.id,
@@ -258,16 +280,22 @@ export default async function ParentDashboard() {
         startTime: session.start_time,
         endTime: session.end_time,
         status: session.status,
-        title: session.classes?.title ?? "חוג",
-        attendees: attendeesByClass.get(session.class_id) ?? [],
+        title: trialOnly
+          ? `שיעור ניסיון · ${session.classes?.title ?? "חוג"}`
+          : session.classes?.title ?? "חוג",
+        attendees: trialOnly
+          ? trialAttendeesBySession.get(session.id) ?? []
+          : [
+              ...(attendeesByClass.get(session.class_id) ?? []),
+              ...(trialAttendeesBySession.get(session.id) ?? []),
+            ],
         notes: session.notes,
         regularInstructorName: instructor,
         substituteInstructorName: substitute,
         instructorName: substitute ?? instructor,
         isSubstitute: Boolean(substitute),
       };
-    }
-  );
+    });
 
   const upcomingSessions = agendaSessions.filter((s) => s.status !== "cancelled");
   const previewSessions = upcomingSessions.slice(0, AGENDA_LIMIT);
@@ -819,6 +847,7 @@ type EnrollmentRowData = {
   created_at: string;
   ends_on?: string | null;
   people_count?: number | null;
+  is_trial?: boolean | null;
   classes: {
     title: string;
     day_of_week: number | null;
@@ -926,7 +955,9 @@ function EnrollmentRow({
             {" · "}
             {interestOnly
               ? "הרשמת עניין"
-              : schedule.day ?? ENROLLMENT_TYPE[enrollment.type]}
+              : enrollment.is_trial
+                ? "שיעור ניסיון"
+                : schedule.day ?? ENROLLMENT_TYPE[enrollment.type]}
             {!interestOnly && schedule.time && (
               <>
                 {" · "}
@@ -1105,18 +1136,19 @@ function sumAmount(rows: { amount: number }[]): number {
 
 function enrollmentTitle(enrollment: {
   type: Enums<"enrollment_type">;
+  is_trial?: boolean | null;
   classes: { title: string } | null;
   programs: { title: string } | null;
   pool_passes: { title: string } | null;
   private_lessons?: { title: string } | null;
 }): string {
-  return (
+  const title =
     enrollment.classes?.title ??
     enrollment.programs?.title ??
     enrollment.pool_passes?.title ??
     enrollment.private_lessons?.title ??
-    ENROLLMENT_TYPE[enrollment.type]
-  );
+    ENROLLMENT_TYPE[enrollment.type];
+  return enrollment.is_trial ? `שיעור ניסיון · ${title}` : title;
 }
 
 /** "היום" / "מחר" / "ד׳ 12.8" — תווית קצרה לכרטיסי KPI. */

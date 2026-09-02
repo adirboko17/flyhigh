@@ -501,6 +501,8 @@ export type Database = {
           start_time: string | null
           status: Database["public"]["Enums"]["class_status"]
           title: string
+          /** מחיר לשיעור ניסיון (מפגש אחד). NULL = אין שיעור ניסיון. */
+          trial_lesson_price: number | null
         }
         Insert: {
           age_max?: number | null
@@ -532,6 +534,7 @@ export type Database = {
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
           title: string
+          trial_lesson_price?: number | null
         }
         Update: {
           age_max?: number | null
@@ -563,6 +566,7 @@ export type Database = {
           start_time?: string | null
           status?: Database["public"]["Enums"]["class_status"]
           title?: string
+          trial_lesson_price?: number | null
         }
         Relationships: [
           {
@@ -765,12 +769,14 @@ export type Database = {
           status: Database["public"]["Enums"]["enrollment_status"]
           type: Database["public"]["Enums"]["enrollment_type"]
           weekly_slot_id: string | null
+          is_trial: boolean
         }
         Insert: {
           admin_assigned?: boolean
           child_id?: string | null
           class_id?: string | null
           weekly_slot_id?: string | null
+          is_trial?: boolean
           created_at?: string
           discount_percent?: number
           ends_on?: string | null
@@ -805,6 +811,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["enrollment_status"]
           type?: Database["public"]["Enums"]["enrollment_type"]
           weekly_slot_id?: string | null
+          is_trial?: boolean
         }
         Relationships: [
           {
@@ -1911,6 +1918,7 @@ export type Database = {
           title: string
           interest_only: boolean
           booking_mode: Database["public"]["Enums"]["class_booking_mode"]
+          trial_lesson_price: number | null
         }[]
       }
       list_public_weekly_slots: {

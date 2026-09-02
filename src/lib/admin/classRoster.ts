@@ -16,7 +16,7 @@ import {
 } from "@/lib/enrollment/participant";
 
 const ENROLLMENT_SELECT =
-  "id, class_id, parent_id, child_id, weekly_slot_id, session_id, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection), class_sessions(session_date, start_time, end_time)";
+  "id, class_id, parent_id, child_id, weekly_slot_id, session_id, is_trial, admin_assigned, status, payment_status, created_at, children(full_name, birth_date), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection), class_sessions(session_date, start_time, end_time)";
 
 const WAITLIST_SELECT =
   "id, class_id, parent_id, child_id, weekly_slot_id, status, created_at, children(full_name), profiles(full_name, phone)";
@@ -86,7 +86,7 @@ export async function loadCalendarSessionRoster(input: {
   const { data, error } = await supabase
     .from("enrollments")
     .select(
-      "id, child_id, parent_id, weekly_slot_id, session_id, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
+      "id, child_id, parent_id, weekly_slot_id, session_id, is_trial, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
     )
     .eq("type", "class")
     .eq("class_id", input.classId)
@@ -116,7 +116,7 @@ export async function loadCalendarSessionRoster(input: {
 }
 
 const CLASS_SUMMARY_SELECT =
-  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, booking_mode, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)";
+  "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, booking_mode, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, trial_lesson_price, instructors(full_name, gender)";
 
 /** מטא־דאטה + ספירות לחלון הקיצור (נרשמים ונוכחות נטענים בנפרד). */
 export async function loadAdminClassSummary(
@@ -138,7 +138,7 @@ export async function loadAdminClassSummary(
     supabase
       .from("enrollments")
       .select(
-        "weekly_slot_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+        "weekly_slot_id, status, payment_status, is_trial, payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("type", "class")
       .eq("class_id", classId)
@@ -161,7 +161,7 @@ export async function loadAdminClassSummary(
   let registeredCount = 0;
   const registeredBySlot = new Map<string, number>();
   for (const row of enrollmentCounts ?? []) {
-    if (!enrollmentHoldsSeat(row)) continue;
+    if (!enrollmentHoldsSeat(row) || row.is_trial) continue;
     registeredCount += 1;
     if (row.weekly_slot_id) {
       registeredBySlot.set(

@@ -19,8 +19,10 @@ import {
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { isInterestClass } from "@/lib/classes/interest";
 import { isAppointmentClass } from "@/lib/classes/bookingMode";
+import { offersTrialLesson, trialLessonAmount } from "@/lib/classes/trialLesson";
 import type { PublicClass, PublicClassSession, PublicClassSlot } from "@/types";
 import { Badge } from "@/components/ui/Badge";
+import { formatCurrency } from "@/utils/format";
 import {
   ClassEnrollmentActions,
   GuestEnrollmentActions,
@@ -113,7 +115,7 @@ export async function ClassEnrollmentPanel({
           reads
             .from("enrollments")
             .select(
-              "id, child_id, status, payment_status, children(full_name), payments(payment_method, status)"
+              "id, child_id, status, payment_status, is_trial, children(full_name), class_sessions(session_date, start_time, end_time), payments(payment_method, status)"
             )
             .eq("class_id", cls.id)
             .eq("parent_id", profile.id)
@@ -178,6 +180,9 @@ export async function ClassEnrollmentPanel({
           slots={slots}
           sessions={sessions}
           classGenderPolicy={cls.gender_policy}
+          trialLessonPrice={
+            offersTrialLesson(cls) ? trialLessonAmount(cls) : null
+          }
         />
       );
     }
@@ -236,6 +241,9 @@ export async function ClassEnrollmentPanel({
             <Badge tone="neutral">{formatClassAudience(cls)}</Badge>
           )}
           {appointment && <Badge tone="info">טיפול לפי תור</Badge>}
+          {offersTrialLesson(cls) && (
+            <Badge tone="info">שיעור ניסיון {formatCurrency(trialLessonAmount(cls))}</Badge>
+          )}
           {interestOnly && <Badge tone="info">הרשמת עניין</Badge>}
           {interestOnly && cls.session_count > 0 && (
             <Badge tone="neutral">{cls.session_count} מפגשים מתוכננים</Badge>

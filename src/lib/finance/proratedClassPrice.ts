@@ -1,8 +1,6 @@
 /**
- * מחיר חוג בהרשמה מאוחרת: המחיר המלא מחולק במספר המפגשים שלא בוטלו,
- * והלקוח משלם רק על המפגשים שנותרו מהיום והלאה.
- *
- * דוגמה: 10 מפגשים ב־300 ₪, כבר התקיימו 2 → 300 / 10 × 8 = 240 ₪.
+ * מחיר חוג קבוע לכל התקופה — גם אם כבר התקיימו מפגשים.
+ * סופרים מפגשים רק כדי לדעת אם החוג הסתיים ולתצוגת לוח.
  * מפגש של היום נספר כנותר כל עוד לא סומן כהושלם.
  */
 
@@ -114,18 +112,17 @@ export function prorateClassPriceFromCounts(
 
   const pricePerSession = round2(price / billable);
   const hasEnded = remaining === 0;
-  const unitPrice = hasEnded ? 0 : round2((price * remaining) / billable);
 
   return {
     fullPrice: price,
-    unitPrice,
+    unitPrice: hasEnded ? 0 : price,
     pricePerSession,
     billableCount: billable,
     remainingCount: remaining,
     elapsedCount: elapsed,
     firstSessionNumber: hasEnded ? billable : elapsed + 1,
     firstRemainingDate: null,
-    isLate: remaining < billable,
+    isLate: false,
     hasEnded,
   };
 }

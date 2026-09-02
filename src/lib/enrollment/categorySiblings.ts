@@ -21,6 +21,7 @@ export function categoriesMatch(
 type CategoryEnrollmentRow = {
   child_id: string | null;
   class_id: string | null;
+  is_trial?: boolean | null;
   classes:
     | { category: string | null }
     | { category: string | null }[]
@@ -46,7 +47,7 @@ export function familyChildIdsInCategory(
   const unique = new Set<string>();
 
   for (const row of rows) {
-    if (!row.child_id) continue;
+    if (!row.child_id || row.is_trial) continue;
     const sameClass = row.class_id === classId;
     const sameCategory = normalized
       ? categoriesMatch(rowCategory(row.classes), normalized) || sameClass
@@ -73,7 +74,7 @@ export async function listFamilyChildrenInCategory(
 ): Promise<string[]> {
   const { data } = await supabase
     .from("enrollments")
-    .select("child_id, class_id, classes(category)")
+    .select("child_id, class_id, is_trial, classes(category)")
     .eq("parent_id", parentId)
     .eq("type", "class")
     .neq("status", "cancelled");

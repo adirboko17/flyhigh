@@ -21,9 +21,17 @@ import type { PublicClassSession } from "@/types";
 export function AppointmentPickerTrigger({
   selectedSessions,
   onOpen,
+  emptyTitle = "בחירת תורים",
+  emptyHint = "לחצו לבחירת תאריך ושעה",
+  selectedLabel = "התור שנבחר",
+  selectedLabelMany = "התורים שנבחרו",
 }: {
   selectedSessions: PublicClassSession[];
   onOpen: () => void;
+  emptyTitle?: string;
+  emptyHint?: string;
+  selectedLabel?: string;
+  selectedLabelMany?: string;
 }) {
   const selected = selectedSessions.length > 0;
   const first = selectedSessions[0];
@@ -52,8 +60,8 @@ export function AppointmentPickerTrigger({
           <>
             <span className="block text-xs font-medium text-brand-700">
               {selectedSessions.length === 1
-                ? "התור שנבחר"
-                : "התורים שנבחרו"}
+                ? selectedLabel
+                : selectedLabelMany}
             </span>
             <span className="mt-0.5 block truncate text-sm font-bold text-ink-900">
               {selectedSessions.length === 1
@@ -63,9 +71,9 @@ export function AppointmentPickerTrigger({
           </>
         ) : (
           <>
-            <span className="block text-base font-bold">בחירת תורים</span>
+            <span className="block text-base font-bold">{emptyTitle}</span>
             <span className="mt-0.5 block text-sm text-white/80">
-              לחצו לבחירת תאריך ושעה
+              {emptyHint}
             </span>
           </>
         )}
@@ -88,12 +96,18 @@ export function AppointmentSessionPicker({
   sessions,
   selectedIds,
   onChange,
+  mode = "multiple",
+  title = "בחירת תורים",
+  description = "בחרו יום בלוח ואז שעה. אפשר כמה תורים יחד.",
 }: {
   open: boolean;
   onClose: () => void;
   sessions: PublicClassSession[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  mode?: "single" | "multiple";
+  title?: string;
+  description?: string;
 }) {
   const datesWithSlots = useMemo(() => {
     const map = new Map<string, PublicClassSession[]>();
@@ -154,6 +168,10 @@ export function AppointmentSessionPicker({
   }
 
   function toggleSession(id: string) {
+    if (mode === "single") {
+      onChange(selectedIds.includes(id) ? [] : [id]);
+      return;
+    }
     onChange(
       selectedIds.includes(id)
         ? selectedIds.filter((sessionId) => sessionId !== id)
@@ -165,8 +183,8 @@ export function AppointmentSessionPicker({
     <Modal
       open={open}
       onClose={onClose}
-      title="בחירת תורים"
-      description="בחרו יום בלוח ואז שעה. אפשר כמה תורים יחד."
+      title={title}
+      description={description}
       className="max-w-md"
     >
       <div className="space-y-4">
@@ -299,8 +317,8 @@ export function AppointmentSessionPicker({
         <Button type="button" className="w-full" onClick={onClose}>
           {selectedIds.length === 0
             ? "סגירה"
-            : selectedIds.length === 1
-              ? "בחירת התור"
+            : mode === "single" || selectedIds.length === 1
+              ? "בחירת המועד"
               : `בחירת ${selectedIds.length} תורים`}
         </Button>
           </>

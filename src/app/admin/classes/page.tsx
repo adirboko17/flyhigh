@@ -30,13 +30,13 @@ export default async function AdminClassesPage() {
       supabase
         .from("classes")
         .select(
-          "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, booking_mode, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, instructors(full_name, gender)"
+          "id, title, category, level, description, image_url, day_of_week, start_time, end_time, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, price, billing_months, planned_session_count, pick_one_slot, booking_mode, capacity, status, schedule_type, start_date, end_date, sibling_discount_tiers, instructor_id, interest_only, trial_lesson_price, instructors(full_name, gender)"
         )
         .order("created_at", { ascending: false }),
       supabase
         .from("enrollments")
         .select(
-          "class_id, weekly_slot_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+          "class_id, weekly_slot_id, status, payment_status, is_trial, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("type", "class")
         .not("class_id", "is", null)
@@ -59,7 +59,7 @@ export default async function AdminClassesPage() {
   const registeredByClass = new Map<string, number>();
   const registeredBySlot = new Map<string, number>();
   for (const row of enrollmentCounts ?? []) {
-    if (!row.class_id || !enrollmentHoldsSeat(row)) continue;
+    if (!row.class_id || !enrollmentHoldsSeat(row) || row.is_trial) continue;
     registeredByClass.set(
       row.class_id,
       (registeredByClass.get(row.class_id) ?? 0) + 1

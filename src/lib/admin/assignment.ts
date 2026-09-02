@@ -6,7 +6,10 @@ import {
   DEFERRED_PAYMENT_METHODS,
   type DeferredPaymentMethod,
 } from "@/lib/constants";
-import { classInstallmentOptions } from "@/lib/finance/classPricing";
+import {
+  classInstallmentOptions,
+  classPeriodTotal,
+} from "@/lib/finance/classPricing";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
@@ -133,7 +136,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity, title, billing_months, pick_one_slot, booking_mode, interest_only")
+        .select("id, capacity, title, price, billing_months, pick_one_slot, booking_mode, interest_only")
         .eq("id", input.classId)
         .maybeSingle(),
       childIds.length > 0
@@ -287,6 +290,11 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   const isCreditCard = !cls.interest_only && input.method === "credit_card";
   const awaitingCardcom = isCreditCard && total > 0;
   const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
+  const listTotal = classPeriodTotal(Number(cls.price), cls.billing_months) * participants.length;
+  const discountPercent =
+    listTotal > 0 && total < listTotal
+      ? Math.min(100, Math.max(0, round2(((listTotal - total) / listTotal) * 100)))
+      : 0;
 
   const { data: created, error: enrollmentError } = await supabase
     .from("enrollments")
@@ -305,6 +313,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
             ? ("paid" as const)
             : ("unpaid" as const),
         admin_assigned: true,
+        discount_percent: discountPercent,
       }))
     )
     .select("id, child_id");

@@ -92,6 +92,7 @@ export type AdminClassEnrollment = {
   payment_status: keyof typeof ENROLLMENT_PAYMENT_STATUS;
   weekly_slot_id: string | null;
   session_id?: string | null;
+  is_trial?: boolean | null;
   class_sessions?: {
     session_date: string;
     start_time: string;
@@ -169,6 +170,7 @@ export type AdminClassRow = {
   instructors: { full_name: string; gender: Enums<"gender_type"> | null } | null;
   instructor_id: string | null;
   interest_only: boolean;
+  trial_lesson_price?: number | null;
   planned_session_count?: number | null;
   registeredCount: number;
   waitlistCount: number;
@@ -1634,6 +1636,11 @@ function EnrollmentRow({
           </p>
           {age !== null && (
             <span className="shrink-0 text-[11px] text-ink-400">גיל {age}</span>
+          )}
+          {enrollment.is_trial && (
+            <Badge tone="info" className="px-1.5 py-0 text-[10px]">
+              ניסיון
+            </Badge>
           )}
         </div>
         {parentLine && (

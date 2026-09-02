@@ -39,6 +39,12 @@ export function ClassQuickEditDialog({
   const [instructorId, setInstructorId] = useState(cls.instructor_id ?? "");
   const [slotInstructors, setSlotInstructors] = useState(slotInstructorMap(cls));
   const [price, setPrice] = useState(String(cls.price ?? 0));
+  const [trialEnabled, setTrialEnabled] = useState(
+    cls.trial_lesson_price != null
+  );
+  const [trialPrice, setTrialPrice] = useState(
+    cls.trial_lesson_price != null ? String(cls.trial_lesson_price) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +54,10 @@ export function ClassQuickEditDialog({
     setInstructorId(cls.instructor_id ?? "");
     setSlotInstructors(slotInstructorMap(cls));
     setPrice(String(cls.price ?? 0));
+    setTrialEnabled(cls.trial_lesson_price != null);
+    setTrialPrice(
+      cls.trial_lesson_price != null ? String(cls.trial_lesson_price) : ""
+    );
     setError(null);
   }, [cls]);
 
@@ -95,6 +105,21 @@ export function ClassQuickEditDialog({
       nextPrice = Number(price);
     }
 
+    const offerTrial =
+      !cls.interest_only && cls.booking_mode !== "appointment" && trialEnabled;
+    let nextTrialPrice: number | null = null;
+    if (offerTrial) {
+      if (
+        trialPrice.trim() === "" ||
+        Number(trialPrice) < 0 ||
+        !Number.isFinite(Number(trialPrice))
+      ) {
+        setError("נא למלא את מחיר שיעור הניסיון, או לבטל את האפשרות.");
+        return;
+      }
+      nextTrialPrice = Number(trialPrice);
+    }
+
     const nextClassInstructorId = hasSlots
       ? cls.slots.map((slot) => slotInstructors[slot.id]).find(Boolean) || null
       : instructorId || null;
@@ -123,6 +148,7 @@ export function ClassQuickEditDialog({
         capacity: nextCapacity,
         instructor_id: nextClassInstructorId,
         price: nextPrice,
+        trial_lesson_price: nextTrialPrice,
         ...(!nextCapacity && cls.status === "full" ? { status: "active" as const } : {}),
       })
       .eq("id", cls.id);
@@ -231,6 +257,41 @@ export function ClassQuickEditDialog({
             disabled={saving || cls.interest_only}
           />
         </Field>
+
+        {!cls.interest_only && cls.booking_mode !== "appointment" && (
+          <div className="space-y-3 rounded-2xl border border-ink-100 bg-ink-50/50 p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500"
+                checked={trialEnabled}
+                disabled={saving}
+                onChange={(event) => setTrialEnabled(event.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-semibold text-ink-900">
+                  שיעור ניסיון
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  כניסה למפגש אחד במחיר נפרד
+                </span>
+              </span>
+            </label>
+            {trialEnabled && (
+              <Field label="מחיר שיעור ניסיון (₪)" required>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="decimal"
+                  value={trialPrice}
+                  onChange={(event) => setTrialPrice(event.target.value)}
+                  disabled={saving}
+                />
+              </Field>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
