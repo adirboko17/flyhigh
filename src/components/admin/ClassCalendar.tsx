@@ -134,6 +134,9 @@ export function ClassCalendar({
   instructors,
 }: ClassCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<CalendarSession | null>(
+    null
+  );
   const [hiddenClasses, setHiddenClasses] = useState<string[]>([]);
   const [substituteFor, setSubstituteFor] = useState<CalendarSession | null>(null);
   const [classPanel, setClassPanel] = useState<{
@@ -207,10 +210,15 @@ export function ClassCalendar({
   );
   const todaySessions = periodContainsToday ? sessionsByDate.get(today) ?? [] : null;
 
+  const overlayOpen = Boolean(selectedDate || selectedSession) && !classPanel;
+
   useEffect(() => {
-    if (!selectedDate || classPanel) return;
+    if (!overlayOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedDate(null);
+      if (e.key === "Escape") {
+        setSelectedSession(null);
+        setSelectedDate(null);
+      }
     };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
@@ -218,7 +226,17 @@ export function ClassCalendar({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [selectedDate, classPanel]);
+  }, [overlayOpen]);
+
+  function openDay(date: string) {
+    setSelectedSession(null);
+    setSelectedDate(date);
+  }
+
+  function openSession(session: CalendarSession) {
+    setSelectedDate(null);
+    setSelectedSession(session);
+  }
 
   async function openClassPanel(session: CalendarSession) {
     if (session.kind !== "class") return;
@@ -356,7 +374,8 @@ export function ClassCalendar({
           days={days}
           sessionsByDate={sessionsByDate}
           colorByClass={colorByClass}
-          onSelect={setSelectedDate}
+          onSelectDay={openDay}
+          onSelectSession={openSession}
         />
       ) : (
         <Card className="overflow-hidden p-0">
@@ -379,7 +398,8 @@ export function ClassCalendar({
                 day={day}
                 sessions={sessionsByDate.get(day.date) ?? []}
                 colorByClass={colorByClass}
-                onSelect={() => setSelectedDate(day.date)}
+                onSelectDay={() => openDay(day.date)}
+                onSelectSession={openSession}
               />
             ))}
           </div>
@@ -393,6 +413,20 @@ export function ClassCalendar({
           colorByClass={colorByClass}
           loadingSessionId={classPanelLoadingId}
           onClose={() => setSelectedDate(null)}
+          onSubstitute={setSubstituteFor}
+          onOpenClass={openClassPanel}
+          onFocusSession={openSession}
+        />
+      )}
+
+      {selectedSession && (
+        <DayPanel
+          date={selectedSession.date}
+          sessions={[selectedSession]}
+          colorByClass={colorByClass}
+          loadingSessionId={classPanelLoadingId}
+          focused
+          onClose={() => setSelectedSession(null)}
           onSubstitute={setSubstituteFor}
           onOpenClass={openClassPanel}
         />
@@ -497,12 +531,14 @@ function WeekGrid({
   days,
   sessionsByDate,
   colorByClass,
-  onSelect,
+  onSelectDay,
+  onSelectSession,
 }: {
   days: CalendarDay[];
   sessionsByDate: Map<string, CalendarSession[]>;
   colorByClass: Map<string, ClassColor>;
-  onSelect: (date: string) => void;
+  onSelectDay: (date: string) => void;
+  onSelectSession: (session: CalendarSession) => void;
 }) {
   return (
     <>
@@ -513,7 +549,8 @@ function WeekGrid({
             day={day}
             sessions={sessionsByDate.get(day.date) ?? []}
             colorByClass={colorByClass}
-            onSelect={() => onSelect(day.date)}
+            onSelectDay={() => onSelectDay(day.date)}
+            onSelectSession={onSelectSession}
           />
         ))}
       </div>
@@ -536,7 +573,8 @@ function WeekGrid({
               day={day}
               sessions={sessionsByDate.get(day.date) ?? []}
               colorByClass={colorByClass}
-              onSelect={() => onSelect(day.date)}
+              onSelectDay={() => onSelectDay(day.date)}
+              onSelectSession={onSelectSession}
             />
           ))}
         </div>
@@ -549,29 +587,35 @@ function WeekDayCard({
   day,
   sessions,
   colorByClass,
-  onSelect,
+  onSelectDay,
+  onSelectSession,
 }: {
   day: CalendarDay;
   sessions: CalendarSession[];
   colorByClass: Map<string, ClassColor>;
-  onSelect: () => void;
+  onSelectDay: () => void;
+  onSelectSession: (session: CalendarSession) => void;
 }) {
   const hasSessions = sessions.length > 0;
 
   return (
     <Card className={cn("overflow-hidden", day.isToday && "ring-2 ring-brand-400")}>
-      <button
-        type="button"
-        onClick={onSelect}
-        disabled={!hasSessions}
-        aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+      <div
         className={cn(
-          "flex w-full flex-col gap-3 p-3 text-start",
-          hasSessions && "hover:bg-brand-50/60",
+          "flex flex-col gap-3 p-3",
           day.isWeekend && !day.isToday && "bg-brand-50/40"
         )}
       >
-        <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onSelectDay}
+          disabled={!hasSessions}
+          aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+          className={cn(
+            "flex w-full items-center justify-between gap-2 text-start",
+            hasSessions && "rounded-2xl hover:bg-brand-50/60"
+          )}
+        >
           <div className="flex items-center gap-2.5">
             <span
               className={cn(
@@ -590,7 +634,7 @@ function WeekDayCard({
           <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-bold text-ink-600">
             {sessions.length} מפגשים
           </span>
-        </div>
+        </button>
 
         {hasSessions ? (
           <div className="flex flex-col gap-1.5">
@@ -600,13 +644,14 @@ function WeekDayCard({
                 session={session}
                 color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
                 expanded
+                onSelect={() => onSelectSession(session)}
               />
             ))}
           </div>
         ) : (
           <p className="text-sm text-ink-400">אין מפגשים ביום זה</p>
         )}
-      </button>
+      </div>
     </Card>
   );
 }
@@ -615,29 +660,35 @@ function WeekDayColumn({
   day,
   sessions,
   colorByClass,
-  onSelect,
+  onSelectDay,
+  onSelectSession,
 }: {
   day: CalendarDay;
   sessions: CalendarSession[];
   colorByClass: Map<string, ClassColor>;
-  onSelect: () => void;
+  onSelectDay: () => void;
+  onSelectSession: (session: CalendarSession) => void;
 }) {
   const hasSessions = sessions.length > 0;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={!hasSessions}
-      aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+    <div
       className={cn(
-        "flex min-h-[28rem] flex-col gap-2 bg-white p-2 text-start transition-colors",
+        "flex min-h-[28rem] flex-col gap-2 bg-white p-2",
         day.isWeekend && "bg-brand-50/50",
-        day.isToday && "bg-brand-50",
-        hasSessions && "hover:bg-brand-50"
+        day.isToday && "bg-brand-50"
       )}
     >
-      <div className="flex items-center justify-between gap-1">
+      <button
+        type="button"
+        onClick={onSelectDay}
+        disabled={!hasSessions}
+        aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+        className={cn(
+          "flex items-center justify-between gap-1 rounded-xl p-0.5 text-start",
+          hasSessions && "hover:bg-brand-50"
+        )}
+      >
         <span
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums",
@@ -651,7 +702,7 @@ function WeekDayColumn({
             {sessions.length}
           </span>
         )}
-      </div>
+      </button>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {sessions.map((session) => (
@@ -659,13 +710,14 @@ function WeekDayColumn({
             key={session.id}
             session={session}
             color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
+            onSelect={() => onSelectSession(session)}
           />
         ))}
         {!hasSessions && (
           <p className="px-1 text-[11px] text-ink-300">אין מפגשים</p>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -673,10 +725,12 @@ function WeekSessionChip({
   session,
   color,
   expanded = false,
+  onSelect,
 }: {
   session: CalendarSession;
   color: ClassColor;
   expanded?: boolean;
+  onSelect: () => void;
 }) {
   const cancelled = session.status === "cancelled";
   const subtitle =
@@ -685,9 +739,12 @@ function WeekSessionChip({
       : session.substituteInstructor ?? session.instructor;
 
   return (
-    <span
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${session.title} ${session.startTime}`}
       className={cn(
-        "flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-start text-[11px] font-medium leading-tight",
+        "flex flex-col gap-0.5 rounded-xl px-2 py-1.5 text-start text-[11px] font-medium leading-tight transition-shadow hover:ring-2 hover:ring-brand-300",
         cancelled ? "bg-ink-100 text-ink-400 line-through" : color.chip,
         expanded && "px-2.5 py-2 text-xs"
       )}
@@ -714,7 +771,7 @@ function WeekSessionChip({
           {subtitle}
         </span>
       )}
-    </span>
+    </button>
   );
 }
 
@@ -722,31 +779,37 @@ function DayCell({
   day,
   sessions,
   colorByClass,
-  onSelect,
+  onSelectDay,
+  onSelectSession,
 }: {
   day: CalendarDay;
   sessions: CalendarSession[];
   colorByClass: Map<string, ClassColor>;
-  onSelect: () => void;
+  onSelectDay: () => void;
+  onSelectSession: (session: CalendarSession) => void;
 }) {
   const hasSessions = sessions.length > 0;
   const chips = sessions.slice(0, MAX_CHIPS_PER_DAY);
   const hiddenCount = sessions.length - chips.length;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={!hasSessions}
-      aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+    <div
       className={cn(
-        "flex min-h-[68px] flex-col gap-1 p-1 text-start transition-colors sm:min-h-[124px] sm:gap-1.5 sm:p-2 lg:min-h-[140px]",
+        "flex min-h-[68px] flex-col gap-1 p-1 sm:min-h-[124px] sm:gap-1.5 sm:p-2 lg:min-h-[140px]",
         day.inMonth ? "bg-white" : "bg-ink-50/60",
-        day.inMonth && day.isWeekend && "bg-brand-50/50",
-        hasSessions && "hover:bg-brand-50"
+        day.inMonth && day.isWeekend && "bg-brand-50/50"
       )}
     >
-      <div className="flex items-center justify-between gap-1">
+      <button
+        type="button"
+        onClick={onSelectDay}
+        disabled={!hasSessions}
+        aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+        className={cn(
+          "flex items-center justify-between gap-1 rounded-lg text-start",
+          hasSessions && "hover:bg-brand-50"
+        )}
+      >
         <span
           className={cn(
             "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums sm:h-7 sm:w-7 sm:text-sm",
@@ -764,17 +827,20 @@ function DayCell({
             {sessions.length}
           </span>
         )}
-      </div>
+      </button>
 
       <div className="hidden min-w-0 flex-col gap-1 sm:flex">
         {chips.map((session) => {
           const color = colorByClass.get(session.classId) ?? FALLBACK_COLOR;
           const cancelled = session.status === "cancelled";
           return (
-            <span
+            <button
               key={session.id}
+              type="button"
+              onClick={() => onSelectSession(session)}
+              aria-label={`${session.title} ${session.startTime}`}
               className={cn(
-                "flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium leading-tight",
+                "flex items-center gap-1 rounded-lg px-1.5 py-1 text-start text-[11px] font-medium leading-tight transition-shadow hover:ring-2 hover:ring-brand-300",
                 cancelled ? "bg-ink-100 text-ink-400 line-through" : color.chip
               )}
             >
@@ -790,17 +856,27 @@ function DayCell({
                   ↺
                 </span>
               )}
-            </span>
+            </button>
           );
         })}
         {hiddenCount > 0 && (
-          <span className="px-1 text-[11px] font-bold text-brand-600">
+          <button
+            type="button"
+            onClick={onSelectDay}
+            className="px-1 text-start text-[11px] font-bold text-brand-600 hover:text-brand-700"
+          >
             +{hiddenCount} נוספים
-          </span>
+          </button>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-1 sm:hidden">
+      <button
+        type="button"
+        onClick={onSelectDay}
+        disabled={!hasSessions}
+        aria-label={`${dayLabelLong(day.date)} — ${sessions.length} מפגשים`}
+        className="flex min-h-[1.25rem] flex-wrap gap-1 sm:hidden"
+      >
         {sessions.slice(0, 6).map((session) => (
           <span
             key={session.id}
@@ -810,8 +886,8 @@ function DayCell({
             )}
           />
         ))}
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -820,23 +896,28 @@ function DayPanel({
   sessions,
   colorByClass,
   loadingSessionId,
+  focused = false,
   onClose,
   onSubstitute,
   onOpenClass,
+  onFocusSession,
 }: {
   date: string;
   sessions: CalendarSession[];
   colorByClass: Map<string, ClassColor>;
   loadingSessionId: string | null;
+  focused?: boolean;
   onClose: () => void;
   onSubstitute: (session: CalendarSession) => void;
   onOpenClass: (session: CalendarSession) => void;
+  onFocusSession?: (session: CalendarSession) => void;
 }) {
   const totalMinutes = sessions.reduce(
     (sum, session) => sum + durationMinutes(session.startTime, session.endTime),
     0
   );
   const groups = groupSessionsByStart(sessions);
+  const focusedSession = focused ? sessions[0] : null;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4">
@@ -855,10 +936,12 @@ function DayPanel({
         <div className="flex shrink-0 items-start justify-between gap-3 bg-brand-gradient px-5 py-4 text-white sm:px-6">
           <div className="min-w-0">
             <h2 id="calendar-day-title" className="font-display text-xl font-bold sm:text-2xl">
-              {dayLabelLong(date)}
+              {focusedSession ? focusedSession.title : dayLabelLong(date)}
             </h2>
             <p className="mt-0.5 text-sm text-white/80">
-              {sessions.length} מפגשים · {formatDuration(totalMinutes)} פעילות
+              {focusedSession
+                ? `${dayLabelLong(date)} · ${focusedSession.startTime}–${focusedSession.endTime}`
+                : `${sessions.length} מפגשים · ${formatDuration(totalMinutes)} פעילות`}
             </p>
           </div>
           <button
@@ -895,8 +978,14 @@ function DayPanel({
                         session={session}
                         color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
                         opening={loadingSessionId === session.id}
+                        autoOpenRoster={focused}
                         onSubstitute={() => onSubstitute(session)}
                         onOpenClass={() => onOpenClass(session)}
+                        onFocusSession={
+                          focused || !onFocusSession
+                            ? undefined
+                            : () => onFocusSession(session)
+                        }
                       />
                     ))}
                   </ul>
@@ -939,32 +1028,31 @@ function SessionRow({
   session,
   color,
   opening,
+  autoOpenRoster = false,
   onSubstitute,
   onOpenClass,
+  onFocusSession,
 }: {
   session: CalendarSession;
   color: ClassColor;
   opening: boolean;
+  autoOpenRoster?: boolean;
   onSubstitute: () => void;
   onOpenClass: () => void;
+  onFocusSession?: () => void;
 }) {
   const status = CLASS_SESSION_STATUS[session.status];
   const cancelled = session.status === "cancelled";
   const isPrivate = isBookedSession(session.kind);
   const instructorLabel = sessionInstructorLabel(session);
   const showStatus = session.status !== "scheduled";
-  const [rosterOpen, setRosterOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(autoOpenRoster && !isPrivate);
   const [roster, setRoster] = useState<CalendarSessionRegistrant[] | null>(null);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const rosterId = `session-roster-${session.id}`;
 
-  async function toggleRoster() {
-    if (rosterOpen) {
-      setRosterOpen(false);
-      return;
-    }
-    setRosterOpen(true);
+  async function loadRoster() {
     if (roster || rosterLoading) return;
     setRosterLoading(true);
     setRosterError(null);
@@ -984,6 +1072,22 @@ function SessionRow({
     }
   }
 
+  useEffect(() => {
+    if (!autoOpenRoster || isPrivate) return;
+    void loadRoster();
+    // נטען פעם אחת בפתיחת המפגש מהלוח.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenRoster, session.id]);
+
+  async function toggleRoster() {
+    if (rosterOpen) {
+      setRosterOpen(false);
+      return;
+    }
+    setRosterOpen(true);
+    await loadRoster();
+  }
+
   return (
     <li className="flex gap-2.5 px-3 py-2.5">
       <span
@@ -994,14 +1098,27 @@ function SessionRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <h3
-            className={cn(
-              "min-w-0 truncate font-display text-sm font-bold text-ink-900",
-              cancelled && "text-ink-400 line-through"
-            )}
-          >
-            {session.title}
-          </h3>
+          {onFocusSession ? (
+            <button
+              type="button"
+              onClick={onFocusSession}
+              className={cn(
+                "min-w-0 truncate text-start font-display text-sm font-bold text-ink-900 transition-colors hover:text-brand-700",
+                cancelled && "text-ink-400 line-through"
+              )}
+            >
+              {session.title}
+            </button>
+          ) : (
+            <h3
+              className={cn(
+                "min-w-0 truncate font-display text-sm font-bold text-ink-900",
+                cancelled && "text-ink-400 line-through"
+              )}
+            >
+              {session.title}
+            </h3>
+          )}
           <span
             dir="ltr"
             className="shrink-0 text-xs font-bold tabular-nums text-ink-600"
