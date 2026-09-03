@@ -31,8 +31,9 @@ import {
   PAYMENT_METHOD,
   PAYMENT_STATUS,
   isManualReceiptMethod,
-  isPoolPassPaymentMethod,
+  isReceiptlessCollectionMethod,
   type CollectionPaymentMethod,
+  type ReceiptlessCollectionMethod,
 } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
 import { cn } from "@/utils/cn";
@@ -133,6 +134,31 @@ function receiptPreview(charge: CollectionCharge) {
     customText: charge.receiptCustomText,
     fallback: charge.subject,
   });
+}
+
+function receiptlessCopy(method: ReceiptlessCollectionMethod) {
+  if (method === "maccabi") {
+    return {
+      openTitle: "אישור תשלום ממכבי",
+      closedTitle: "תשלום ממכבי",
+      hint: "האישור מסמן שהכסף התקבל ממכבי ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות ממכבי.",
+      paidNote: "אושר שהכסף התקבל ממכבי. לא הופקה קבלה או חשבונית.",
+    };
+  }
+  if (method === "amit") {
+    return {
+      openTitle: "אישור תשלום מעמית",
+      closedTitle: "תשלום מעמית",
+      hint: "האישור מסמן שהכסף התקבל מעמית ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות מעמית.",
+      paidNote: "אושר שהכסף התקבל מעמית. לא הופקה קבלה או חשבונית.",
+    };
+  }
+  return {
+    openTitle: "אישור תשלום בכרטיסייה",
+    closedTitle: "תשלום בכרטיסייה",
+    hint: "האישור מסמן שהלקוח שילם בכרטיסייה ומעביר את החיוב ל״שולם״. לא מופקת קבלה, חשבונית או תקבול.",
+    paidNote: "אושר תשלום בכרטיסייה. לא הופקה קבלה או חשבונית.",
+  };
 }
 
 function todayDateInput() {
@@ -567,8 +593,8 @@ function ChargeRow({
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
-  const isPass = isPoolPassPaymentMethod(charge.method);
   const [method, setMethod] = useState(charge.method);
+  const isReceiptless = isReceiptlessCollectionMethod(method);
 
   useEffect(() => {
     setMethod(charge.method);
@@ -613,7 +639,7 @@ function ChargeRow({
           {charge.enrollmentCancelled && (
             <Badge tone="warning">ההרשמה בוטלה</Badge>
           )}
-          {!isPass &&
+          {!isReceiptless &&
             (charge.receiptLabel ? (
               <Badge tone="info" className="text-sm">
                 קבלה: {charge.receiptLabel}
@@ -623,7 +649,7 @@ function ChargeRow({
                 קבלה: כרגיל
               </Badge>
             ))}
-          {!isPass && charge.receiptCustomText && (
+          {!isReceiptless && charge.receiptCustomText && (
             <Badge tone="warning" className="text-sm">
               מותאם: {charge.receiptCustomText}
             </Badge>
@@ -643,7 +669,7 @@ function ChargeRow({
           {charge.receipts.length > 0 &&
             ` · ${charge.receipts.length} תקבולים`}
         </p>
-        {open && !isPass && (
+        {open && !isReceiptless && (
           <>
             <ReceiptLabelSelect
               charge={charge}
@@ -688,7 +714,7 @@ function ChargeRow({
         disabled={disabled}
         onClick={onOpen}
       >
-        {open ? (isPass ? "אישור" : "רישום תקבול") : "היסטוריה"}
+        {open ? (isReceiptless ? "אישור" : "רישום תקבול") : "היסטוריה"}
       </Button>
     </li>
   );
@@ -736,7 +762,10 @@ function ChargeReceiptDialog({
 
   const busy = disabled || busyId !== null;
   const isCard = charge.method === "credit_card";
-  const isPass = isPoolPassPaymentMethod(charge.method);
+  const receiptless = isReceiptlessCollectionMethod(charge.method)
+    ? receiptlessCopy(charge.method)
+    : null;
+  const isReceiptless = receiptless !== null;
 
   function run(
     key: string,
@@ -827,10 +856,10 @@ function ChargeReceiptDialog({
       open
       onClose={onClose}
       title={
-        isPass
+        isReceiptless && receiptless
           ? open
-            ? "אישור תשלום בכרטיסייה"
-            : "תשלום בכרטיסייה"
+            ? receiptless.openTitle
+            : receiptless.closedTitle
           : open
             ? "רישום תקבול"
             : "היסטוריית תקבולים"
@@ -839,7 +868,7 @@ function ChargeReceiptDialog({
       className="max-w-lg"
     >
       <div className="space-y-5">
-        {!isPass && (
+        {!isReceiptless && (
           <>
             <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
               <p className="text-xs text-ink-500">שם על הקבלה</p>
@@ -892,10 +921,9 @@ function ChargeReceiptDialog({
 
         {open && (
           <div className="space-y-3">
-            {isPass ? (
+            {isReceiptless && receiptless ? (
               <p className="text-sm leading-relaxed text-ink-600">
-                האישור מסמן שהלקוח שילם בכרטיסייה ומעביר את החיוב ל״שולם״.
-                לא מופקת קבלה, חשבונית או תקבול.
+                {receiptless.hint}
               </p>
             ) : isCard ? (
               <>
@@ -974,7 +1002,7 @@ function ChargeReceiptDialog({
             )}
 
             <div className="flex flex-wrap gap-2">
-              {isPass ? (
+              {isReceiptless ? (
                 <Button
                   type="button"
                   disabled={busy}
@@ -1025,7 +1053,7 @@ function ChargeReceiptDialog({
           </div>
         )}
 
-        {!isPass && (
+        {!isReceiptless && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-ink-800">
             היסטוריית תקבולים
@@ -1070,9 +1098,9 @@ function ChargeReceiptDialog({
         </div>
         )}
 
-        {isPass && !open && (
+        {isReceiptless && receiptless && !open && (
           <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
-            אושר תשלום בכרטיסייה. לא הופקה קבלה או חשבונית.
+            {receiptless.paidNote}
           </p>
         )}
 

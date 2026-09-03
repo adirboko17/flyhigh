@@ -7,7 +7,7 @@ import {
 import {
   COLLECTION_OFFICE_METHODS,
   isCollectionPaymentMethod,
-  isPoolPassPaymentMethod,
+  isReceiptlessChargeSettled,
 } from "@/lib/constants";
 import { subjectKind, subjectLabel } from "@/lib/finance/subject";
 import type { ReceiptLabelOption } from "@/lib/receipt-labels";
@@ -76,9 +76,10 @@ export default async function AdminCollectionsPage() {
           new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
       );
 
-    const passSettled =
-      isPoolPassPaymentMethod(charge.payment_method) &&
-      charge.status === "paid";
+    const passSettled = isReceiptlessChargeSettled(
+      charge.payment_method,
+      charge.status
+    );
     const amountPaid = passSettled
       ? amount
       : round2(receipts.reduce((sum, receipt) => sum + receipt.amount, 0));

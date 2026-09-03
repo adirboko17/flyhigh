@@ -283,11 +283,12 @@ export function isDeferredPaymentMethod(
 }
 
 /**
- * אמצעי תשלום משרדיים שנגבים בתקבול ידני (לא סליקת אשראי).
+ * אמצעי תשלום משרדיים שנגבים בתקבול ידני עם הפקת קבלה.
  * פייבוקס כאן בלבד — לא בצ׳קאאוט ללקוח, רק בעמוד הגבייה למנהל (לקוחות חריגים).
  */
 export const OFFICE_RECEIPT_METHODS = [
-  ...DEFERRED_PAYMENT_METHODS,
+  "cash",
+  "bank_transfer",
   "paybox",
 ] as const satisfies readonly Enums<"payment_method">[];
 
@@ -303,8 +304,38 @@ export function isManualReceiptMethod(
 }
 
 /**
+ * אישור בגבייה בלי קבלה או חשבונית.
+ * כרטיסייה — תשלום פנימי. מכבי/עמית — הלקוח מקבל קבלה מהם ישירות.
+ */
+export const RECEIPTLESS_COLLECTION_METHODS = [
+  "maccabi",
+  "amit",
+  "pool_pass",
+] as const satisfies readonly Enums<"payment_method">[];
+
+export type ReceiptlessCollectionMethod =
+  (typeof RECEIPTLESS_COLLECTION_METHODS)[number];
+
+export function isReceiptlessCollectionMethod(
+  method: Enums<"payment_method"> | null | undefined
+): method is ReceiptlessCollectionMethod {
+  return (
+    method != null &&
+    (RECEIPTLESS_COLLECTION_METHODS as readonly string[]).includes(method)
+  );
+}
+
+export function isReceiptlessChargeSettled(
+  method: Enums<"payment_method"> | null | undefined,
+  status: Enums<"payment_status"> | null | undefined
+): boolean {
+  return isReceiptlessCollectionMethod(method) && status === "paid";
+}
+
+/**
  * כרטיסייה — רק בעמוד הגבייה למנהל.
  * מאשרים בלי קבלה או חשבונית; החיוב עובר ל״שולם״.
+ * לא נספר כהכנסה כספית בדוחות (בניגוד למכבי/עמית).
  */
 export function isPoolPassPaymentMethod(
   method: Enums<"payment_method"> | null | undefined
@@ -312,9 +343,13 @@ export function isPoolPassPaymentMethod(
   return method === "pool_pass";
 }
 
-/** אמצעי תשלום משרדיים שמופיעים ברשימת הגבייה — כולל כרטיסייה בלי מסמך. */
+/** אמצעי תשלום משרדיים שמופיעים ברשימת הגבייה — כולל אישור בלי מסמך. */
 export const COLLECTION_OFFICE_METHODS = [
-  ...OFFICE_RECEIPT_METHODS,
+  "cash",
+  "bank_transfer",
+  "maccabi",
+  "amit",
+  "paybox",
   "pool_pass",
 ] as const satisfies readonly Enums<"payment_method">[];
 

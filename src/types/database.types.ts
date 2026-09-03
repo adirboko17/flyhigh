@@ -210,6 +210,56 @@ export type Database = {
           },
         ]
       }
+      business_expenses: {
+        Row: {
+          amount: number | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          month: string
+          notes: string | null
+          title: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          month: string
+          notes?: string | null
+          title: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          month?: string
+          notes?: string | null
+          title?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_expenses_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       children: {
         Row: {
           birth_date: string | null

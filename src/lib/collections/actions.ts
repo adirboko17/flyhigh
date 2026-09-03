@@ -7,7 +7,8 @@ import {
   PAYMENT_METHOD,
   isCollectionPaymentMethod,
   isManualReceiptMethod,
-  isPoolPassPaymentMethod,
+  isReceiptlessChargeSettled,
+  isReceiptlessCollectionMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
@@ -80,7 +81,7 @@ const CHARGE_SELECT =
   "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
 
 function remainingOf(charge: ChargeRow) {
-  if (isPoolPassPaymentMethod(charge.payment_method) && charge.status === "paid") {
+  if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
     return 0;
   }
   const paid = (charge.payment_receipts ?? []).reduce(
@@ -123,7 +124,7 @@ function isCollectionManagedCharge(charge: {
   office_collection?: boolean | null;
 }) {
   if (isManualReceiptMethod(charge.payment_method)) return true;
-  if (isPoolPassPaymentMethod(charge.payment_method)) return true;
+  if (isReceiptlessCollectionMethod(charge.payment_method)) return true;
   return (
     charge.payment_method === "credit_card" && charge.office_collection === true
   );
@@ -295,10 +296,11 @@ export async function addPaymentReceipt(input: {
     };
   }
 
-  if (isPoolPassPaymentMethod(loaded.charge.payment_method)) {
+  if (isReceiptlessCollectionMethod(loaded.charge.payment_method)) {
+    const methodLabel = PAYMENT_METHOD[loaded.charge.payment_method];
     return {
       success: false,
-      error: "לחיוב בכרטיסייה יש לאשר בלי להפיק קבלה.",
+      error: `לחיוב ב${methodLabel} יש לאשר בלי להפיק קבלה.`,
     };
   }
 
@@ -583,12 +585,12 @@ export async function updateCollectionPaymentMethod(input: {
   }
 
   if (
-    isPoolPassPaymentMethod(input.method) &&
+    isReceiptlessCollectionMethod(input.method) &&
     remainingOf(loaded.charge) < round2(Number(loaded.charge.amount))
   ) {
     return {
       success: false,
-      error: "לא ניתן לעבור לכרטיסייה אחרי שנרשמו תקבולים.",
+      error: `לא ניתן לעבור ל${PAYMENT_METHOD[input.method]} אחרי שנרשמו תקבולים.`,
     };
   }
 
@@ -689,7 +691,8 @@ export async function startCollectionCardcomCheckout(input: {
 }
 
 /**
- * מאשר חיוב בכרטיסייה — מסמן כשולם בלי קבלה, חשבונית או תקבול.
+ * מאשר חיוב בלי קבלה — כרטיסייה, מכבי או עמית.
+ * מסמן כשולם בלי חשבונית או תקבול.
  */
 export async function approveCollectionPassCharge(input: {
   paymentId: string;
@@ -703,12 +706,14 @@ export async function approveCollectionPassCharge(input: {
     return { success: false, error: loaded.error };
   }
 
-  if (!isPoolPassPaymentMethod(loaded.charge.payment_method)) {
+  if (!isReceiptlessCollectionMethod(loaded.charge.payment_method)) {
     return {
       success: false,
-      error: "יש לבחור כרטיסייה כאמצעי התשלום לפני האישור.",
+      error: "יש לבחור כרטיסייה, מכבי או עמית כאמצעי התשלום לפני האישור.",
     };
   }
+
+  const methodLabel = PAYMENT_METHOD[loaded.charge.payment_method];
 
   if (remainingOf(loaded.charge) <= 0) {
     return { success: false, error: "החיוב כבר אושר." };
@@ -717,7 +722,7 @@ export async function approveCollectionPassCharge(input: {
   if ((loaded.charge.payment_receipts ?? []).length > 0) {
     return {
       success: false,
-      error: "לחיוב הזה כבר נרשמו תקבולים. לא ניתן לאשר ככרטיסייה.",
+      error: `לחיוב הזה כבר נרשמו תקבולים. לא ניתן לאשר כ${methodLabel}.`,
     };
   }
 
@@ -733,7 +738,10 @@ export async function approveCollectionPassCharge(input: {
     .eq("id", loaded.charge.id);
 
   if (error) {
-    return { success: false, error: "אישור התשלום בכרטיסייה נכשל. נסו שוב." };
+    return {
+      success: false,
+      error: `אישור התשלום ב${methodLabel} נכשל. נסו שוב.`,
+    };
   }
 
   if (loaded.charge.enrollment_id) {
