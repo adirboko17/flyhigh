@@ -1288,9 +1288,7 @@ export function GuestEnrollmentActions({
   }
 
   const loginHref = `/login?redirect=${encodeURIComponent(`/classes/${classId}`)}`;
-  const registerHref = soldOut
-    ? `/register?class=${classId}&waitlist=1`
-    : `/register?class=${classId}`;
+  const registerHref = `/register?class=${classId}`;
 
   return (
     <div className="mt-5 space-y-3">

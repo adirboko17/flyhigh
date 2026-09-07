@@ -29,6 +29,15 @@ import { calcAge, initials, joinPersonName } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
 const MIN_PASSWORD_LENGTH = 8;
+const CLASS_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function afterRegistrationPath(classId: string | null) {
+  if (classId && CLASS_ID_PATTERN.test(classId)) {
+    return `/classes/${classId}`;
+  }
+  return "/parent/dashboard";
+}
 
 const STEPS = [
   { label: "פרטים אישיים" },
@@ -68,7 +77,6 @@ export function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const classId = searchParams.get("class");
-  const wantsWaitlist = searchParams.get("waitlist") === "1";
 
   const [step, setStep] = useState<Step>(1);
   const [otp, setOtp] = useState("");
@@ -236,38 +244,9 @@ export function RegisterForm() {
       })
       .eq("id", userId);
 
-    if (classId) {
-      const { data: created } = await supabase
-        .from("children")
-        .select("id")
-        .eq("parent_id", userId);
-
-      const childIds: (string | null)[] = created?.length
-        ? created.map((c) => c.id)
-        : [null];
-
-      for (const childId of childIds) {
-        if (wantsWaitlist) {
-          await supabase.from("waitlist").insert({
-            parent_id: userId,
-            child_id: childId,
-            class_id: classId,
-            status: "waiting",
-          });
-        } else {
-          await supabase.from("enrollments").insert({
-            parent_id: userId,
-            child_id: childId,
-            class_id: classId,
-            type: "class",
-            status: "pending",
-            payment_status: "unpaid",
-          });
-        }
-      }
-    }
-
-    router.push("/parent/dashboard");
+    // פתיחת חשבון מדף חוג לא רושמת לחוג ולא לרשימת המתנה.
+    // ההרשמה נפתחת רק אחרי בחירת תשלום / הצטרפות בעמוד החוג.
+    router.push(afterRegistrationPath(classId));
     router.refresh();
   }
 
