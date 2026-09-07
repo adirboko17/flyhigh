@@ -5,6 +5,7 @@ export type Child = Tables<"children">;
 export type Instructor = Tables<"instructors">;
 export type InstructorDocument = Tables<"instructor_documents">;
 export type BusinessDocument = Tables<"business_documents">;
+export type BusinessExpense = Tables<"business_expenses">;
 export type Class = Tables<"classes">;
 export type Program = Tables<"programs">;
 export type PoolPass = Tables<"pool_passes">;
