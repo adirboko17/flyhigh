@@ -61,6 +61,22 @@ export function isValidIdNumber(value: string): boolean {
   return /^\d{5,9}$/.test(normalizeIdNumber(value));
 }
 
+export function receiptIdNumberError(value: string): string | null {
+  const digits = normalizeIdNumber(value);
+  if (!digits) return "נא למלא תעודת זהות.";
+  if (!isValidIdNumber(value)) return "תעודת זהות חייבת להכיל 5–9 ספרות.";
+  return null;
+}
+
+/** ת.ז. של הלקוח, או ח.פ אחר אם מולא בפרטי קבלה שונים. */
+export function resolveReceiptIdNumber(
+  personalId: string,
+  overrideId?: string | null,
+): string {
+  const override = normalizeIdNumber(overrideId ?? "");
+  return override || normalizeIdNumber(personalId);
+}
+
 export function isSignedHealthDraft(
   draft: HealthDeclarationDraft | null | undefined,
 ): draft is HealthDeclarationDraft {

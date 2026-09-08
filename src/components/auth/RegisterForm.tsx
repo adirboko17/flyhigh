@@ -23,6 +23,9 @@ import {
   declarationSchoolYear,
   isSignedHealthDraft,
   MISSING_HEALTH_DECLARATION_ERROR,
+  isValidIdNumber,
+  receiptIdNumberError,
+  resolveReceiptIdNumber,
   type HealthDeclarationDraft,
 } from "@/lib/health-declaration";
 import { calcAge, initials, joinPersonName } from "@/utils/format";
@@ -90,6 +93,7 @@ export function RegisterForm() {
     gender: "",
     city: "",
     address: "",
+    idNumber: "",
     receiptName: "",
     receiptIdNumber: "",
   });
@@ -192,8 +196,17 @@ export function RegisterForm() {
       if (birthError) return setError(birthError);
       if (!details.city.trim()) return setError("נא למלא עיר.");
       if (!details.address.trim()) return setError("נא למלא כתובת.");
+      const idError = receiptIdNumberError(details.idNumber);
+      if (idError) return setError(idError);
       if (wantsDifferentReceipt && !details.receiptName.trim())
         return setError("נא למלא שם על הקבלה.");
+      if (
+        wantsDifferentReceipt &&
+        details.receiptIdNumber.trim() &&
+        !isValidIdNumber(details.receiptIdNumber)
+      ) {
+        return setError("מספר ח.פ / ת.ז לקבלה חייב להכיל 5–9 ספרות.");
+      }
       if (!acceptedTerms) return setError("יש לאשר את התקנון כדי להמשיך.");
       setStep(2);
       return;
@@ -238,9 +251,10 @@ export function RegisterForm() {
       .update({
         gender: isGenderType(details.gender) ? details.gender : null,
         receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
-        receipt_id_number: wantsDifferentReceipt
-          ? details.receiptIdNumber.trim() || null
-          : null,
+        receipt_id_number: resolveReceiptIdNumber(
+          details.idNumber,
+          wantsDifferentReceipt ? details.receiptIdNumber : null,
+        ),
       })
       .eq("id", userId);
 
@@ -279,9 +293,10 @@ export function RegisterForm() {
           address: details.address.trim(),
           role: "parent",
           receipt_name: wantsDifferentReceipt ? details.receiptName.trim() : null,
-          receipt_id_number: wantsDifferentReceipt
-            ? details.receiptIdNumber.trim() || null
-            : null,
+          receipt_id_number: resolveReceiptIdNumber(
+            details.idNumber,
+            wantsDifferentReceipt ? details.receiptIdNumber : null,
+          ),
           pending_children: namedChildren.map((c) => ({
             full_name: childFullName(c),
             birth_date: c.birth || null,
@@ -523,6 +538,26 @@ export function RegisterForm() {
               onChange={setDetailsField("address")}
             />
           </Field>
+          <Field
+            label="תעודת זהות"
+            htmlFor="idNumber"
+            hint="חובה. המספר יופיע על הקבלה"
+            required
+            variant="ds"
+          >
+            <Input
+              id="idNumber"
+              variant="ds"
+              dir="ltr"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={9}
+              placeholder="123456789"
+              value={details.idNumber}
+              onChange={setDetailsField("idNumber")}
+              required
+            />
+          </Field>
 
           <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3 transition-colors hover:border-ink-200">
             <input
@@ -563,8 +598,9 @@ export function RegisterForm() {
                 />
               </Field>
               <Field
-                label="מספר ח.פ / ת.ז"
+                label="מספר ח.פ / ת.ז לקבלה"
                 htmlFor="receiptIdNumber"
+                hint="אם ריק — תופיע תעודת הזהות של הלקוח"
                 variant="ds"
               >
                 <Input
@@ -572,6 +608,7 @@ export function RegisterForm() {
                   variant="ds"
                   dir="ltr"
                   inputMode="numeric"
+                  maxLength={9}
                   placeholder="123456789"
                   value={details.receiptIdNumber}
                   onChange={setDetailsField("receiptIdNumber")}

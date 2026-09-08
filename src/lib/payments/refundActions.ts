@@ -170,6 +170,7 @@ export async function refundCardcomPayment(input: {
 
   revalidatePath("/admin/refunds");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/admin/classes");
   revalidatePath("/admin/calendar");
   revalidatePath("/parent/dashboard");
@@ -341,6 +342,7 @@ export async function issuePaymentRefund(input: {
 
   revalidatePath("/admin/refunds");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/admin/classes");
   revalidatePath("/parent/dashboard");
   return { success: true };

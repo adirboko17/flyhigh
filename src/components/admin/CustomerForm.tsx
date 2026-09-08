@@ -17,6 +17,11 @@ import {
   resolveSchoolGrade,
   SCHOOL_GRADES,
 } from "@/lib/school-grade";
+import {
+  isValidIdNumber,
+  receiptIdNumberError,
+  resolveReceiptIdNumber,
+} from "@/lib/health-declaration";
 import { joinPersonName, splitPersonName } from "@/utils/format";
 
 type ChildDraft = {
@@ -38,6 +43,7 @@ type ProfileForm = {
   gender: string;
   city: string;
   address: string;
+  idNumber: string;
   receiptName: string;
   receiptIdNumber: string;
 };
@@ -72,8 +78,9 @@ function toProfileForm(existing?: CustomerWithChildren): ProfileForm {
     gender: existing?.gender ?? "",
     city: existing?.city ?? "",
     address: existing?.address ?? "",
+    idNumber: existing?.receipt_id_number ?? "",
     receiptName: existing?.receipt_name ?? "",
-    receiptIdNumber: existing?.receipt_id_number ?? "",
+    receiptIdNumber: "",
   };
 }
 
@@ -120,7 +127,7 @@ export function CustomerForm({
   const [confirm, setConfirm] = useState("");
   const [adminNote, setAdminNote] = useState(existing?.admin_note ?? "");
   const [wantsDifferentReceipt, setWantsDifferentReceipt] = useState(
-    Boolean(existing?.receipt_name || existing?.receipt_id_number)
+    Boolean(existing?.receipt_name)
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +174,24 @@ export function CustomerForm({
       return;
     }
 
+    if (!profile.address.trim()) {
+      setError("נא למלא כתובת.");
+      return;
+    }
+    const idError = receiptIdNumberError(profile.idNumber);
+    if (idError) {
+      setError(idError);
+      return;
+    }
+    if (
+      wantsDifferentReceipt &&
+      profile.receiptIdNumber.trim() &&
+      !isValidIdNumber(profile.receiptIdNumber)
+    ) {
+      setError("מספר ח.פ / ת.ז לקבלה חייב להכיל 5–9 ספרות.");
+      return;
+    }
+
     const incompleteChild = children.find((child) => {
       const started =
         Boolean(child.id) ||
@@ -201,7 +226,10 @@ export function CustomerForm({
       city: profile.city,
       address: profile.address,
       receiptName: wantsDifferentReceipt ? profile.receiptName : "",
-      receiptIdNumber: wantsDifferentReceipt ? profile.receiptIdNumber : "",
+      receiptIdNumber: resolveReceiptIdNumber(
+        profile.idNumber,
+        wantsDifferentReceipt ? profile.receiptIdNumber : null,
+      ),
     };
 
     const result = isEdit
@@ -313,8 +341,26 @@ export function CustomerForm({
             required
           />
         </Field>
+        <Field
+          label="תעודת זהות"
+          htmlFor="customerIdNumber"
+          hint="חובה. המספר יופיע על הקבלה"
+          required
+        >
+          <Input
+            id="customerIdNumber"
+            dir="ltr"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={9}
+            value={profile.idNumber}
+            onChange={setProfileField("idNumber")}
+            placeholder="123456789"
+            required
+          />
+        </Field>
 
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-ink-100 bg-ink-50/60 px-4 py-3">
           <input
             type="checkbox"
             checked={wantsDifferentReceipt}
@@ -346,11 +392,12 @@ export function CustomerForm({
                 placeholder="שם החברה או שם מלא"
               />
             </Field>
-            <Field label="מספר ח.פ / ת.ז" htmlFor="customerReceiptId">
+            <Field label="מספר ח.פ / ת.ז לקבלה" htmlFor="customerReceiptId">
               <Input
                 id="customerReceiptId"
                 dir="ltr"
                 inputMode="numeric"
+                maxLength={9}
                 value={profile.receiptIdNumber}
                 onChange={setProfileField("receiptIdNumber")}
                 placeholder="123456789"

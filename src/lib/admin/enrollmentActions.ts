@@ -21,6 +21,7 @@ export async function revalidateAfterEnrollmentChange() {
   revalidatePath("/admin/activity");
   revalidatePath("/admin/collections");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/admin/customers");
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/refunds");

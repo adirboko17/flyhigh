@@ -85,5 +85,6 @@ export async function saveMatnasIncome(input: {
   }
 
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   return { success: true };
 }

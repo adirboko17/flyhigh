@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 export type AdminReceiptLabelRow = {
   id: string;
   label: string;
+  note: string | null;
   is_active: boolean;
   sort_order: number;
 };
@@ -62,7 +63,14 @@ export function ReceiptLabelList({ labels }: { labels: AdminReceiptLabelRow[] })
             <TBody>
               {sorted.map((row) => (
                 <TR key={row.id}>
-                  <TD className="font-semibold text-ink-900">{row.label}</TD>
+                  <TD>
+                    <p className="font-semibold text-ink-900">{row.label}</p>
+                    {row.note?.trim() ? (
+                      <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                        {row.note.trim()}
+                      </span>
+                    ) : null}
+                  </TD>
                   <TD className="hidden tabular-nums text-ink-500 sm:table-cell">
                     {row.sort_order}
                   </TD>
@@ -97,7 +105,7 @@ export function ReceiptLabelList({ labels }: { labels: AdminReceiptLabelRow[] })
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing === "new" ? "תווית חדשה" : "עריכת תווית"}
-        description="הטקסט שיופיע ללקוח בבחירת פרטי הקבלה."
+        description="הטקסט שיופיע על הקבלה, והערה קצרה שתוצג ללקוח ליד הבחירה."
       >
         {editing !== null && (
           <ReceiptLabelForm
@@ -120,6 +128,7 @@ function ReceiptLabelForm({
   const router = useRouter();
   const isEdit = Boolean(existing);
   const [label, setLabel] = useState(existing?.label ?? "");
+  const [note, setNote] = useState(existing?.note ?? "");
   const [sortOrder, setSortOrder] = useState(String(existing?.sort_order ?? 100));
   const [isActive, setIsActive] = useState(existing?.is_active ?? true);
   const [loading, setLoading] = useState(false);
@@ -137,6 +146,12 @@ function ReceiptLabelForm({
       return;
     }
 
+    const trimmedNote = note.trim();
+    if (trimmedNote.length > 80) {
+      setError("ההערה ארוכה מדי (עד 80 תווים).");
+      return;
+    }
+
     const order = Number(sortOrder);
     if (!Number.isFinite(order)) {
       setError("סדר התצוגה חייב להיות מספר.");
@@ -148,6 +163,7 @@ function ReceiptLabelForm({
 
     const payload = {
       label: trimmed,
+      note: trimmedNote || null,
       sort_order: Math.round(order),
       is_active: isActive,
     };
@@ -181,6 +197,20 @@ function ReceiptLabelForm({
           placeholder="למשל: טיפול הידרותרפיה"
           maxLength={120}
           required
+        />
+      </Field>
+
+      <Field
+        label="הערה / תגית"
+        htmlFor="receipt-label-note"
+        hint="מוצגת ליד התווית בעמוד התשלום, ולא נכתבת על הקבלה עצמה."
+      >
+        <Input
+          id="receipt-label-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="למשל: רק לטובת החזרים מהצבא"
+          maxLength={80}
         />
       </Field>
 

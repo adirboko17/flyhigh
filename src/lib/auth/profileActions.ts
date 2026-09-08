@@ -3,12 +3,14 @@
 import { revalidateTag } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { isGenderType } from "@/lib/constants";
+import { normalizeIdNumber, receiptIdNumberError } from "@/lib/health-declaration";
 import { createClient } from "@/lib/supabase/server";
 
 export async function updateOwnProfile(input: {
   fullName: string;
   phone: string;
   gender: string;
+  receiptIdNumber?: string;
 }): Promise<{ success: true } | { success: false; error: string }> {
   const profile = await requireProfile();
   const fullName = input.fullName.trim();
@@ -19,6 +21,12 @@ export async function updateOwnProfile(input: {
     return { success: false, error: "נא לבחור מגדר." };
   }
 
+  const receiptIdNumber = input.receiptIdNumber;
+  if (receiptIdNumber !== undefined) {
+    const idError = receiptIdNumberError(receiptIdNumber);
+    if (idError) return { success: false, error: idError };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
@@ -26,6 +34,9 @@ export async function updateOwnProfile(input: {
       full_name: fullName,
       phone: input.phone.trim() || null,
       gender: input.gender,
+      ...(receiptIdNumber !== undefined
+        ? { receipt_id_number: normalizeIdNumber(receiptIdNumber) }
+        : {}),
     })
     .eq("id", profile.id);
 

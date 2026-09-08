@@ -17,6 +17,7 @@ interface StatCardProps {
   icon?: React.ReactNode;
   tone?: Tone;
   hint?: string;
+  delta?: { text: string; favorable: boolean | null };
 }
 
 export function StatCard({
@@ -25,6 +26,7 @@ export function StatCard({
   icon,
   tone = "brand",
   hint,
+  delta,
 }: StatCardProps) {
   return (
     <div
@@ -48,6 +50,18 @@ export function StatCard({
           >
             {value}
           </p>
+          {delta && (
+            <span
+              className={cn(
+                "mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-bold",
+                delta.favorable === true && "bg-aqua-100 text-aqua-800",
+                delta.favorable === false && "bg-rose-50 text-rose-700",
+                delta.favorable == null && "bg-ink-100 text-ink-500"
+              )}
+            >
+              {delta.text}
+            </span>
+          )}
           {hint && (
             <p
               data-stat-hint

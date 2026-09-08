@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   EMPTY_RECEIPT_LABEL_CHOICE,
+  receiptLabelNote,
   type ReceiptLabelChoice,
   type ReceiptLabelOption,
 } from "@/lib/receipt-labels";
@@ -31,7 +32,7 @@ export function ReceiptLabelField({
       const supabase = createClient();
       const { data } = await supabase
         .from("receipt_labels")
-        .select("id, label")
+        .select("id, label, note")
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
         .order("label", { ascending: true });
@@ -86,34 +87,39 @@ export function ReceiptLabelField({
       </div>
 
       {value.enabled && (
-        <div>
-          <label
-            htmlFor="receipt-label-select"
-            className="mb-1.5 block text-sm font-semibold text-ink-700"
-          >
-            מה לרשום על הקבלה
-          </label>
-          <select
-            id="receipt-label-select"
-            className="ah-select w-full"
-            disabled={disabled || loading}
-            value={value.labelId ?? ""}
-            onChange={(e) =>
-              onChange({
-                enabled: true,
-                labelId: e.target.value || null,
-              })
-            }
-          >
-            <option value="" disabled>
-              בחרו אפשרות...
-            </option>
-            {options.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-ink-700">מה לרשום על הקבלה</p>
+          <div className="space-y-2">
+            {options.map((option) => {
+              const active = value.labelId === option.id;
+              const note = receiptLabelNote(option.note);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={disabled || loading}
+                  onClick={() =>
+                    onChange({ enabled: true, labelId: option.id })
+                  }
+                  className={cn(
+                    "flex w-full flex-wrap items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-right transition-colors disabled:opacity-50",
+                    active
+                      ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
+                      : "border-ink-100 bg-white hover:border-brand-200 hover:bg-ink-50"
+                  )}
+                >
+                  <span className="font-semibold text-ink-900">
+                    {option.label}
+                  </span>
+                  {note ? (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      {note}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

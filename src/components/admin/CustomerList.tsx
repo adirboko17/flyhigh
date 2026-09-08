@@ -406,6 +406,9 @@ function CustomerDetail({
               {customer.receipt_name && (
                 <DetailRow label="שם לקבלה">{customer.receipt_name}</DetailRow>
               )}
+              <DetailRow label="תעודת זהות" dir="ltr">
+                {customer.receipt_id_number || "—"}
+              </DetailRow>
               <DetailRow label="תאריך הצטרפות">
                 {formatDate(customer.created_at)}
               </DetailRow>

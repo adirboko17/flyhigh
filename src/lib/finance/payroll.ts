@@ -107,6 +107,25 @@ export function buildPayroll(
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "he"));
 }
 
+export function mergePayrollLines(groups: PayrollLine[][]): PayrollLine[] {
+  const byId = new Map<string, PayrollLine>();
+  for (const lines of groups) {
+    for (const line of lines) {
+      const existing = byId.get(line.instructorId);
+      if (!existing) {
+        byId.set(line.instructorId, { ...line });
+        continue;
+      }
+      existing.sessions += line.sessions;
+      existing.hours = Math.round((existing.hours + line.hours) * 100) / 100;
+      existing.amount = Math.round((existing.amount + line.amount) * 100) / 100;
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => b.amount - a.amount || a.name.localeCompare(b.name, "he")
+  );
+}
+
 export function payrollTotal(lines: PayrollLine[]): number {
   return lines.reduce((sum, line) => sum + line.amount, 0);
 }

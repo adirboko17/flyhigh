@@ -1134,6 +1134,7 @@ function labelsForCharge(
       {
         id: charge.receiptLabelId,
         label: charge.receiptLabel ?? "תווית לא פעילה",
+        note: null,
       },
     ];
   }
@@ -1167,7 +1168,9 @@ function ReceiptLabelSelect({
       <option value="">כרגיל — {charge.subject}</option>
       {options.map((option) => (
         <option key={option.id} value={option.id}>
-          {option.label}
+          {option.note?.trim()
+            ? `${option.label} · ${option.note.trim()}`
+            : option.label}
         </option>
       ))}
     </Select>

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { updateOwnProfile } from "@/lib/auth/profileActions";
 import { GENDER, isGenderType, ROLE_LABEL } from "@/lib/constants";
+import { receiptIdNumberError } from "@/lib/health-declaration";
 import { createClient } from "@/lib/supabase/client";
 import type { Enums } from "@/types/database.types";
 import { formatDate } from "@/utils/format";
@@ -20,6 +21,7 @@ interface AccountSettingsProps {
   fullName: string;
   phone: string | null;
   gender?: Enums<"gender_type"> | null;
+  receiptIdNumber?: string | null;
   role: Enums<"user_role">;
   createdAt: string;
   /** identity-only — רק כרטיס הזיהות, בלי טפסי עריכה (לעמוד הגדרות מנהל). */
@@ -32,6 +34,7 @@ export function AccountSettings({
   fullName,
   phone,
   gender = null,
+  receiptIdNumber = null,
   role,
   createdAt,
   layout = "full",
@@ -56,6 +59,8 @@ export function AccountSettings({
                 fullName={fullName}
                 phone={phone}
                 gender={gender}
+                receiptIdNumber={receiptIdNumber}
+                requireReceiptId
               />
             </CardContent>
           </Card>
@@ -137,6 +142,8 @@ export function ProfileSettingsForm({
   fullName,
   phone,
   gender,
+  receiptIdNumber = null,
+  requireReceiptId = false,
   onSuccess,
   onCancel,
 }: {
@@ -144,6 +151,8 @@ export function ProfileSettingsForm({
   fullName: string;
   phone: string | null;
   gender?: Enums<"gender_type"> | null;
+  receiptIdNumber?: string | null;
+  requireReceiptId?: boolean;
   onSuccess?: () => void;
   onCancel?: () => void;
 }) {
@@ -152,6 +161,7 @@ export function ProfileSettingsForm({
     fullName,
     phone: phone ?? "",
     gender: gender ?? "",
+    receiptIdNumber: receiptIdNumber ?? "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +170,8 @@ export function ProfileSettingsForm({
   const isDirty =
     form.fullName !== fullName ||
     form.phone !== (phone ?? "") ||
-    form.gender !== (gender ?? "");
+    form.gender !== (gender ?? "") ||
+    (requireReceiptId && form.receiptIdNumber !== (receiptIdNumber ?? ""));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -175,12 +186,20 @@ export function ProfileSettingsForm({
       setError("נא לבחור מגדר.");
       return;
     }
+    if (requireReceiptId) {
+      const idError = receiptIdNumberError(form.receiptIdNumber);
+      if (idError) {
+        setError(idError);
+        return;
+      }
+    }
 
     setLoading(true);
     const result = await updateOwnProfile({
       fullName: form.fullName,
       phone: form.phone,
       gender: form.gender,
+      ...(requireReceiptId ? { receiptIdNumber: form.receiptIdNumber } : {}),
     });
     setLoading(false);
 
@@ -195,7 +214,12 @@ export function ProfileSettingsForm({
   }
 
   function handleCancel() {
-    setForm({ fullName, phone: phone ?? "", gender: gender ?? "" });
+    setForm({
+      fullName,
+      phone: phone ?? "",
+      gender: gender ?? "",
+      receiptIdNumber: receiptIdNumber ?? "",
+    });
     setError(null);
     onCancel?.();
   }
@@ -224,7 +248,7 @@ export function ProfileSettingsForm({
             placeholder="052-7654321"
           />
         </Field>
-        <Field label="מגדר" required className="sm:col-span-2">
+        <Field label="מגדר" required className={requireReceiptId ? "" : "sm:col-span-2"}>
           <Select
             value={form.gender}
             onChange={(e) => {
@@ -241,6 +265,28 @@ export function ProfileSettingsForm({
             ))}
           </Select>
         </Field>
+        {requireReceiptId && (
+          <Field
+            label="תעודת זהות"
+            hint="חובה. המספר יופיע על הקבלה"
+            required
+            className="sm:col-span-2"
+          >
+            <Input
+              dir="ltr"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={9}
+              value={form.receiptIdNumber}
+              onChange={(e) => {
+                setSaved(false);
+                setForm((f) => ({ ...f, receiptIdNumber: e.target.value }));
+              }}
+              placeholder="123456789"
+              required
+            />
+          </Field>
+        )}
       </div>
 
       {error && <FormError>{error}</FormError>}

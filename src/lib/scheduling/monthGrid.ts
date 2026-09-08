@@ -119,9 +119,75 @@ export function dayLabelLong(date: string): string {
   }).format(new Date(`${date}T00:00:00Z`));
 }
 
-function isValidIsoDate(value: string): boolean {
+export function isValidIsoDate(value: string): boolean {
   if (!DATE_PATTERN.test(value)) return false;
   return toIsoDate(new Date(`${value}T00:00:00Z`)) === value;
+}
+
+export function parseDateParam(value: string | undefined, fallback: string): string {
+  return value && isValidIsoDate(value) ? value : fallback;
+}
+
+export function parseYearParam(value: string | undefined, fallback: number): number {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : fallback;
+}
+
+export function yearRange(year: number): { start: string; end: string } {
+  return { start: `${year}-01-01`, end: `${year}-12-31` };
+}
+
+export function yearLabel(year: number): string {
+  return String(year);
+}
+
+export function daysInclusive(start: string, end: string): number {
+  const from = new Date(`${start}T00:00:00Z`);
+  const to = new Date(`${end}T00:00:00Z`);
+  return Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1);
+}
+
+export function monthsInRange(start: string, end: string): string[] {
+  const last = monthOf(end);
+  const months: string[] = [];
+  let cursor = monthOf(start);
+  while (cursor <= last) {
+    months.push(cursor);
+    cursor = shiftMonth(cursor, 1);
+  }
+  return months;
+}
+
+export function monthDayOverlap(
+  month: string,
+  start: string,
+  end: string
+): { days: number; total: number } {
+  const range = monthRange(month);
+  const overlapStart = start > range.start ? start : range.start;
+  const overlapEnd = end < range.end ? end : range.end;
+  return {
+    days: overlapStart > overlapEnd ? 0 : daysInclusive(overlapStart, overlapEnd),
+    total: daysInclusive(range.start, range.end),
+  };
+}
+
+export function dateRangeLabel(start: string, end: string): string {
+  const fmt = new Intl.DateTimeFormat("he-IL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  if (start === end) return fmt.format(new Date(`${start}T00:00:00Z`));
+  return `${fmt.format(new Date(`${start}T00:00:00Z`))} – ${fmt.format(new Date(`${end}T00:00:00Z`))}`;
+}
+
+/** התקופה הקודמת באותו אורך ימים, מיד לפני תחילת הטווח. */
+export function precedingRange(start: string, end: string): { start: string; end: string } {
+  const length = daysInclusive(start, end);
+  const nextEnd = addDays(start, -1);
+  return { start: addDays(nextEnd, -(length - 1)), end: nextEnd };
 }
 
 /** יום ראשון של השבוע שמכיל את התאריך, בהתאם ללוח שמתחיל בראשון. */

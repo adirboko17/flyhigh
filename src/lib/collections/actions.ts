@@ -764,6 +764,7 @@ export async function approveCollectionPassCharge(input: {
 
   revalidatePath("/admin/collections");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/parent/dashboard");
   return { success: true };
 }

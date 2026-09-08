@@ -1,5 +1,6 @@
 import { notifyAdminCardcomPaid } from "@/lib/notifications/adminPayment";
 import { isAbandonedCardcomCharge } from "@/lib/constants";
+import { normalizeIdNumber } from "@/lib/health-declaration";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database.types";
 import {
@@ -54,7 +55,9 @@ export async function loadCustomer(parentId: string): Promise<CardcomCustomer> {
     invoiceName,
     email: data?.email,
     phone: data?.phone,
-    taxId: data?.receipt_id_number,
+    taxId: data?.receipt_id_number
+      ? normalizeIdNumber(data.receipt_id_number) || null
+      : null,
     address: data?.address,
     city: data?.city,
   };

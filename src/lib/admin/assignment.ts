@@ -431,6 +431,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   revalidatePath("/admin/activity");
   revalidatePath("/admin/collections");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/admin/customers");
 
   if (

@@ -50,6 +50,7 @@ export async function setSessionSubstitute(input: {
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/classes");
   revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
   revalidatePath("/instructor");
   revalidatePath("/instructor/payroll");
 

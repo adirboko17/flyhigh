@@ -56,11 +56,26 @@ export function uniqueZipNames(names: string[]): string[] {
   });
 }
 
-export function createZip(entries: ZipEntry[]): Blob {
+function zipEntryName(name: string, allowPaths: boolean): string {
+  if (!allowPaths) return name.replace(/[\\/]/g, "_").trim() || "file";
+  return (
+    name
+      .replace(/\\/g, "/")
+      .replace(/\.\./g, "_")
+      .replace(/^\/+/, "")
+      .trim() || "file"
+  );
+}
+
+export function createZipBytes(
+  entries: ZipEntry[],
+  options?: { allowPaths?: boolean }
+): Uint8Array {
   const encoder = new TextEncoder();
   const now = dosDateTime(new Date());
+  const allowPaths = Boolean(options?.allowPaths);
   const files = entries.map((entry) => {
-    const nameBytes = encoder.encode(entry.name.replace(/[\\/]/g, "_") || "file");
+    const nameBytes = encoder.encode(zipEntryName(entry.name, allowPaths));
     return {
       nameBytes,
       data: entry.data,
@@ -136,7 +151,16 @@ export function createZip(entries: ZipEntry[]): Blob {
     cursor += part.byteLength;
   }
 
-  return new Blob([combined], { type: "application/zip" });
+  return combined;
+}
+
+export function createZip(
+  entries: ZipEntry[],
+  options?: { allowPaths?: boolean }
+): Blob {
+  return new Blob([createZipBytes(entries, options) as BlobPart], {
+    type: "application/zip",
+  });
 }
 
 export function triggerDownload(blob: Blob, filename: string) {

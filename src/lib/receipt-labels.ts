@@ -3,7 +3,14 @@
 export type ReceiptLabelOption = {
   id: string;
   label: string;
+  /** הערה/תגית ליד התווית בבחירה — לא נכתבת על הקבלה. */
+  note?: string | null;
 };
+
+export function receiptLabelNote(note: string | null | undefined) {
+  const trimmed = note?.trim() ?? "";
+  return trimmed || null;
+}
 
 export type ReceiptLabelChoice = {
   /** האם הלקוח ביקש טקסט אחר על הקבלה. */

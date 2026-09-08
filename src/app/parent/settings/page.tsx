@@ -11,7 +11,7 @@ export default async function ParentSettingsPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="הגדרות חשבון"
-        description="עדכון פרטים אישיים, מגדר וסיסמת התחברות"
+        description="עדכון פרטים אישיים, תעודת זהות וסיסמת התחברות"
       />
       <AccountSettings
         id={profile.id}
@@ -19,6 +19,7 @@ export default async function ParentSettingsPage() {
         fullName={profile.full_name}
         phone={profile.phone}
         gender={profile.gender}
+        receiptIdNumber={profile.receipt_id_number}
         role={profile.role}
         createdAt={profile.created_at}
       />

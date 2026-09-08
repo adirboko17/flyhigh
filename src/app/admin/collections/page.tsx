@@ -43,7 +43,7 @@ export default async function AdminCollectionsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("receipt_labels")
-      .select("id, label")
+      .select("id, label, note")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
       .order("label", { ascending: true }),

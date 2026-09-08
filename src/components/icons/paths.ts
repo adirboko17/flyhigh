@@ -47,6 +47,7 @@ export const ICON_PATHS = {
   chevron: "M15 6l-6 6 6 6",
   money:
     "M12 3v18M16 7a4 4 0 0 0-4-1.5C9.8 5.5 8 6.6 8 8.5S10 11 12 11s4 1 4 2.8-1.8 2.7-4 2.7A4 4 0 0 1 8 15",
+  download: "M12 3v12m0 0-4-4m4 4 4-4M5 21h14",
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

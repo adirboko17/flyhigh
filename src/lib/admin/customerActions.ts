@@ -3,6 +3,10 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import { isGenderType, MIN_PASSWORD_LENGTH } from "@/lib/constants";
+import {
+  normalizeIdNumber,
+  receiptIdNumberError,
+} from "@/lib/health-declaration";
 import { currentSchoolYear, parseSchoolGradeInput } from "@/lib/school-grade";
 import {
   createAdminClient,
@@ -78,7 +82,7 @@ function normalizeProfile(input: CustomerProfileInput) {
     city: input.city.trim(),
     address: input.address.trim(),
     receiptName: input.receiptName.trim(),
-    receiptIdNumber: input.receiptIdNumber.trim(),
+    receiptIdNumber: normalizeIdNumber(input.receiptIdNumber),
   };
 }
 
@@ -92,6 +96,8 @@ function validateProfile(input: CustomerProfileInput): string | null {
   if (!isGenderType(profile.gender)) return "נא לבחור מגדר.";
   if (!profile.city) return "נא למלא עיר.";
   if (!profile.address) return "נא למלא כתובת.";
+  const idError = receiptIdNumberError(profile.receiptIdNumber);
+  if (idError) return idError;
   return null;
 }
 
