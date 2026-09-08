@@ -71,7 +71,7 @@ export const ADMIN_NAV: NavEntry[] = [
         icon: "💳",
         matchPaths: ["/admin/payments"],
       },
-      { href: "/admin/reports", label: "דוחות", icon: "📈" },
+      { href: "/admin/reports", label: "השוואות", icon: "📈" },
       { href: "/admin/collections", label: "גבייה", icon: "🧾" },
       { href: "/admin/expenses", label: "הוצאות", icon: "📂" },
       { href: "/admin/refunds", label: "זיכויים", icon: "↩️" },
@@ -85,6 +85,7 @@ export const ADMIN_NAV: NavEntry[] = [
 
 export const INSTRUCTOR_NAV: NavItem[] = [
   { href: "/instructor", label: "דשבורד", icon: "📊" },
+  { href: "/instructor/calendar", label: "לוח שנה", icon: "📅" },
   { href: "/instructor/payroll", label: "שכר ופעילות", icon: "💰" },
   { href: "/instructor/documents", label: "מסמכים", icon: "📄" },
 ];

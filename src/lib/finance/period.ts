@@ -98,6 +98,45 @@ export function defaultComparePeriod(period: FinancePeriod): FinancePeriod {
   return rangePeriod(previous.start, previous.end);
 }
 
+function monthsBetween(from: string, to: string) {
+  const [fromYear, fromMonth] = from.split("-").map(Number);
+  const [toYear, toMonth] = to.split("-").map(Number);
+  return toYear * 12 + toMonth - (fromYear * 12 + fromMonth);
+}
+
+/** כשמזיזים את התקופה הנבחרת, שומרים על אותו מרווח מול תקופת ההשוואה. */
+export function shiftCompareWithPeriod(
+  period: FinancePeriod,
+  compare: FinancePeriod | null,
+  nextPeriod: FinancePeriod
+): FinancePeriod {
+  if (!compare) return defaultComparePeriod(nextPeriod);
+
+  if (
+    period.view === "month" &&
+    nextPeriod.view === "month" &&
+    period.month &&
+    nextPeriod.month &&
+    compare.month
+  ) {
+    return monthPeriod(
+      shiftMonth(compare.month, monthsBetween(period.month, nextPeriod.month))
+    );
+  }
+
+  if (
+    period.view === "year" &&
+    nextPeriod.view === "year" &&
+    period.year != null &&
+    nextPeriod.year != null &&
+    compare.year != null
+  ) {
+    return yearPeriod(compare.year + (nextPeriod.year - period.year));
+  }
+
+  return defaultComparePeriod(nextPeriod);
+}
+
 export type ComparePresetId = "previous" | "lastYear" | "custom";
 
 export type ComparePreset = {

@@ -114,7 +114,9 @@ interface ClassCalendarProps {
   today: string;
   days: CalendarDay[];
   sessions: CalendarSession[];
-  instructors: { id: string; full_name: string }[];
+  instructors?: { id: string; full_name: string }[];
+  /** באזור מדריכה אין שיבוץ החלפה ואין כניסה לכרטיס ניהול של החוג. */
+  mode?: "admin" | "instructor";
 }
 
 export function ClassCalendar({
@@ -131,7 +133,8 @@ export function ClassCalendar({
   today,
   days,
   sessions,
-  instructors,
+  instructors = [],
+  mode = "admin",
 }: ClassCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<CalendarSession | null>(
@@ -210,6 +213,7 @@ export function ClassCalendar({
   );
   const todaySessions = periodContainsToday ? sessionsByDate.get(today) ?? [] : null;
 
+  const canManage = mode === "admin";
   const overlayOpen = Boolean(selectedDate || selectedSession) && !classPanel;
 
   useEffect(() => {
@@ -239,7 +243,7 @@ export function ClassCalendar({
   }
 
   async function openClassPanel(session: CalendarSession) {
-    if (session.kind !== "class") return;
+    if (!canManage || session.kind !== "class") return;
     setClassPanelLoadingId(session.id);
     const cls = await loadAdminClassSummary(session.classId);
     setClassPanelLoadingId(null);
@@ -413,9 +417,10 @@ export function ClassCalendar({
           colorByClass={colorByClass}
           loadingSessionId={classPanelLoadingId}
           onClose={() => setSelectedDate(null)}
-          onSubstitute={setSubstituteFor}
-          onOpenClass={openClassPanel}
+          onSubstitute={canManage ? setSubstituteFor : undefined}
+          onOpenClass={canManage ? openClassPanel : undefined}
           onFocusSession={openSession}
+          showRoster={canManage}
         />
       )}
 
@@ -427,12 +432,13 @@ export function ClassCalendar({
           loadingSessionId={classPanelLoadingId}
           focused
           onClose={() => setSelectedSession(null)}
-          onSubstitute={setSubstituteFor}
-          onOpenClass={openClassPanel}
+          onSubstitute={canManage ? setSubstituteFor : undefined}
+          onOpenClass={canManage ? openClassPanel : undefined}
+          showRoster={canManage}
         />
       )}
 
-      {classPanel && (
+      {canManage && classPanel && (
         <ClassDetailPanel
           cls={classPanel.cls}
           initialTab="enrollments"
@@ -442,7 +448,7 @@ export function ClassCalendar({
         />
       )}
 
-      {substituteFor && substituteFor.kind === "class" && (
+      {canManage && substituteFor && substituteFor.kind === "class" && (
         <SessionSubstituteDialog
           open
           onClose={() => setSubstituteFor(null)}
@@ -901,6 +907,7 @@ function DayPanel({
   onSubstitute,
   onOpenClass,
   onFocusSession,
+  showRoster = true,
 }: {
   date: string;
   sessions: CalendarSession[];
@@ -908,9 +915,10 @@ function DayPanel({
   loadingSessionId: string | null;
   focused?: boolean;
   onClose: () => void;
-  onSubstitute: (session: CalendarSession) => void;
-  onOpenClass: (session: CalendarSession) => void;
+  onSubstitute?: (session: CalendarSession) => void;
+  onOpenClass?: (session: CalendarSession) => void;
   onFocusSession?: (session: CalendarSession) => void;
+  showRoster?: boolean;
 }) {
   const totalMinutes = sessions.reduce(
     (sum, session) => sum + durationMinutes(session.startTime, session.endTime),
@@ -978,9 +986,14 @@ function DayPanel({
                         session={session}
                         color={colorByClass.get(session.classId) ?? FALLBACK_COLOR}
                         opening={loadingSessionId === session.id}
-                        autoOpenRoster={focused}
-                        onSubstitute={() => onSubstitute(session)}
-                        onOpenClass={() => onOpenClass(session)}
+                        autoOpenRoster={focused && showRoster}
+                        showRoster={showRoster}
+                        onSubstitute={
+                          onSubstitute ? () => onSubstitute(session) : undefined
+                        }
+                        onOpenClass={
+                          onOpenClass ? () => onOpenClass(session) : undefined
+                        }
                         onFocusSession={
                           focused || !onFocusSession
                             ? undefined
@@ -1029,6 +1042,7 @@ function SessionRow({
   color,
   opening,
   autoOpenRoster = false,
+  showRoster = true,
   onSubstitute,
   onOpenClass,
   onFocusSession,
@@ -1037,8 +1051,9 @@ function SessionRow({
   color: ClassColor;
   opening: boolean;
   autoOpenRoster?: boolean;
-  onSubstitute: () => void;
-  onOpenClass: () => void;
+  showRoster?: boolean;
+  onSubstitute?: () => void;
+  onOpenClass?: () => void;
   onFocusSession?: () => void;
 }) {
   const status = CLASS_SESSION_STATUS[session.status];
@@ -1149,17 +1164,23 @@ function SessionRow({
             <Badge tone="warning">החלפה</Badge>
           )}
           {!isPrivate && (
-            <button
-              type="button"
-              aria-expanded={rosterOpen}
-              aria-controls={rosterId}
-              onClick={toggleRoster}
-              className="tabular-nums text-ink-600 transition-colors hover:text-brand-700"
-            >
-              {formatClassOccupancy(session.registered, session.capacity)}
-            </button>
+            showRoster ? (
+              <button
+                type="button"
+                aria-expanded={rosterOpen}
+                aria-controls={rosterId}
+                onClick={toggleRoster}
+                className="tabular-nums text-ink-600 transition-colors hover:text-brand-700"
+              >
+                {formatClassOccupancy(session.registered, session.capacity)}
+              </button>
+            ) : (
+              <span className="tabular-nums text-ink-600">
+                {formatClassOccupancy(session.registered, session.capacity)}
+              </span>
+            )
           )}
-          {!isPrivate && !cancelled && (
+          {!isPrivate && !cancelled && onSubstitute && (
             <button
               type="button"
               onClick={onSubstitute}
@@ -1168,7 +1189,7 @@ function SessionRow({
               {session.substituteInstructor ? "עדכון החלפה" : "החלפה"}
             </button>
           )}
-          {!isPrivate && (
+          {!isPrivate && showRoster && (
             <button
               type="button"
               aria-expanded={rosterOpen}
@@ -1199,7 +1220,7 @@ function SessionRow({
             >
               תיאום
             </Link>
-          ) : (
+          ) : onOpenClass ? (
             <button
               type="button"
               disabled={opening}
@@ -1208,7 +1229,7 @@ function SessionRow({
             >
               {opening ? "טוען..." : "החוג"}
             </button>
-          )}
+          ) : null}
         </div>
 
         {session.notes && (

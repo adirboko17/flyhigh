@@ -272,9 +272,12 @@ export default async function InstructorDashboard() {
               {todayClasses.length > 0 && (
                 <Badge tone="brand">{todayClasses.length} היום</Badge>
               )}
-              <span className="hidden text-xs text-ink-400 sm:inline">
-                לחיצה על חוג לסימון נוכחות או לצפייה בהיסטוריה
-              </span>
+              <Link
+                href="/instructor/calendar"
+                className="text-sm font-semibold text-brand-600 transition-colors hover:text-brand-700"
+              >
+                ללוח השנה
+              </Link>
             </div>
           </div>
 

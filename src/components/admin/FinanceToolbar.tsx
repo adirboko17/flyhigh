@@ -9,7 +9,9 @@ import {
   REPORTS_PATH,
   activeComparePreset,
   comparePresets,
+  defaultComparePeriod,
   financeHref,
+  shiftCompareWithPeriod,
   type FinancePeriod,
   type FinanceView,
 } from "@/lib/finance/period";
@@ -53,6 +55,7 @@ export function FinanceToolbar({
   currentMonth,
   currentYear,
   basePath = REPORTS_PATH,
+  alwaysCompare = false,
 }: {
   view: FinanceView;
   period: FinancePeriod;
@@ -60,57 +63,72 @@ export function FinanceToolbar({
   currentMonth: string;
   currentYear: number;
   basePath?: string;
+  alwaysCompare?: boolean;
 }) {
   const state: ToolbarState = { view, period, compare };
   const exportHref = hrefFor(state, `${basePath}/export`);
 
-  const viewTabs = useMemo(
-    () =>
-      [
-        {
-          id: "month" as const,
-          label: "חודש",
-          href: financeHref(
-            {
-              view: "month",
-              period: {
-                view: "month",
-                start: "",
-                end: "",
-                label: "",
-                month: period.month ?? currentMonth,
-              },
-              compare: null,
-            },
-            basePath
-          ),
-        },
-        {
-          id: "year" as const,
-          label: "שנה",
-          href: financeHref(
-            {
-              view: "year",
-              period: {
-                view: "year",
-                start: "",
-                end: "",
-                label: "",
-                year: period.year ?? currentYear,
-              },
-              compare: null,
-            },
-            basePath
-          ),
-        },
-        {
-          id: "range" as const,
-          label: "טווח תאריכים",
-          href: `${basePath}?view=range&from=${period.start}&to=${period.end}`,
-        },
-      ] as const,
-    [period, currentMonth, currentYear, basePath]
-  );
+  const viewTabs = useMemo(() => {
+    const monthPeriod: FinancePeriod = {
+      view: "month",
+      start: "",
+      end: "",
+      label: "",
+      month: period.month ?? currentMonth,
+    };
+    const yearPeriod: FinancePeriod = {
+      view: "year",
+      start: "",
+      end: "",
+      label: "",
+      year: period.year ?? currentYear,
+    };
+    const rangePeriod: FinancePeriod = {
+      view: "range",
+      start: period.start,
+      end: period.end,
+      label: "",
+    };
+
+    return [
+      {
+        id: "month" as const,
+        label: "חודש",
+        href: financeHref(
+          {
+            view: "month",
+            period: monthPeriod,
+            compare: alwaysCompare ? defaultComparePeriod(monthPeriod) : null,
+          },
+          basePath
+        ),
+      },
+      {
+        id: "year" as const,
+        label: "שנה",
+        href: financeHref(
+          {
+            view: "year",
+            period: yearPeriod,
+            compare: alwaysCompare ? defaultComparePeriod(yearPeriod) : null,
+          },
+          basePath
+        ),
+      },
+      {
+        id: "range" as const,
+        label: "טווח תאריכים",
+        href: financeHref(
+          {
+            view: "range",
+            period: rangePeriod,
+            compare: alwaysCompare ? defaultComparePeriod(rangePeriod) : null,
+          },
+          basePath
+        ),
+      },
+    ] as const;
+  }, [period, currentMonth, currentYear, basePath, alwaysCompare]);
 
   return (
     <div className="space-y-3 rounded-2xl border border-ink-100 bg-white p-3 shadow-soft sm:p-4">
@@ -146,6 +164,7 @@ export function FinanceToolbar({
           path={basePath}
           month={period.month}
           currentMonth={currentMonth}
+          period={period}
           compare={compare}
         />
       )}
@@ -155,6 +174,7 @@ export function FinanceToolbar({
           path={basePath}
           year={period.year}
           currentYear={currentYear}
+          period={period}
           compare={compare}
         />
       )}
@@ -173,6 +193,7 @@ export function FinanceToolbar({
         view={view}
         period={period}
         compare={compare}
+        alwaysCompare={alwaysCompare}
       />
     </div>
   );
@@ -182,22 +203,32 @@ function MonthSwitcher({
   path,
   month,
   currentMonth,
+  period,
   compare,
 }: {
   path: string;
   month: string;
   currentMonth: string;
+  period: FinancePeriod;
   compare: FinancePeriod | null;
 }) {
-  const withCompare = (nextMonth: string) =>
-    financeHref(
+  const withCompare = (nextMonth: string) => {
+    const nextPeriod: FinancePeriod = {
+      view: "month",
+      start: "",
+      end: "",
+      label: "",
+      month: nextMonth,
+    };
+    return financeHref(
       {
         view: "month",
-        period: { view: "month", start: "", end: "", label: "", month: nextMonth },
-        compare,
+        period: nextPeriod,
+        compare: shiftCompareWithPeriod(period, compare, nextPeriod),
       },
       path
     );
+  };
 
   return (
     <div className="flex w-full items-center justify-between gap-1.5 rounded-2xl border border-ink-100 bg-ink-50/70 p-1.5 sm:w-auto sm:justify-start">
@@ -211,20 +242,7 @@ function MonthSwitcher({
         <ChevronIcon className="h-4 w-4" />
       </NavArrow>
       <Link
-        href={financeHref(
-          {
-            view: "month",
-            period: {
-              view: "month",
-              start: "",
-              end: "",
-              label: "",
-              month: currentMonth,
-            },
-            compare,
-          },
-          path
-        )}
+        href={withCompare(currentMonth)}
         className={cn(
           "rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors",
           month === currentMonth
@@ -242,22 +260,32 @@ function YearSwitcher({
   path,
   year,
   currentYear,
+  period,
   compare,
 }: {
   path: string;
   year: number;
   currentYear: number;
+  period: FinancePeriod;
   compare: FinancePeriod | null;
 }) {
-  const withCompare = (nextYear: number) =>
-    financeHref(
+  const withCompare = (nextYear: number) => {
+    const nextPeriod: FinancePeriod = {
+      view: "year",
+      start: "",
+      end: "",
+      label: "",
+      year: nextYear,
+    };
+    return financeHref(
       {
         view: "year",
-        period: { view: "year", start: "", end: "", label: "", year: nextYear },
-        compare,
+        period: nextPeriod,
+        compare: shiftCompareWithPeriod(period, compare, nextPeriod),
       },
       path
     );
+  };
 
   return (
     <div className="flex w-full items-center justify-between gap-1.5 rounded-2xl border border-ink-100 bg-ink-50/70 p-1.5 sm:w-auto sm:justify-start">
@@ -271,20 +299,7 @@ function YearSwitcher({
         <ChevronIcon className="h-4 w-4" />
       </NavArrow>
       <Link
-        href={financeHref(
-          {
-            view: "year",
-            period: {
-              view: "year",
-              start: "",
-              end: "",
-              label: "",
-              year: currentYear,
-            },
-            compare,
-          },
-          path
-        )}
+        href={withCompare(currentYear)}
         className={cn(
           "rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors",
           year === currentYear
@@ -339,11 +354,13 @@ function CompareSection({
   view,
   period,
   compare,
+  alwaysCompare,
 }: {
   path: string;
   view: FinanceView;
   period: FinancePeriod;
   compare: FinancePeriod | null;
+  alwaysCompare: boolean;
 }) {
   const presets = comparePresets(period);
   const active = activeComparePreset(period, compare);
@@ -354,13 +371,13 @@ function CompareSection({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-display text-[15px] font-extrabold text-ink-900">
-            השוואה לתקופה אחרת
+            מול מה משווים
           </p>
           <p className="mt-0.5 text-sm text-ink-500">
             בחרו במהירות מול מה להשוות את {period.label}
           </p>
         </div>
-        {compare && (
+        {compare && !alwaysCompare && (
           <Link
             href={offHref}
             className="text-sm font-semibold text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"

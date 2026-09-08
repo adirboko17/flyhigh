@@ -67,7 +67,7 @@ export default async function AdminFinancePage({
               href={REPORTS_PATH}
               className="inline-flex items-center justify-center rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100"
             >
-              דוחות והשוואות
+              להשוואות
             </Link>
             <MonthSwitcher
               month={month}
