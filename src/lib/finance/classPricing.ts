@@ -25,6 +25,18 @@ export function classPeriodTotal(
   return months ? Math.round(unit * months * 100) / 100 : unit;
 }
 
+/** מחיר מועד — דריסה למועד ספציפי, אחרת מחיר החוג לתקופה. */
+export function classSlotPeriodPrice(
+  classPrice: number,
+  billingMonths?: number | null,
+  slotPrice?: number | null
+): number {
+  if (slotPrice != null && Number.isFinite(Number(slotPrice))) {
+    return Math.max(0, Number(slotPrice));
+  }
+  return classPeriodTotal(classPrice, billingMonths);
+}
+
 export function classInstallmentsMax(billingMonths?: number | null) {
   return parseBillingMonths(billingMonths) ?? DEFAULT_CLASS_INSTALLMENTS;
 }

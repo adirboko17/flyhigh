@@ -85,6 +85,11 @@ export async function saveClassSchedule(
             gender_policy: slot.genderPolicy ?? "mixed",
             instructor_id: slot.instructorId || null,
             note: slot.note?.trim() || null,
+            price:
+              slot.price != null && Number.isFinite(Number(slot.price))
+                ? Number(slot.price)
+                : null,
+            starts_on: slot.startsOn?.trim() || null,
           })
           .eq("id", match.id);
         if (updateError) {
@@ -101,6 +106,11 @@ export async function saveClassSchedule(
             gender_policy: slot.genderPolicy ?? "mixed",
             instructor_id: slot.instructorId || null,
             note: slot.note?.trim() || null,
+            price:
+              slot.price != null && Number.isFinite(Number(slot.price))
+                ? Number(slot.price)
+                : null,
+            starts_on: slot.startsOn?.trim() || null,
           })
           .select("id")
           .single();

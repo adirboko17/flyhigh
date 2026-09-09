@@ -964,6 +964,18 @@ export function ClassEnrollmentActions({
                       {" · "}
                       {formatClassGenderPolicy(slot.gender_policy)}
                     </span>
+                    {(slot.starts_on || slot.price != null) && (
+                      <span className="mt-0.5 block text-xs text-ink-500">
+                        {[
+                          slot.starts_on ? `מתחיל ${formatDate(slot.starts_on)}` : null,
+                          slot.price != null
+                            ? formatCurrency(Number(slot.price))
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    )}
                     <SlotNoteBadge note={slot.note} className="mt-1.5" />
                     {full && (
                     <span className="mt-1 block text-xs text-ink-500">

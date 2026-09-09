@@ -477,7 +477,9 @@ export type Database = {
           id: string
           instructor_id: string | null
           note: string | null
+          price: number | null
           start_time: string
+          starts_on: string | null
         }
         Insert: {
           class_id: string
@@ -488,7 +490,9 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           note?: string | null
+          price?: number | null
           start_time: string
+          starts_on?: string | null
         }
         Update: {
           class_id?: string
@@ -499,7 +503,9 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           note?: string | null
+          price?: number | null
           start_time?: string
+          starts_on?: string | null
         }
         Relationships: [
           {
@@ -534,6 +540,7 @@ export type Database = {
           description: string | null
           end_date: string | null
           end_time: string | null
+          fine_print: string | null
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           grade_max: number | null
           grade_min: number | null
@@ -567,6 +574,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          fine_print?: string | null
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           grade_max?: number | null
           grade_min?: number | null
@@ -599,6 +607,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           end_time?: string | null
+          fine_print?: string | null
           gender_policy?: Database["public"]["Enums"]["class_gender_policy"]
           grade_max?: number | null
           grade_min?: number | null
@@ -1932,7 +1941,9 @@ export type Database = {
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           id: string
           note: string | null
+          price: number | null
           start_time: string
+          starts_on: string | null
           taken_count: number
         }[]
       }
@@ -1972,6 +1983,7 @@ export type Database = {
           interest_only: boolean
           booking_mode: Database["public"]["Enums"]["class_booking_mode"]
           trial_lesson_price: number | null
+          fine_print: string | null
         }[]
       }
       list_public_weekly_slots: {
@@ -1982,7 +1994,9 @@ export type Database = {
           end_time: string
           gender_policy: Database["public"]["Enums"]["class_gender_policy"]
           note: string | null
+          price: number | null
           start_time: string
+          starts_on: string | null
         }[]
       }
       preview_coupon:

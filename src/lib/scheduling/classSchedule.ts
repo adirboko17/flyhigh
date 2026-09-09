@@ -23,6 +23,8 @@ export type WeeklySlot = {
   genderPolicy: ClassGenderPolicy;
   instructorId?: string;
   note?: string;
+  price?: number | null;
+  startsOn?: string;
 };
 
 export function weeklySlotKey(slot: Pick<WeeklySlot, "dayOfWeek" | "startTime">) {
@@ -221,7 +223,8 @@ export function generateWeeklySessions(
 
   if (count) {
     for (const slot of uniqueSlots) {
-      const cursor = firstOnOrAfter(start, slot.dayOfWeek);
+      const slotStart = parseLocalDate(slot.startsOn?.trim() || rangeStart);
+      const cursor = firstOnOrAfter(slotStart, slot.dayOfWeek);
       for (let i = 0; i < count; i++) {
         sessions.push({
           sessionDate: formatLocalDate(cursor),
@@ -240,10 +243,15 @@ export function generateWeeklySessions(
     const cursor = new Date(start);
     while (cursor <= end) {
       const dayOfWeek = cursor.getDay();
-      const daySlots = uniqueSlots.filter((slot) => slot.dayOfWeek === dayOfWeek);
+      const sessionDate = formatLocalDate(cursor);
+      const daySlots = uniqueSlots.filter((slot) => {
+        if (slot.dayOfWeek !== dayOfWeek) return false;
+        const slotStart = slot.startsOn?.trim() || rangeStart;
+        return sessionDate >= slotStart;
+      });
       for (const slot of daySlots) {
         sessions.push({
-          sessionDate: formatLocalDate(cursor),
+          sessionDate,
           startTime: slot.startTime,
           endTime: slot.endTime,
           status: "scheduled",
@@ -540,6 +548,8 @@ export function weeklySlotsFromDb(
     gender_policy?: ClassGenderPolicy | null;
     instructor_id?: string | null;
     note?: string | null;
+    price?: number | null;
+    starts_on?: string | null;
   }[],
   fallbackInstructorId?: string | null
 ): WeeklySlot[] {
@@ -552,6 +562,8 @@ export function weeklySlotsFromDb(
       genderPolicy: r.gender_policy ?? "mixed",
       instructorId: r.instructor_id ?? fallbackInstructorId ?? undefined,
       note: r.note?.trim() || undefined,
+      price: r.price ?? null,
+      startsOn: r.starts_on ?? undefined,
     }))
     .sort(
       (a, b) =>
@@ -609,6 +621,7 @@ export function formToPreviewClass(
     interest_only?: boolean;
     booking_mode?: PublicClass["booking_mode"];
     trial_lesson_price?: string;
+    fine_print?: string;
   },
   schedule: ClassScheduleState,
   imageUrl: string | null,
@@ -711,6 +724,7 @@ export function formToPreviewClass(
       interestOnly || appointment || form.trial_lesson_price === ""
         ? null
         : Number(form.trial_lesson_price),
+    fine_print: form.fine_print?.trim() || null,
     weekly_slots: interestOnly
       ? []
       : schedule.weeklySlots
@@ -721,6 +735,8 @@ export function formToPreviewClass(
             end_time: slot.endTime,
             gender_policy: slot.genderPolicy,
             note: slot.note?.trim() || null,
+            price: slot.price ?? null,
+            starts_on: slot.startsOn?.trim() || null,
           })),
   };
 }

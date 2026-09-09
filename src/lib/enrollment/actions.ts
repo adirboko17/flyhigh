@@ -28,6 +28,7 @@ import { countHeldSeats, enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat"
 import {
   classInstallmentOptions,
   classPeriodTotal,
+  classSlotPeriodPrice,
 } from "@/lib/finance/classPricing";
 import { prorateClassPrice } from "@/lib/finance/proratedClassPrice";
 import {
@@ -218,6 +219,17 @@ async function classSubtotal(
 
   if (!cls) return null;
 
+  let slotPrice: number | null = null;
+  if (cls.pick_one_slot && weeklySlotId) {
+    const { data: slot } = await supabase
+      .from("class_weekly_slots")
+      .select("price")
+      .eq("id", weeklySlotId)
+      .eq("class_id", classId)
+      .maybeSingle();
+    slotPrice = slot?.price ?? null;
+  }
+
   if (cls.booking_mode === "appointment") {
     const booked = await loadBookableAppointmentSessions(
       supabase,
@@ -232,7 +244,7 @@ async function classSubtotal(
     loadClassUnitPrice(
       supabase,
       classId,
-      classPeriodTotal(Number(cls.price), cls.billing_months),
+      classSlotPeriodPrice(Number(cls.price), cls.billing_months, slotPrice),
       cls.pick_one_slot ? weeklySlotId : null
     ),
     listFamilyChildrenInCategory(supabase, parentId, classId, cls.category),
@@ -344,13 +356,14 @@ export async function completeClassEnrollmentPayment(input: {
 
   let weeklySlotId: string | null = null;
   let slotGenders: ClassGenderPolicy[] = [];
+  let slotPrice: number | null = null;
   if (!isAppointment && cls.pick_one_slot) {
     if (!input.weeklySlotId) {
       return { success: false, error: "נא לבחור מועד לחוג." };
     }
     const { data: slot } = await supabase
       .from("class_weekly_slots")
-      .select("id, gender_policy")
+      .select("id, gender_policy, price")
       .eq("id", input.weeklySlotId)
       .eq("class_id", classId)
       .maybeSingle();
@@ -359,6 +372,7 @@ export async function completeClassEnrollmentPayment(input: {
     }
     weeklySlotId = slot.id;
     slotGenders = [slot.gender_policy];
+    slotPrice = slot.price;
   } else {
     const { data: slots } = await supabase
       .from("class_weekly_slots")
@@ -452,10 +466,10 @@ export async function completeClassEnrollmentPayment(input: {
         unitPrice: Number(cls.price) || 0,
         hasEnded: false,
       }
-    : await loadClassUnitPrice(
+    : await     loadClassUnitPrice(
         supabase,
         classId,
-        classPeriodTotal(Number(cls.price), cls.billing_months),
+        classSlotPeriodPrice(Number(cls.price), cls.billing_months, slotPrice),
         weeklySlotId
       );
   if (proration.hasEnded) {

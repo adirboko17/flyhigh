@@ -275,6 +275,42 @@ export function ClassScheduleEditor({
                     />
                   </Field>
                 )}
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Field
+                    label="מחיר למועד הזה"
+                    hint="ריק = מחיר החוג. רק אם המועד הזה במחיר אחר."
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={slot.price == null ? "" : String(slot.price)}
+                      onChange={(e) =>
+                        updateWeeklySlot(index, {
+                          price: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      placeholder="למשל: 800"
+                      disabled={disabled}
+                    />
+                  </Field>
+                  <Field
+                    label="התחלה למועד הזה"
+                    hint="ריק = תאריך ההתחלה של החוג."
+                  >
+                    <ScheduleInput
+                      type="date"
+                      placeholder="תאריך התחלה"
+                      value={slot.startsOn ?? ""}
+                      onChange={(e) =>
+                        updateWeeklySlot(index, {
+                          startsOn: e.target.value || undefined,
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </Field>
+                </div>
                 {showNotes && (
                   <Field label="הערה להורים">
                     <Input

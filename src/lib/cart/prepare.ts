@@ -15,6 +15,7 @@ import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 import {
   classInstallmentsMax,
   classPeriodTotal,
+  classSlotPeriodPrice,
 } from "@/lib/finance/classPricing";
 import { planInstallmentsMax } from "@/lib/finance/installments";
 import {
@@ -341,13 +342,14 @@ async function prepareClassLine(
 
   let weeklySlotId: string | null = null;
   let slotGenders: ClassGenderPolicy[] = [];
+  let slotPrice: number | null = null;
   if (cls.pick_one_slot) {
     if (!item.weeklySlotId) {
       return { success: false, error: `נא לבחור מועד ל${cls.title}.` };
     }
     const { data: slot } = await supabase
       .from("class_weekly_slots")
-      .select("id, gender_policy")
+      .select("id, gender_policy, price")
       .eq("id", item.weeklySlotId)
       .eq("class_id", classId)
       .maybeSingle();
@@ -356,6 +358,7 @@ async function prepareClassLine(
     }
     weeklySlotId = slot.id;
     slotGenders = [slot.gender_policy];
+    slotPrice = slot.price;
   } else {
     const { data: slots } = await supabase
       .from("class_weekly_slots")
@@ -440,7 +443,7 @@ async function prepareClassLine(
   if (weeklySlotId) sessionsQuery = sessionsQuery.eq("weekly_slot_id", weeklySlotId);
   const { data: sessions } = await sessionsQuery;
   const proration = prorateClassPrice(
-    classPeriodTotal(Number(cls.price), cls.billing_months),
+    classSlotPeriodPrice(Number(cls.price), cls.billing_months, slotPrice),
     sessions ?? [],
     todayInIsrael()
   );

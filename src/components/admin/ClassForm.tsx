@@ -78,6 +78,7 @@ export type ClassFormData = {
   sibling_discount_tiers?: Json | null;
   interest_only?: boolean;
   trial_lesson_price?: number | null;
+  fine_print?: string | null;
 };
 
 interface Props {
@@ -127,6 +128,7 @@ const emptyForm = {
   interest_only: false,
   trial_lesson_enabled: false,
   trial_lesson_price: "",
+  fine_print: "",
 };
 
 function toFormState(existing?: ClassFormData, categories: string[] = []) {
@@ -170,6 +172,7 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
       existing.trial_lesson_price != null
         ? String(existing.trial_lesson_price)
         : "",
+    fine_print: existing.fine_print ?? "",
   };
 }
 
@@ -239,6 +242,7 @@ function toPayload(
         : form.trial_lesson_price === ""
           ? null
           : Number(form.trial_lesson_price),
+    fine_print: form.fine_print.trim() || null,
   };
 }
 
@@ -677,6 +681,16 @@ export function ClassForm({
                 value={form.description}
                 onChange={set("description")}
                 placeholder="כתבו תיאור קצר על החוג"
+              />
+            </Field>
+            <Field
+              label="הערת כוכבית ללקוחות"
+              hint="מוצגת ליד המחיר. למשל מדיניות ביטול."
+            >
+              <Textarea
+                value={form.fine_print}
+                onChange={set("fine_print")}
+                placeholder="ביטול של עד 24 שעות מראש יתואם טיפול בסוף השנה/החזר כספי"
               />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">

@@ -6,6 +6,7 @@ import {
   ClassEnrollmentPanelFallback,
 } from "@/components/classes/ClassEnrollmentPanel";
 import { ClassSessionGroups } from "@/components/classes/ClassSessionGroups";
+import { ClassFinePrint } from "@/components/classes/ClassFinePrint";
 import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
 import { PublicPageHero } from "@/components/layout/PublicPageHero";
 import { Badge } from "@/components/ui/Badge";
@@ -34,7 +35,7 @@ import {
 import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { instructorTitle } from "@/lib/instructors/labels";
-import { formatTime, formatDate } from "@/utils/format";
+import { formatTime, formatDate, formatCurrency } from "@/utils/format";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -311,6 +312,16 @@ export default async function ClassDetailPage({
                           )}
                         </span>
                         <SlotNoteBadge note={slot.note} />
+                        {slot.starts_on && slot.starts_on !== cls.start_date && (
+                          <span className="text-xs text-ink-500">
+                            מתחיל {formatDate(slot.starts_on)}
+                          </span>
+                        )}
+                        {slot.price != null && (
+                          <span className="text-xs font-semibold text-ink-700">
+                            {formatCurrency(Number(slot.price))}
+                          </span>
+                        )}
                       </span>
                       {slot.available <= 0 && (
                         <span className="text-ink-500">מלא</span>
@@ -318,6 +329,7 @@ export default async function ClassDetailPage({
                     </li>
                   ))}
                 </ul>
+                <ClassFinePrint text={cls.fine_print} className="mt-4" />
               </div>
             )}
 

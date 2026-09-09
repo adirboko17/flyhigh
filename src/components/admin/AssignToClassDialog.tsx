@@ -26,6 +26,7 @@ import {
 import {
   classInstallmentsMax,
   classPeriodTotal,
+  classSlotPeriodPrice,
   parseBillingMonths,
 } from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
@@ -150,6 +151,7 @@ export function AssignToClassDialog({
       start_time: string;
       end_time: string;
       gender_policy: "male" | "female" | "mixed";
+      price: number | null;
     }[]
   >([]);
   const [method, setMethod] = useState<AssignChargeMethod>("cash");
@@ -181,31 +183,10 @@ export function AssignToClassDialog({
       }
     });
 
-    supabase
-      .from("class_sessions")
-      .select("session_date, start_time, status")
-      .eq("class_id", cls.id)
-      .then(({ data }) => {
-        if (!active) return;
-        if (isAppointmentClass(cls)) {
-          setUnitPrice(Number(cls.price) || 0);
-          setProrationNote(null);
-          return;
-        }
-        const proration = prorateClassPrice(
-          classPeriodTotal(Number(cls.price), cls.billing_months),
-          data ?? [],
-          todayInIsrael()
-        );
-        setUnitPrice(proration.unitPrice);
-        setProrationNote(
-          proration.isLate
-            ? `החוג כבר התחיל — מחיר מוצע ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount} (${proration.remainingCount} מפגשים × ${formatCurrency(proration.pricePerSession)})`
-            : proration.hasEnded
-              ? "כל המפגשים כבר התקיימו. אפשר עדיין לשבץ בסכום ידני."
-              : null
-        );
-      });
+    if (isAppointmentClass(cls)) {
+      setUnitPrice(Number(cls.price) || 0);
+      setProrationNote(null);
+    }
 
     if (isAppointmentClass(cls)) {
       supabase
@@ -222,7 +203,7 @@ export function AssignToClassDialog({
     } else if (cls.pick_one_slot) {
       supabase
         .from("class_weekly_slots")
-        .select("id, day_of_week, start_time, end_time, gender_policy")
+        .select("id, day_of_week, start_time, end_time, gender_policy, price")
         .eq("class_id", cls.id)
         .order("day_of_week")
         .order("start_time")
@@ -246,6 +227,40 @@ export function AssignToClassDialog({
       active = false;
     };
   }, [cls.id, cls.category, cls.price, cls.billing_months, isWaitlist]);
+
+  useEffect(() => {
+    if (appointment) return;
+
+    let active = true;
+    const slot = slots.find((row) => row.id === weeklySlotId);
+    const supabase = createClient();
+    let query = supabase
+      .from("class_sessions")
+      .select("session_date, start_time, status")
+      .eq("class_id", cls.id);
+    if (weeklySlotId) query = query.eq("weekly_slot_id", weeklySlotId);
+
+    query.then(({ data }) => {
+      if (!active) return;
+      const proration = prorateClassPrice(
+        classSlotPeriodPrice(Number(cls.price), cls.billing_months, slot?.price),
+        data ?? [],
+        todayInIsrael()
+      );
+      setUnitPrice(proration.unitPrice);
+      setProrationNote(
+        proration.isLate
+          ? `החוג כבר התחיל — מחיר מוצע ממפגש ${proration.firstSessionNumber} מתוך ${proration.billableCount} (${proration.remainingCount} מפגשים × ${formatCurrency(proration.pricePerSession)})`
+          : proration.hasEnded
+            ? "כל המפגשים כבר התקיימו. אפשר עדיין לשבץ בסכום ידני."
+            : null
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [appointment, cls.id, cls.price, cls.billing_months, weeklySlotId, slots]);
 
   useEffect(() => {
     if (!parentId) {

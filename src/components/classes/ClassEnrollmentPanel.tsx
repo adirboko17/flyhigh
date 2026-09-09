@@ -28,6 +28,7 @@ import {
   GuestEnrollmentActions,
   NonParentEnrollmentNotice,
 } from "./ClassEnrollmentActions";
+import { ClassFinePrint } from "./ClassFinePrint";
 import {
   ClassLateRegistrationBanner,
   ClassPriceAmount,
@@ -212,6 +213,7 @@ export async function ClassEnrollmentPanel({
             appointment={appointment}
           />
         </div>
+        <ClassFinePrint text={cls.fine_print} className="mt-2" />
         {!interestOnly && (proration.isLate || proration.hasEnded) && (
           <div className="mt-3">
             <ClassLateRegistrationBanner proration={proration} />

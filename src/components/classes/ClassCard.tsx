@@ -18,6 +18,7 @@ import { classIsSoldOut } from "@/lib/classes/capacity";
 import { isInterestClass } from "@/lib/classes/interest";
 import { instructorTitle } from "@/lib/instructors/labels";
 import type { PublicClass, PublicClassWeeklySlot } from "@/types";
+import { ClassFinePrint } from "./ClassFinePrint";
 import { ClassPriceAmount, ClassPriceNote, classPriceLabel } from "./ClassPrice";
 
 const ACCENTS = [
@@ -263,6 +264,7 @@ export function ClassCard({
                 interestOnly={interestOnly}
                 appointment={appointment}
               />
+              <ClassFinePrint text={cls.fine_print} className="mt-1" />
             </div>
           </div>
 

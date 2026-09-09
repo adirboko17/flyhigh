@@ -8,7 +8,7 @@ import {
 } from "@/lib/constants";
 import {
   classInstallmentOptions,
-  classPeriodTotal,
+  classSlotPeriodPrice,
 } from "@/lib/finance/classPricing";
 import { splitAmount } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
@@ -168,6 +168,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   const isAppointment = cls.booking_mode === "appointment";
   let weeklySlotId: string | null = input.weeklySlotId ?? null;
   let sessionId: string | null = input.sessionId ?? null;
+  let slotPrice: number | null = null;
   if (cls.interest_only) {
     weeklySlotId = null;
     sessionId = null;
@@ -195,7 +196,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     }
     const { data: slot } = await supabase
       .from("class_weekly_slots")
-      .select("id")
+      .select("id, price")
       .eq("id", weeklySlotId)
       .eq("class_id", input.classId)
       .maybeSingle();
@@ -203,6 +204,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       return { success: false, error: "המועד שנבחר אינו שייך לחוג זה." };
     }
     weeklySlotId = slot.id;
+    slotPrice = slot.price;
   } else {
     weeklySlotId = null;
   }
@@ -290,7 +292,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   const isCreditCard = !cls.interest_only && input.method === "credit_card";
   const awaitingCardcom = isCreditCard && total > 0;
   const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
-  const listTotal = classPeriodTotal(Number(cls.price), cls.billing_months) * participants.length;
+  const listTotal =
+    classSlotPeriodPrice(Number(cls.price), cls.billing_months, slotPrice) *
+    participants.length;
   const discountPercent =
     listTotal > 0 && total < listTotal
       ? Math.min(100, Math.max(0, round2(((listTotal - total) / listTotal) * 100)))
