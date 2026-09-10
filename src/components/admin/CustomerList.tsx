@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { CustomerAdvanceNotices } from "@/components/admin/CustomerAdvanceNotices";
 import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
+import { CustomerPaymentInstructions } from "@/components/admin/CustomerPaymentInstructions";
 import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
 import { CustomerForm } from "@/components/admin/CustomerForm";
 import type {
@@ -466,6 +467,8 @@ function CustomerDetail({
             parentId={customer.id}
             parentName={customer.full_name}
           />
+
+          <CustomerPaymentInstructions parentId={customer.id} />
 
           <CustomerAdvanceNotices parentId={customer.id} />
 

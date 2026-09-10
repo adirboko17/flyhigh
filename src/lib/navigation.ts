@@ -81,6 +81,7 @@ export const ADMIN_NAV: NavEntry[] = [
       { href: "/admin/expenses", label: "הוצאות", icon: "📂" },
       { href: "/admin/refunds", label: "זיכויים", icon: "↩️" },
       { href: "/admin/receipt-labels", label: "תוויות לקבלה", icon: "🏷️" },
+      { href: "/admin/payment-methods", label: "אמצעי תשלום", icon: "💸" },
       { href: "/admin/coupons", label: "קודי קופון", icon: "🎟️" },
     ],
   },

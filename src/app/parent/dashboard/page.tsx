@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/Card";
 import { CancelInterestEnrollmentButton } from "@/components/parent/CancelInterestEnrollmentButton";
 import { PayOpenChargeButton } from "@/components/payments/PayOpenChargeButton";
+import { PaymentMethodNoteCard } from "@/components/payments/PaymentMethodNoteCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/StatCard";
 import { ViewAllDialog } from "@/components/ui/ViewAllDialog";
@@ -32,6 +33,11 @@ import {
   PAYMENT_METHOD,
 } from "@/lib/constants";
 import { isAbandonedCardcomEnrollment } from "@/lib/enrollment/holdsSeat";
+import {
+  PAYMENT_METHOD_NOTES_KEY,
+  parsePaymentMethodNotes,
+  paymentMethodNote,
+} from "@/lib/payments/methodNotes";
 import { addDays, dayLabelLong, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database.types";
@@ -65,6 +71,7 @@ export default async function ParentDashboard() {
     { data: receipts },
     { data: waitlist },
     { data: healthDeclarations },
+    { data: methodNotesSetting },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -95,7 +102,13 @@ export default async function ParentDashboard() {
       )
       .eq("parent_id", profile.id)
       .eq("school_year", healthYear),
+    supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", PAYMENT_METHOD_NOTES_KEY)
+      .maybeSingle(),
   ]);
+  const methodNotes = parsePaymentMethodNotes(methodNotesSetting?.value);
 
   const allChildren = children ?? [];
   const allPayments = payments ?? [];
@@ -137,6 +150,19 @@ export default async function ParentDashboard() {
       p.office_collection
     )
   );
+  const openPaymentInstructions = (() => {
+    const seen = new Set<Enums<"payment_method">>();
+    const rows: { method: Enums<"payment_method">; note: string }[] = [];
+    for (const payment of openPayments) {
+      const method = payment.payment_method;
+      if (!method || seen.has(method)) continue;
+      const note = paymentMethodNote(methodNotes, method);
+      if (!note) continue;
+      seen.add(method);
+      rows.push({ method, note });
+    }
+    return rows;
+  })();
   const openAmount = sumAmount(openPayments);
   const paidAmount = sumAmount(allPayments.filter((p) => p.status === "paid"));
 
@@ -732,6 +758,17 @@ export default async function ParentDashboard() {
             disabled={allPayments.length === 0 && allReceipts.length === 0}
           >
             <div className="space-y-6">
+              {openPaymentInstructions.length > 0 && (
+                <div className="space-y-3">
+                  {openPaymentInstructions.map((item) => (
+                    <PaymentMethodNoteCard
+                      key={item.method}
+                      method={item.method}
+                      note={item.note}
+                    />
+                  ))}
+                </div>
+              )}
               <section>
                 <h3 className="font-display text-base font-bold text-ink-900">
                   תשלומים
@@ -796,6 +833,17 @@ export default async function ParentDashboard() {
           </ViewAllDialog>
         </CardHeader>
         <CardContent>
+          {openPaymentInstructions.length > 0 && (
+            <div className="mb-4 space-y-3">
+              {openPaymentInstructions.map((item) => (
+                <PaymentMethodNoteCard
+                  key={item.method}
+                  method={item.method}
+                  note={item.note}
+                />
+              ))}
+            </div>
+          )}
           {allPayments.length === 0 ? (
             <EmptyState
               icon="💳"

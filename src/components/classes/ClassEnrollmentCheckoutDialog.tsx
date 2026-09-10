@@ -6,17 +6,14 @@ import { useCart } from "@/components/cart/CartProvider";
 import { Modal } from "@/components/ui/Modal";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import {
-  BankTransferDetails,
   CardcomRedirectHint,
   CouponField,
   PaymentMethodPicker,
+  SelectedPaymentInstructions,
 } from "@/components/checkout/CheckoutFields";
+import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
-import {
-  DEFERRED_PAYMENT_HINT,
-  PAYMENT_METHOD,
-  isDeferredPaymentMethod,
-} from "@/lib/constants";
+import { PAYMENT_METHOD, isDeferredPaymentMethod } from "@/lib/constants";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import {
   calculateOrderTotal,
@@ -82,6 +79,7 @@ export function ClassEnrollmentCheckoutDialog({
     "summary"
   );
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
+  const methodNotes = usePaymentMethodNotes();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
@@ -463,16 +461,11 @@ export function ClassEnrollmentCheckoutDialog({
           />
 
           {deferred ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <p className="font-semibold">התשלום לא ייגבה עכשיו</p>
-              <p className="mt-1">
-                {DEFERRED_PAYMENT_HINT[method]} ההרשמה נשמרת מיד והמקום בחוג נשמר
-                לכם.
-              </p>
-              {method === "bank_transfer" && (
-                <BankTransferDetails className="mt-3" />
-              )}
-            </div>
+            <SelectedPaymentInstructions
+              method={method}
+              notes={methodNotes}
+              deferredFooter="ההרשמה נשמרת מיד והמקום בחוג נשמר לכם."
+            />
           ) : nothingToCharge ? (
             <div className="rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
               <p className="font-semibold">אין מה לשלם</p>
@@ -481,7 +474,13 @@ export function ClassEnrollmentCheckoutDialog({
               </p>
             </div>
           ) : (
-            <CardcomRedirectHint installmentsMax={installmentsMax} />
+            <>
+              <SelectedPaymentInstructions
+                method={method}
+                notes={methodNotes}
+              />
+              <CardcomRedirectHint installmentsMax={installmentsMax} />
+            </>
           )}
 
           {error && (

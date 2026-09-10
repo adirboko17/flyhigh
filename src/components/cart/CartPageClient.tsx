@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/cart/CartProvider";
 import {
-  BankTransferDetails,
   CardcomRedirectHint,
   CouponField,
   PaymentMethodPicker,
+  SelectedPaymentInstructions,
 } from "@/components/checkout/CheckoutFields";
+import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -24,10 +25,7 @@ import {
   writePendingCartCheckoutId,
 } from "@/lib/cart/pendingCheckout";
 import type { CartItem } from "@/lib/cart/types";
-import {
-  DEFERRED_PAYMENT_HINT,
-  isDeferredPaymentMethod,
-} from "@/lib/constants";
+import { isDeferredPaymentMethod } from "@/lib/constants";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import {
@@ -59,6 +57,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
   );
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
+  const methodNotes = usePaymentMethodNotes();
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -320,15 +319,18 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
               />
 
               {deferred ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <p className="font-semibold">התשלום לא ייגבה עכשיו</p>
-                  <p className="mt-1">{DEFERRED_PAYMENT_HINT[method]}</p>
-                  {method === "bank_transfer" && (
-                    <BankTransferDetails className="mt-3" />
-                  )}
-                </div>
+                <SelectedPaymentInstructions
+                  method={method}
+                  notes={methodNotes}
+                />
               ) : (
-                <CardcomRedirectHint installmentsMax={installmentsMax} />
+                <>
+                  <SelectedPaymentInstructions
+                    method={method}
+                    notes={methodNotes}
+                  />
+                  <CardcomRedirectHint installmentsMax={installmentsMax} />
+                </>
               )}
 
               {error && (

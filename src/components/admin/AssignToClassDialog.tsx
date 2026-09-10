@@ -12,6 +12,9 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CardcomRedirectHint } from "@/components/checkout/CheckoutFields";
+import { PaymentMethodNoteCard } from "@/components/payments/PaymentMethodNoteCard";
+import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
+import { paymentMethodNote } from "@/lib/payments/methodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
 import {
   assignChildrenToClass,
@@ -164,6 +167,7 @@ export function AssignToClassDialog({
     }[]
   >([]);
   const [method, setMethod] = useState<AssignChargeMethod>("cash");
+  const methodNotes = usePaymentMethodNotes();
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitParts, setSplitParts] = useState<PaymentSplitDraft[]>([]);
   const [markPaid, setMarkPaid] = useState(false);
@@ -685,6 +689,13 @@ export function AssignToClassDialog({
             <option value="none">ללא חיוב</option>
           </Select>
         </Field>
+
+        {method !== "none" && (
+          <PaymentMethodNoteCard
+            method={method}
+            note={paymentMethodNote(methodNotes, method)}
+          />
+        )}
 
         {method !== "none" && (
           <>

@@ -6,8 +6,13 @@ import { Field, Input } from "@/components/ui/Input";
 import {
   BANK_TRANSFER_ACCOUNT,
   DEFERRED_PAYMENT_METHODS,
+  isDeferredPaymentMethod,
   PAYMENT_METHOD,
 } from "@/lib/constants";
+import {
+  paymentMethodNote,
+  type PaymentMethodNotes,
+} from "@/lib/payments/methodNotes";
 import { normalizeCouponCode, type AppliedCoupon } from "@/lib/finance/coupon";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
 import { cn } from "@/utils/cn";
@@ -103,6 +108,42 @@ export function CouponField({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+export function SelectedPaymentInstructions({
+  method,
+  notes,
+  deferredFooter,
+}: {
+  method: CheckoutPaymentMethod;
+  notes: PaymentMethodNotes;
+  deferredFooter?: string;
+}) {
+  const deferred = isDeferredPaymentMethod(method);
+  const note = paymentMethodNote(notes, method, { fallbackHint: deferred });
+
+  if (deferred) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <p className="font-semibold">התשלום לא ייגבה עכשיו</p>
+        {note ? (
+          <p className="mt-2 whitespace-pre-wrap leading-relaxed">{note}</p>
+        ) : null}
+        {deferredFooter ? <p className="mt-2">{deferredFooter}</p> : null}
+        {method === "bank_transfer" && (
+          <BankTransferDetails className="mt-3" />
+        )}
+      </div>
+    );
+  }
+
+  if (!note) return null;
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3.5 text-sky-950">
+      <p className="font-semibold">{PAYMENT_METHOD[method]}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{note}</p>
     </div>
   );
 }
