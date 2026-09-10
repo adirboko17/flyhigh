@@ -211,7 +211,7 @@ async function prepareClassLine(
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, is_trial, session_id, payments(status, payment_method, external_reference, office_collection)"
+          "child_id, status, payment_status, admin_assigned, is_trial, session_id, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
@@ -630,7 +630,7 @@ async function prepareTrialClassLine(
   const { data: existing } = await reads
     .from("enrollments")
     .select(
-      "child_id, session_id, is_trial, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+      "child_id, session_id, is_trial, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
     )
     .eq("class_id", cls.id)
     .eq("parent_id", profile.id)

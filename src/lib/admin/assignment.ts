@@ -149,7 +149,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       supabase
         .from("enrollments")
         .select(
-          "id, child_id, status, payment_status, children(full_name), payments(status, payment_method, external_reference, office_collection)"
+          "id, child_id, status, payment_status, admin_assigned, children(full_name), payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", input.classId)
         .eq("parent_id", input.parentId)
@@ -313,9 +313,11 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         status: "active" as const,
         payment_status: cls.interest_only
           ? ("not_required" as const)
-          : settledNow
-            ? ("paid" as const)
-            : ("unpaid" as const),
+          : input.method === "none" || (!settledNow && total <= 0)
+            ? ("no_charge" as const)
+            : settledNow
+              ? ("paid" as const)
+              : ("unpaid" as const),
         admin_assigned: true,
         discount_percent: discountPercent,
       }))

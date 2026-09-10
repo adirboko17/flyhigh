@@ -322,7 +322,7 @@ export async function completeClassEnrollmentPayment(input: {
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+          "child_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", classId)
         .eq("parent_id", profile.id)
@@ -760,7 +760,7 @@ export async function registerInterestForClass(input: {
       reads
         .from("enrollments")
         .select(
-          "child_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+          "child_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("class_id", input.classId)
         .eq("parent_id", profile.id)

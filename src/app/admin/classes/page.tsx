@@ -36,7 +36,7 @@ export default async function AdminClassesPage() {
       supabase
         .from("enrollments")
         .select(
-          "class_id, weekly_slot_id, status, payment_status, is_trial, payments(status, payment_method, external_reference, office_collection)"
+          "class_id, weekly_slot_id, status, payment_status, admin_assigned, is_trial, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("type", "class")
         .not("class_id", "is", null)

@@ -14,6 +14,7 @@ export type SeatEnrollment = {
   payment_status?: Enums<"enrollment_payment_status"> | null;
   payments?: SeatPayment[] | null;
   is_trial?: boolean | null;
+  admin_assigned?: boolean | null;
 };
 
 /**
@@ -27,6 +28,7 @@ export function isAbandonedCardcomEnrollment(
     enrollment.payment_status === "paid" ||
     enrollment.payment_status === "partial" ||
     enrollment.payment_status === "not_required" ||
+    enrollment.payment_status === "no_charge" ||
     enrollment.payment_status === "refunded"
   ) {
     return false;
@@ -46,7 +48,7 @@ export function isAbandonedCardcomEnrollment(
 
 /**
  * האם ההרשמה תופסת מקום בחוג.
- * אשראי שנפתח לדף סליקה ולא שולם — לא תופס מקום.
+ * שיבוץ מנהל נספר תמיד (גם בלי חיוב). אשראי שנפתח לדף סליקה ולא שולם — לא.
  */
 export function enrollmentHoldsSeat(enrollment: SeatEnrollment): boolean {
   if (enrollment.status !== "active" && enrollment.status !== "pending") {
@@ -54,9 +56,17 @@ export function enrollmentHoldsSeat(enrollment: SeatEnrollment): boolean {
   }
 
   if (
+    enrollment.admin_assigned &&
+    !isAbandonedCardcomEnrollment(enrollment)
+  ) {
+    return true;
+  }
+
+  if (
     enrollment.payment_status === "paid" ||
     enrollment.payment_status === "partial" ||
     enrollment.payment_status === "not_required" ||
+    enrollment.payment_status === "no_charge" ||
     enrollment.payment_status === "refunded"
   ) {
     return true;
@@ -87,7 +97,7 @@ export const SEAT_PAYMENT_FIELDS =
   "status, payment_method, external_reference, office_collection";
 
 const SEAT_SELECT =
-  `id, status, payment_status, is_trial, payments(${SEAT_PAYMENT_FIELDS})`;
+  `id, status, payment_status, admin_assigned, is_trial, payments(${SEAT_PAYMENT_FIELDS})`;
 
 export async function countHeldSeats(
   supabase: SupabaseClient<Database>,

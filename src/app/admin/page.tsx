@@ -92,7 +92,7 @@ export default async function AdminDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "class_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+        "class_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("type", "class")
       .eq("status", "active")

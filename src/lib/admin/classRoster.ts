@@ -86,7 +86,7 @@ export async function loadCalendarSessionRoster(input: {
   const { data, error } = await supabase
     .from("enrollments")
     .select(
-      "id, child_id, parent_id, weekly_slot_id, session_id, is_trial, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
+      "id, child_id, parent_id, weekly_slot_id, session_id, is_trial, admin_assigned, status, payment_status, children(full_name), profiles(full_name, phone), payments(status, payment_method, external_reference, office_collection)"
     )
     .eq("type", "class")
     .eq("class_id", input.classId)
@@ -138,7 +138,7 @@ export async function loadAdminClassSummary(
     supabase
       .from("enrollments")
       .select(
-        "weekly_slot_id, status, payment_status, is_trial, payments(status, payment_method, external_reference, office_collection)"
+        "weekly_slot_id, status, payment_status, admin_assigned, is_trial, payments(status, payment_method, external_reference, office_collection)"
       )
       .eq("type", "class")
       .eq("class_id", classId)

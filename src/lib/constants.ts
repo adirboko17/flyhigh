@@ -95,6 +95,7 @@ export const ENROLLMENT_PAYMENT_STATUS: Record<
   paid: { label: "שולם", tone: "success" },
   refunded: { label: "הוחזר", tone: "neutral" },
   not_required: { label: "הרשמת עניין", tone: "info" },
+  no_charge: { label: "ללא חיוב", tone: "neutral" },
 };
 
 /** תווית ללקוח כשהתשלום לא בוצע בכרטיס אשראי — נגבה/מאושר מול המשרד. */
@@ -132,8 +133,8 @@ export function parentEnrollmentDisplayBadge(
     chargeStatus?: Enums<"payment_status"> | null;
   }
 ): { label: string; tone: BadgeTone } {
-  if (paymentStatus === "not_required") {
-    return ENROLLMENT_PAYMENT_STATUS.not_required;
+  if (paymentStatus === "not_required" || paymentStatus === "no_charge") {
+    return ENROLLMENT_PAYMENT_STATUS[paymentStatus];
   }
   if (paymentStatus === "paid") {
     return ENROLLMENT_STATUS.active;

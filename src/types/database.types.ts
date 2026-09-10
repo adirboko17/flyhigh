@@ -2047,7 +2047,7 @@ export type Database = {
       class_session_status: "scheduled" | "cancelled" | "completed"
       class_status: "active" | "inactive" | "full"
       coupon_discount_type: "percent" | "fixed"
-      enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded" | "not_required"
+      enrollment_payment_status: "unpaid" | "partial" | "paid" | "refunded" | "not_required" | "no_charge"
       enrollment_status: "pending" | "active" | "cancelled" | "completed"
       enrollment_type: "class" | "program" | "pool_pass" | "private_lesson"
       gender_type: "male" | "female" | "other"
@@ -2216,7 +2216,7 @@ export const Constants = {
       class_session_status: ["scheduled", "cancelled", "completed"],
       class_status: ["active", "inactive", "full"],
       coupon_discount_type: ["percent", "fixed"],
-      enrollment_payment_status: ["unpaid", "partial", "paid", "refunded", "not_required"],
+      enrollment_payment_status: ["unpaid", "partial", "paid", "refunded", "not_required", "no_charge"],
       enrollment_status: ["pending", "active", "cancelled", "completed"],
       enrollment_type: ["class", "program", "pool_pass", "private_lesson"],
       gender_type: ["male", "female", "other"],

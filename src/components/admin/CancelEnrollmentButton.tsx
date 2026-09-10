@@ -73,8 +73,8 @@ export function CancelEnrollmentButton({
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-ink-600">
             ההרשמה תבוטל והמקום יתפנה. אם עדיין לא שולם — החיוב יימחק מהגבייה.
-            אם כבר שולם — הלקוח ייכנס לעמוד זיכויים כזיכוי בהמתנה, עם סכום יחסי
-            לפי המפגשים שנותרו.
+            אם כבר שולם — התשלום נשאר בתיעוד, בלי זיכוי. זיכוי רק מעמוד
+            הזיכויים.
           </p>
           {error && (
             <p className="text-sm text-red-600" role="alert">

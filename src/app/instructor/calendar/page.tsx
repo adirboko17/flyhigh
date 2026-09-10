@@ -95,7 +95,7 @@ export default async function InstructorCalendarPage({
       supabase
         .from("enrollments")
         .select(
-          "class_id, weekly_slot_id, session_id, status, payment_status, payments(status, payment_method, external_reference, office_collection)"
+          "class_id, weekly_slot_id, session_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
         )
         .eq("type", "class")
         .in("status", ["active", "pending"])
