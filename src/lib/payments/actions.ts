@@ -64,14 +64,15 @@ export async function payOpenCreditCharge(
     const { data: enrollment } = await supabase
       .from("enrollments")
       .select(
-        "type, classes(billing_months), programs(kind, title, extra_half_hour_price), pool_passes(entries_count, title), private_lessons(id)"
+        "type, classes(billing_months, installments_max), programs(kind, title, extra_half_hour_price), pool_passes(entries_count, title), private_lessons(id)"
       )
       .eq("id", enrollmentId)
       .maybeSingle();
 
     if (enrollment?.type === "class") {
       installments = classInstallmentOptions(
-        firstRelated(enrollment.classes)?.billing_months
+        firstRelated(enrollment.classes)?.billing_months,
+        firstRelated(enrollment.classes)?.installments_max
       );
     } else if (enrollment?.type === "program") {
       const program = firstRelated(enrollment.programs);

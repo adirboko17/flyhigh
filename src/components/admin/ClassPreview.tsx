@@ -32,6 +32,7 @@ export type ClassPreviewForm = {
   pick_one_slot?: boolean;
   booking_mode?: PublicClass["booking_mode"];
   billing_months?: string;
+  installments_max?: string;
   planned_session_count?: string;
   interest_only?: boolean;
   trial_lesson_price?: string;

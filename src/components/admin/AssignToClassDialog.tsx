@@ -18,7 +18,16 @@ import {
   assignWaitlistEntry,
   type AssignChargeMethod,
 } from "@/lib/admin/assignment";
-import { DEFERRED_PAYMENT_METHODS, PAYMENT_METHOD } from "@/lib/constants";
+import {
+  PaymentSplitEditor,
+  emptySplitDrafts,
+  type PaymentSplitDraft,
+} from "@/components/admin/PaymentSplitEditor";
+import {
+  DEFERRED_PAYMENT_METHODS,
+  PAYMENT_METHOD,
+  type CollectionPaymentMethod,
+} from "@/lib/constants";
 import {
   countFamilyChildrenInCategory,
   listFamilyChildrenInCategory,
@@ -155,6 +164,8 @@ export function AssignToClassDialog({
     }[]
   >([]);
   const [method, setMethod] = useState<AssignChargeMethod>("cash");
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitParts, setSplitParts] = useState<PaymentSplitDraft[]>([]);
   const [markPaid, setMarkPaid] = useState(false);
   const [amount, setAmount] = useState("");
   const [amountTouched, setAmountTouched] = useState(false);
@@ -340,11 +351,22 @@ export function AssignToClassDialog({
     cls.capacity == null ? Number.POSITIVE_INFINITY : cls.capacity - registered;
   const overCapacity =
     cls.capacity != null && participantCount > 0 && participantCount > available;
-  const isCreditCard = method === "credit_card";
+  const splitHasCard =
+    splitEnabled && splitParts.some((part) => part.method === "credit_card");
+  const isCreditCard = method === "credit_card" || splitHasCard;
 
   function handleMethodChange(next: AssignChargeMethod) {
     setMethod(next);
     if (next === "credit_card") setMarkPaid(false);
+    if (next === "none") setSplitEnabled(false);
+  }
+
+  function toggleSplit(enabled: boolean) {
+    setSplitEnabled(enabled);
+    if (!enabled) return;
+    const first: CollectionPaymentMethod =
+      method === "none" || method === "credit_card" ? "cash" : method;
+    setSplitParts(emptySplitDrafts(Number(amount || 0), first));
   }
 
   function toggleChild(id: string) {
@@ -382,6 +404,20 @@ export function AssignToClassDialog({
       setError("נא לבחור מה לרשום על הקבלה, או לבטל את הבקשה לפרטים שונים.");
       return;
     }
+    if (!cls.interest_only && splitEnabled) {
+      const splitTotal = splitParts.reduce(
+        (sum, part) => sum + (Number(part.amount) || 0),
+        0
+      );
+      if (splitParts.length < 2) {
+        setError("פיצול תשלום דורש לפחות שני חלקים.");
+        return;
+      }
+      if (Math.abs(splitTotal - Number(amount || 0)) > 0.05) {
+        setError("סכום חלקי הפיצול חייב להיות שווה לסכום הסופי ללקוח.");
+        return;
+      }
+    }
 
     const checkoutTab =
       !cls.interest_only && isCreditCard ? openCheckoutTab() : null;
@@ -398,9 +434,17 @@ export function AssignToClassDialog({
       ? { amount: 0, method: "none" as const, markPaid: false }
       : {
           amount: Number(amount || 0),
-          method,
+          method: (splitEnabled
+            ? splitParts[0]?.method ?? method
+            : method) as AssignChargeMethod,
           markPaid,
           receiptLabelId,
+          splits: splitEnabled
+            ? splitParts.map((part) => ({
+                method: part.method,
+                amount: Number(part.amount),
+              }))
+            : null,
         };
 
     const result = isWaitlist
@@ -477,11 +521,20 @@ export function AssignToClassDialog({
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
               {formatCurrency(cls.price)} לחודש ×{" "}
               {parseBillingMonths(cls.billing_months)} חודשים. בדף הסליקה אפשר
-              לפרוס עד {classInstallmentsMax(cls.billing_months)} תשלומים.
+              לפרוס עד{" "}
+              {classInstallmentsMax(
+                cls.billing_months,
+                cls.installments_max
+              )}{" "}
+              תשלומים.
             </p>
           ) : (
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
-              בדף הסליקה אפשר לפרוס עד {classInstallmentsMax(cls.billing_months)}{" "}
+              בדף הסליקה אפשר לפרוס עד{" "}
+              {classInstallmentsMax(
+                cls.billing_months,
+                cls.installments_max
+              )}{" "}
               תשלומים.
             </p>
           ))}
@@ -604,13 +657,15 @@ export function AssignToClassDialog({
           label="אמצעי תשלום"
           htmlFor="assign-method"
           hint={
-            method === "credit_card"
-              ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
-              : method === "none"
-                ? "הלקוח ישובץ לחוג בלי רשומת חיוב — אין חוב ואין הפרש לגבייה."
-                : markPaid
-                  ? "הלקוח ישובץ לחוג לפי הסכום שהוזן בלבד. אין חיוב נוסף על ההפרש ממחיר החוג."
-                  : "ייפתח חוב בגבייה לפי הסכום שהוזן בלבד — לא על ההפרש ממחיר החוג."
+            splitEnabled
+              ? "כל חלק ייפתח כחיוב נפרד בגבייה. חשבונית מס-קבלה תופק עם רישום כל תקבול."
+              : method === "credit_card"
+                ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
+                : method === "none"
+                  ? "הלקוח ישובץ לחוג בלי רשומת חיוב — אין חוב ואין הפרש לגבייה."
+                  : markPaid
+                    ? "הלקוח ישובץ לחוג לפי הסכום שהוזן בלבד. אין חיוב נוסף על ההפרש ממחיר החוג."
+                    : "ייפתח חוב בגבייה לפי הסכום שהוזן בלבד — לא על ההפרש ממחיר החוג."
           }
         >
           <Select
@@ -619,6 +674,7 @@ export function AssignToClassDialog({
             onChange={(e) =>
               handleMethodChange(e.target.value as AssignChargeMethod)
             }
+            disabled={splitEnabled}
           >
             <option value="credit_card">{PAYMENT_METHOD.credit_card}</option>
             {DEFERRED_PAYMENT_METHODS.map((value) => (
@@ -634,7 +690,10 @@ export function AssignToClassDialog({
           <>
             {isCreditCard && (
               <CardcomRedirectHint
-                installmentsMax={classInstallmentsMax(cls.billing_months)}
+                installmentsMax={classInstallmentsMax(
+                  cls.billing_months,
+                  cls.installments_max
+                )}
               />
             )}
 
@@ -669,6 +728,31 @@ export function AssignToClassDialog({
               </p>
             )}
 
+            <label className="flex items-start gap-2.5 text-sm text-ink-700">
+              <input
+                type="checkbox"
+                checked={splitEnabled}
+                onChange={(e) => toggleSplit(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
+              />
+              <span>
+                <span className="block font-medium">פיצול תשלום</span>
+                <span className="block text-xs text-ink-500">
+                  למשל חצי מכבי וחצי מזומן. כל חלק ייפתח כחיוב נפרד בגבייה,
+                  וחשבונית תופק עם כל תקבול. הלקוח לא רואה את זה.
+                </span>
+              </span>
+            </label>
+
+            {splitEnabled && (
+              <PaymentSplitEditor
+                parts={splitParts}
+                onChange={setSplitParts}
+                total={Number(amount || 0)}
+                disabled={saving}
+              />
+            )}
+
             {!isCreditCard && (
               <label className="flex items-center gap-2.5 text-sm text-ink-700">
                 <input
@@ -677,7 +761,9 @@ export function AssignToClassDialog({
                   onChange={(e) => setMarkPaid(e.target.checked)}
                   className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
                 />
-                התשלום כבר התקבל — לסמן כשולם
+                {splitEnabled
+                  ? "חלקים במכבי / עמית / כרטיסייה כבר אושרו — לסמן כשולם"
+                  : "התשלום כבר התקבל — לסמן כשולם"}
               </label>
             )}
 

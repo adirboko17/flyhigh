@@ -9,7 +9,12 @@ import { Field, Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
-import { parseBillingMonths } from "@/lib/finance/classPricing";
+import {
+  CARDCOM_MAX_INSTALLMENTS,
+  DEFAULT_CLASS_INSTALLMENTS,
+  parseBillingMonths,
+  parseInstallmentsMax,
+} from "@/lib/finance/classPricing";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { createClient } from "@/lib/supabase/client";
 
@@ -39,6 +44,13 @@ export function ClassQuickEditDialog({
   const [instructorId, setInstructorId] = useState(cls.instructor_id ?? "");
   const [slotInstructors, setSlotInstructors] = useState(slotInstructorMap(cls));
   const [price, setPrice] = useState(String(cls.price ?? 0));
+  const [installmentsMax, setInstallmentsMax] = useState(
+    String(
+      parseInstallmentsMax(cls.installments_max) ??
+        parseBillingMonths(cls.billing_months) ??
+        DEFAULT_CLASS_INSTALLMENTS
+    )
+  );
   const [trialEnabled, setTrialEnabled] = useState(
     cls.trial_lesson_price != null
   );
@@ -54,6 +66,13 @@ export function ClassQuickEditDialog({
     setInstructorId(cls.instructor_id ?? "");
     setSlotInstructors(slotInstructorMap(cls));
     setPrice(String(cls.price ?? 0));
+    setInstallmentsMax(
+      String(
+        parseInstallmentsMax(cls.installments_max) ??
+          parseBillingMonths(cls.billing_months) ??
+          DEFAULT_CLASS_INSTALLMENTS
+      )
+    );
     setTrialEnabled(cls.trial_lesson_price != null);
     setTrialPrice(
       cls.trial_lesson_price != null ? String(cls.trial_lesson_price) : ""
@@ -105,6 +124,16 @@ export function ClassQuickEditDialog({
       nextPrice = Number(price);
     }
 
+    const nextInstallments = cls.interest_only
+      ? null
+      : parseInstallmentsMax(installmentsMax);
+    if (!cls.interest_only && nextInstallments == null) {
+      setError(
+        `נא לבחור בין 1 ל־${CARDCOM_MAX_INSTALLMENTS} תשלומים בקארדקום.`
+      );
+      return;
+    }
+
     const offerTrial =
       !cls.interest_only && cls.booking_mode !== "appointment" && trialEnabled;
     let nextTrialPrice: number | null = null;
@@ -148,6 +177,7 @@ export function ClassQuickEditDialog({
         capacity: nextCapacity,
         instructor_id: nextClassInstructorId,
         price: nextPrice,
+        installments_max: nextInstallments,
         trial_lesson_price: nextTrialPrice,
         ...(!nextCapacity && cls.status === "full" ? { status: "active" as const } : {}),
       })
@@ -257,6 +287,24 @@ export function ClassQuickEditDialog({
             disabled={saving || cls.interest_only}
           />
         </Field>
+
+        {!cls.interest_only && (
+          <Field
+            label="תשלומים בקארדקום"
+            hint={`מקסימום ${CARDCOM_MAX_INSTALLMENTS} לפי קארדקום`}
+          >
+            <Input
+              type="number"
+              min={1}
+              max={CARDCOM_MAX_INSTALLMENTS}
+              step={1}
+              inputMode="numeric"
+              value={installmentsMax}
+              onChange={(event) => setInstallmentsMax(event.target.value)}
+              disabled={saving}
+            />
+          </Field>
+        )}
 
         {!cls.interest_only && cls.booking_mode !== "appointment" && (
           <div className="space-y-3 rounded-2xl border border-ink-100 bg-ink-50/50 p-3">

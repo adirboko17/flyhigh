@@ -194,7 +194,7 @@ async function prepareClassLine(
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only, trial_lesson_price"
+          "id, title, price, billing_months, installments_max, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only, trial_lesson_price"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -495,7 +495,10 @@ async function prepareClassLine(
       title: cls.title,
       listTotal: order.total,
       participantNames: names,
-      installmentsMax: classInstallmentsMax(cls.billing_months),
+      installmentsMax: classInstallmentsMax(
+        cls.billing_months,
+        cls.installments_max
+      ),
       chargeDescription: chargeDescriptionForCheckout({
         productTitle: cls.title,
         participantCount: participants.length,

@@ -58,6 +58,11 @@ export const ADMIN_NAV: NavEntry[] = [
         icon: "📝",
         matchPaths: ["/admin/enrollments"],
       },
+      {
+        href: "/admin/prospects",
+        label: "מתעניינים",
+        icon: "👋",
+      },
     ],
   },
   {

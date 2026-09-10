@@ -13,6 +13,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
 import { PAYMENT_METHOD, PAYMENT_STATUS } from "@/lib/constants";
 import {
   dismissPendingRefund,
+  issueOfficeCreditInvoice,
   issuePaymentRefund,
   refundCardcomPayment,
 } from "@/lib/payments/refundActions";
@@ -49,12 +50,15 @@ export type PendingRefund = {
 export type RefundTransaction = {
   id: string;
   amount: number;
+  invoicedAmount: number;
   refundedAmount: number;
   remaining: number;
   status: Enums<"payment_status">;
   paidAt: string | null;
   createdAt: string;
+  paymentMethod: Enums<"payment_method"> | null;
   cardcomReference: string | null;
+  invoiceNumbers: string[];
   parentName: string;
   phone: string | null;
   email: string | null;
@@ -108,7 +112,11 @@ export function RefundsList({
         normalize(row.phone).includes(q) ||
         normalize(row.email).includes(q) ||
         normalize(row.childName).includes(q) ||
-        normalize(row.subject).includes(q)
+        normalize(row.subject).includes(q) ||
+        normalize(
+          row.paymentMethod ? PAYMENT_METHOD[row.paymentMethod] : null
+        ).includes(q) ||
+        row.invoiceNumbers.some((number) => normalize(number).includes(q))
     );
   }, [transactions, query]);
 
@@ -223,9 +231,9 @@ export function RefundsList({
       )}
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="עסקאות אשראי"
+          label="חשבוניות מס קבלה"
           value={String(visible.length)}
-          icon="💳"
+          icon="🧾"
           tone="brand"
           hint={monthTitle}
         />
@@ -241,7 +249,7 @@ export function RefundsList({
           value={formatCurrency(totals.refunded)}
           icon="✅"
           tone="aqua"
-          hint="סכום שכבר הוחזר לכרטיס"
+          hint="סכום שכבר הופקה לו חשבונית זיכוי"
         />
       </div>
 
@@ -249,10 +257,10 @@ export function RefundsList({
         <div className="flex flex-col gap-3 border-b border-ink-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="font-display text-lg font-bold text-ink-900">
-              עסקאות אשראי
+              חשבוניות מס קבלה
             </h2>
             <p className="text-sm text-ink-400">
-              רק עסקאות שנסלקו בהצלחה בקארדקום
+              אשראי, מזומן, העברה בנקאית ופייבוקס — אפשר להוציא חשבונית זיכוי
             </p>
           </div>
           <div className="w-full sm:max-w-sm">
@@ -260,7 +268,7 @@ export function RefundsList({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="חיפוש לפי שם, טלפון או מייל"
+              placeholder="חיפוש לפי שם, חשבונית, טלפון או מייל"
               aria-label="חיפוש עסקאות"
             />
           </div>
@@ -278,6 +286,7 @@ export function RefundsList({
               <TR>
                 <TH>הורה</TH>
                 <TH className="hidden md:table-cell">עבור</TH>
+                <TH className="hidden lg:table-cell">אמצעי</TH>
                 <TH>סכום</TH>
                 <TH className="hidden sm:table-cell">סטטוס</TH>
                 <TH className="hidden lg:table-cell">תאריך</TH>
@@ -296,13 +305,28 @@ export function RefundsList({
                       <p className="mt-0.5 text-xs text-ink-400" dir="ltr">
                         {row.phone || row.email || "—"}
                       </p>
+                      {row.paymentMethod && (
+                        <p className="mt-0.5 text-xs text-ink-400 lg:hidden">
+                          {PAYMENT_METHOD[row.paymentMethod]}
+                        </p>
+                      )}
                     </TD>
                     <TD className="hidden max-w-[14rem] truncate text-ink-600 md:table-cell">
                       {row.subject}
                       {row.childName ? ` · ${row.childName}` : ""}
                     </TD>
+                    <TD className="hidden whitespace-nowrap text-ink-600 lg:table-cell">
+                      {row.paymentMethod
+                        ? PAYMENT_METHOD[row.paymentMethod]
+                        : "תשלום"}
+                    </TD>
                     <TD className="whitespace-nowrap">
                       <p className="font-medium">{formatCurrency(row.amount)}</p>
+                      {row.invoiceNumbers.length > 0 && (
+                        <p className="text-xs text-ink-400">
+                          חשבונית {row.invoiceNumbers.join(", ")}
+                        </p>
+                      )}
                       {row.refundedAmount > 0 && (
                         <p className="text-xs text-ink-400">
                           זוכה {formatCurrency(row.refundedAmount)}
@@ -342,14 +366,14 @@ export function RefundsList({
             title={
               query
                 ? "אין תוצאות לחיפוש"
-                : "אין עסקאות אשראי שנסלקו בחודש זה"
+                : "אין חשבוניות מס קבלה בחודש זה"
             }
             description={
               query
-                ? "נסו שם, מספר טלפון או כתובת מייל אחרים."
-                : "עסקאות יופיעו כאן אחרי שהלקוח סיים לשלם בהצלחה בדף קארדקום."
+                ? "נסו שם, מספר חשבונית, טלפון, אמצעי תשלום או כתובת מייל."
+                : "יופיעו כאן תשלומים שעליהם הופקה חשבונית — אשראי, מזומן, העברה או פייבוקס."
             }
-            icon="💳"
+            icon="🧾"
             className="rounded-none border-0 bg-transparent"
           />
         )}
@@ -558,11 +582,17 @@ function RefundDialog({
     setLocalError(null);
     onError(null);
     onBusy(transaction.id);
-    const result = await refundCardcomPayment({
-      paymentId: transaction.id,
-      amount: value,
-      note: note.trim() || null,
-    });
+    const result = transaction.cardcomReference
+      ? await refundCardcomPayment({
+          paymentId: transaction.id,
+          amount: value,
+          note: note.trim() || null,
+        })
+      : await issueOfficeCreditInvoice({
+          paymentId: transaction.id,
+          amount: value,
+          note: note.trim() || null,
+        });
     onBusy(null);
 
     if (!result.success) {
@@ -581,8 +611,18 @@ function RefundDialog({
     <Modal
       open
       onClose={onClose}
-      title={canRefund ? "זיכוי לכרטיס אשראי" : "היסטוריית זיכויים"}
-      description={`${transaction.parentName} · ${transaction.subject}`}
+      title={
+        canRefund
+          ? transaction.cardcomReference
+            ? "זיכוי לכרטיס אשראי"
+            : "חשבונית זיכוי"
+          : "היסטוריית זיכויים"
+      }
+      description={`${transaction.parentName} · ${transaction.subject}${
+        transaction.paymentMethod
+          ? ` · ${PAYMENT_METHOD[transaction.paymentMethod]}`
+          : ""
+      }`}
     >
       <div className="space-y-5">
         <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
@@ -608,7 +648,11 @@ function RefundDialog({
 
         {canRefund && (
           <div className="rounded-2xl border border-ink-100 px-4 py-3 text-sm">
-            <p className="text-xs text-ink-500">חשבונית זיכוי והחזר כספים תישלח לאימייל</p>
+            <p className="text-xs text-ink-500">
+              {transaction.cardcomReference
+                ? "חשבונית זיכוי והחזר כספים תישלח לאימייל"
+                : "חשבונית הזיכוי תישלח לאימייל"}
+            </p>
             {transaction.email ? (
               <p dir="ltr" className="mt-0.5 text-right font-semibold text-ink-900">
                 {transaction.email}
@@ -626,7 +670,11 @@ function RefundDialog({
             <Field
               label="סכום לזיכוי"
               htmlFor="refund-amount"
-              hint="ניתן לזכות חלקית או את כל היתרה. זיכוי מלא מבטל את ההרשמה לחוג או למסלול ומפנה את המקום. הכסף חוזר לכרטיס, ותופק חשבונית זיכוי."
+              hint={
+                transaction.cardcomReference
+                  ? "ניתן לזכות חלקית או את כל היתרה. זיכוי מלא מבטל את ההרשמה לחוג או למסלול ומפנה את המקום. הכסף חוזר לכרטיס, ותופק חשבונית זיכוי."
+                  : "ניתן לזכות חלקית או את כל היתרה. תופק חשבונית זיכוי כמו במערכת. ההחזר הכספי עצמו יטופל מול הלקוח."
+              }
             >
               <Input
                 id="refund-amount"

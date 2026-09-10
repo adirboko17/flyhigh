@@ -615,6 +615,7 @@ export function formToPreviewClass(
     capacity_limited?: boolean;
     price: string;
     billing_months?: string;
+    installments_max?: string;
     planned_session_count?: string;
     price_mode?: "period" | "monthly";
     pick_one_slot?: boolean;
@@ -688,6 +689,11 @@ export function formToPreviewClass(
     grade_max: isGrade && form.grade_max ? Number(form.grade_max) : 0,
     capacity,
     billing_months: billingMonths,
+    installments_max: interestOnly
+      ? null
+      : form.installments_max
+        ? Number(form.installments_max) || null
+        : null,
     pick_one_slot: interestOnly || appointment ? false : form.pick_one_slot ?? true,
     booking_mode: bookingMode,
     price: Number(form.price) || 0,

@@ -17,11 +17,14 @@ const MEMBERSHIP_INSTALLMENTS = 6;
 const POOL_RENTAL_INSTALLMENTS = 6;
 const MULTI_ENTRY_PASS_INSTALLMENTS = 3;
 
+/** מקסימום תשלומים בדף קארדקום — MaxNumOfPayments לפי תיעוד Low Profile. */
+export const CARDCOM_MAX_INSTALLMENTS = 12;
+
 export function installmentOptions(
   max?: number | null
 ): InstallmentOptions | null {
   const n = Math.floor(Number(max));
-  if (!Number.isFinite(n) || n < 2 || n > 12) return null;
+  if (!Number.isFinite(n) || n < 2 || n > CARDCOM_MAX_INSTALLMENTS) return null;
   return { min: 1, max: n, selected: n };
 }
 

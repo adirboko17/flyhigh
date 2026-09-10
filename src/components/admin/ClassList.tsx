@@ -22,6 +22,7 @@ import {
   type AssignMode,
 } from "@/components/admin/AssignToClassDialog";
 import { CancelEnrollmentButton } from "@/components/admin/CancelEnrollmentButton";
+import { TransferEnrollmentButton } from "@/components/admin/TransferEnrollmentDialog";
 import { ClassPreviewDialog } from "@/components/admin/ClassPreviewDialog";
 import { ClassQuickEditDialog } from "@/components/admin/ClassQuickEditDialog";
 import { CatalogOrderDialog } from "@/components/admin/CatalogOrderDialog";
@@ -159,6 +160,7 @@ export type AdminClassRow = {
   grade_max: number | null;
   price: number;
   billing_months: number | null;
+  installments_max?: number | null;
   pick_one_slot: boolean;
   booking_mode?: "series" | "appointment";
   capacity: number | null;
@@ -1677,13 +1679,25 @@ function EnrollmentRow({
           )}
         </div>
         {!muted && classTitle && onRemoved && (
-          <CancelEnrollmentButton
-            enrollmentId={enrollment.id}
-            title={classTitle}
-            participantName={displayName}
-            compact
-            onRemoved={onRemoved}
-          />
+          <div className="flex flex-wrap justify-end gap-1">
+            {enrollment.class_id && (
+              <TransferEnrollmentButton
+                enrollmentId={enrollment.id}
+                currentClassId={enrollment.class_id}
+                compact
+                onTransferred={onRemoved}
+              />
+            )}
+            <CancelEnrollmentButton
+              enrollmentId={enrollment.id}
+              title={classTitle}
+              participantName={displayName}
+              actionLabel="הסרה וזיכוי"
+              alwaysCredit
+              compact
+              onRemoved={onRemoved}
+            />
+          </div>
         )}
         <span className="text-[10px] tabular-nums text-ink-400">
           {formatDate(enrollment.created_at)}
@@ -1849,8 +1863,9 @@ function AttendanceTab({
               סימון נוכחות
             </h3>
             <p className="mt-0.5 text-sm text-ink-500">
-              בחרו מפגש וסמנו נוכחות. אפשר לשמור גם בלי לסמן את כולם, ולחזור
-              להשלים או לשנות.
+              בחרו מפגש וסמנו נוכחות. «עדכון מראש» הוא ביטול 24 שעות לפני ללא
+              חיוב — נספר בכרטיס הלקוח לסוף השנה. אפשר לשמור גם בלי לסמן את
+              כולם, ולחזור להשלים או לשנות.
             </p>
           </div>
           <ClassAttendanceForm
@@ -1892,6 +1907,9 @@ function AttendanceTab({
             const present = rows.filter((r) => r.status === "present").length;
             const late = rows.filter((r) => r.status === "late").length;
             const absent = rows.filter((r) => r.status === "absent").length;
+            const advanceNotice = rows.filter(
+              (r) => r.status === "advance_notice"
+            ).length;
 
             return (
               <section
@@ -1907,6 +1925,9 @@ function AttendanceTab({
                       present > 0 ? `${present} נוכחים` : null,
                       late > 0 ? `${late} איחור` : null,
                       absent > 0 ? `${absent} נעדרים` : null,
+                      advanceNotice > 0
+                        ? `${advanceNotice} עדכון מראש`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

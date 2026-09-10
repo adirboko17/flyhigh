@@ -53,6 +53,9 @@ export function ClassAttendanceHistory({
         const present = dayRecords.filter((r) => r.status === "present").length;
         const late = dayRecords.filter((r) => r.status === "late").length;
         const absent = dayRecords.filter((r) => r.status === "absent").length;
+        const advanceNotice = dayRecords.filter(
+          (r) => r.status === "advance_notice"
+        ).length;
 
         return (
           <div
@@ -75,6 +78,11 @@ export function ClassAttendanceHistory({
                 {absent > 0 && (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 font-semibold text-red-700">
                     {absent} נעדרים
+                  </span>
+                )}
+                {advanceNotice > 0 && (
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-700">
+                    {advanceNotice} עדכון מראש
                   </span>
                 )}
               </div>

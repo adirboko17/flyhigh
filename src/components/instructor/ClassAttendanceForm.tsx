@@ -24,10 +24,21 @@ import type { Enums } from "@/types";
 
 type Status = Enums<"attendance_status">;
 
-const STATUS_OPTIONS: { value: Status; label: string; active: string }[] = [
+const STATUS_OPTIONS: {
+  value: Status;
+  label: string;
+  active: string;
+  title?: string;
+}[] = [
   { value: "present", label: "נוכח", active: "bg-aqua-500 text-white" },
   { value: "late", label: "איחור", active: "bg-amber-500 text-white" },
   { value: "absent", label: "נעדר", active: "bg-red-500 text-white" },
+  {
+    value: "advance_notice",
+    label: "עדכון מראש",
+    active: "bg-sky-600 text-white",
+    title: "ביטול לפחות 24 שעות מראש, ללא חיוב",
+  },
 ];
 
 interface ClassAttendanceFormProps {
@@ -218,6 +229,10 @@ export function ClassAttendanceForm({
             <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
           ) : (
             <div className="space-y-2">
+              <p className="text-xs text-ink-500">
+                «עדכון מראש» — ביטול לפחות 24 שעות לפני, ללא חיוב. נספר בכרטיס הלקוח
+                לסוף השנה.
+              </p>
               {sessionStudents.map((child) => {
                 const current = marks[child.id];
                 return (
@@ -233,11 +248,12 @@ export function ClassAttendanceForm({
                     <span className="min-w-0 truncate font-medium text-ink-800">
                       {child.full_name}
                     </span>
-                    <div className="flex gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
                       {STATUS_OPTIONS.map((opt) => (
                         <button
                           key={opt.value}
                           type="button"
+                          title={opt.title}
                           onClick={() =>
                             setMarks((m) => {
                               if (m[child.id] === opt.value) {
@@ -249,7 +265,7 @@ export function ClassAttendanceForm({
                             })
                           }
                           className={cn(
-                            "min-h-9 flex-1 rounded-lg px-3 text-sm font-semibold transition-colors md:flex-none md:px-3.5",
+                            "min-h-9 rounded-lg px-2.5 text-sm font-semibold transition-colors sm:flex-none sm:px-3.5",
                             current === opt.value
                               ? opt.active
                               : "bg-ink-100 text-ink-600 hover:bg-ink-200"

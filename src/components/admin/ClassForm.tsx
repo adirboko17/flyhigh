@@ -27,9 +27,11 @@ import { ClassPreviewPanel } from "@/components/admin/ClassPreview";
 import { ClassScheduleEditor } from "@/components/admin/ClassScheduleEditor";
 import { InstructorSelect } from "@/components/admin/InstructorSelect";
 import {
+  CARDCOM_MAX_INSTALLMENTS,
   DEFAULT_CLASS_INSTALLMENTS,
   classPeriodTotal,
   parseBillingMonths,
+  parseInstallmentsMax,
 } from "@/lib/finance/classPricing";
 import {
   monthsToFormBound,
@@ -68,6 +70,7 @@ export type ClassFormData = {
   capacity: number | null;
   price: number;
   billing_months: number | null;
+  installments_max?: number | null;
   pick_one_slot: boolean;
   booking_mode?: ClassBookingMode;
   planned_session_count?: number | null;
@@ -123,6 +126,7 @@ const emptyForm = {
   booking_mode: "series" as ClassBookingMode,
   price_mode: "period" as const,
   billing_months: "10",
+  installments_max: String(DEFAULT_CLASS_INSTALLMENTS),
   instructor_id: "",
   image_url: "",
   interest_only: false,
@@ -164,6 +168,11 @@ function toFormState(existing?: ClassFormData, categories: string[] = []) {
       ? ("monthly" as const)
       : ("period" as const),
     billing_months: String(parseBillingMonths(existing.billing_months) ?? 10),
+    installments_max: String(
+      parseInstallmentsMax(existing.installments_max) ??
+        parseBillingMonths(existing.billing_months) ??
+        DEFAULT_CLASS_INSTALLMENTS
+    ),
     instructor_id: existing.instructor_id ?? "",
     image_url: existing.image_url ?? "",
     interest_only: existing.interest_only ?? false,
@@ -221,6 +230,10 @@ function toPayload(
         : form.price_mode === "monthly"
           ? parseBillingMonths(Number(form.billing_months))
           : null,
+    installments_max: form.interest_only
+      ? null
+      : parseInstallmentsMax(form.installments_max) ??
+        DEFAULT_CLASS_INSTALLMENTS,
     booking_mode: form.interest_only ? "series" : form.booking_mode,
     planned_session_count: form.interest_only
       ? parseSessionCount(form.planned_session_count)
@@ -314,6 +327,9 @@ function validatePricing(form: ReturnType<typeof toFormState>): string | null {
     !parseBillingMonths(Number(form.billing_months))
   ) {
     return "נא לבחור בין 2 ל־12 חודשים לחוג שמתומחר לפי חודש.";
+  }
+  if (!form.interest_only && !parseInstallmentsMax(form.installments_max)) {
+    return `נא לבחור בין 1 ל־${CARDCOM_MAX_INSTALLMENTS} תשלומים בקארדקום.`;
   }
   if (
     form.booking_mode !== "appointment" &&
@@ -1040,6 +1056,19 @@ export function ClassForm({
                 </Field>
               )}
             </div>
+            <Field
+              label="תשלומים בקארדקום"
+              hint={`כמה תשלומים הלקוח יוכל לבחור בדף הסליקה. המקסימום בקארדקום הוא ${CARDCOM_MAX_INSTALLMENTS}.`}
+            >
+              <Input
+                type="number"
+                min={1}
+                max={CARDCOM_MAX_INSTALLMENTS}
+                step="1"
+                value={form.installments_max}
+                onChange={set("installments_max")}
+              />
+            </Field>
             {form.price_mode === "monthly" && Number(form.price) > 0 && (
               <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
                 סה״כ לתקופה:{" "}
@@ -1053,14 +1082,16 @@ export function ClassForm({
                 </span>
                 {" · "}
                 הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
-                {parseBillingMonths(Number(form.billing_months)) ?? "—"} תשלומים
+                {parseInstallmentsMax(form.installments_max) ?? "—"} תשלומים
                 בקארדקום.
               </p>
             )}
             {form.price_mode === "period" && Number(form.price) > 0 && (
               <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
                 הלקוח ישלם את מלוא הסכום, עם אפשרות לפרוס עד{" "}
-                {DEFAULT_CLASS_INSTALLMENTS} תשלומים בקארדקום.
+                {parseInstallmentsMax(form.installments_max) ??
+                  DEFAULT_CLASS_INSTALLMENTS}{" "}
+                תשלומים בקארדקום.
               </p>
             )}
 

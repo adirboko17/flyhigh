@@ -305,7 +305,7 @@ export async function completeClassEnrollmentPayment(input: {
       supabase
         .from("classes")
         .select(
-          "id, title, price, billing_months, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
+          "id, title, price, billing_months, installments_max, pick_one_slot, booking_mode, category, capacity, status, gender_policy, audience_type, age_min, age_max, grade_min, grade_max, interest_only"
         )
         .eq("id", classId)
         .in("status", ["active", "full"])
@@ -664,7 +664,10 @@ export async function completeClassEnrollmentPayment(input: {
       paymentIds: createdPayments.map((payment) => payment.id),
       couponRedemptionId: redemptionId,
       metadata: { classId, childIds: uniqueChildIds, weeklySlotId },
-      installments: classInstallmentOptions(cls.billing_months),
+      installments: classInstallmentOptions(
+        cls.billing_months,
+        cls.installments_max
+      ),
     });
 
     if (!charge.success || !charge.redirectUrl) {

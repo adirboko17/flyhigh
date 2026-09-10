@@ -4,8 +4,17 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import {
   DEFERRED_PAYMENT_METHODS,
+  isReceiptlessCollectionMethod,
+  type CollectionPaymentMethod,
   type DeferredPaymentMethod,
 } from "@/lib/constants";
+import {
+  parseSplitParts,
+  splitPartsMatchTotal,
+  allocateSplitParts,
+  syncEnrollmentPaymentStatus,
+  type PaymentSplitPart,
+} from "@/lib/payments/splitParts";
 import {
   classInstallmentOptions,
   classSlotPeriodPrice,
@@ -55,6 +64,8 @@ type AssignCore = {
   weeklySlotId?: string | null;
   sessionId?: string | null;
   receiptLabelId?: string | null;
+  /** פיצול תשלום למנהל בלבד — כמה חיובים עם אמצעי תשלום שונים. */
+  splits?: { method: string; amount: number | string }[] | null;
 };
 
 function isAllowedMethod(value: string): value is AssignChargeMethod {
@@ -87,6 +98,7 @@ export async function assignWaitlistEntry(input: {
   method: AssignChargeMethod;
   markPaid: boolean;
   receiptLabelId?: string | null;
+  splits?: { method: string; amount: number | string }[] | null;
 }): Promise<AssignResult> {
   await requireRole("admin");
 
@@ -115,11 +127,19 @@ export async function assignWaitlistEntry(input: {
     markPaid: input.markPaid,
     weeklySlotId: entry.weekly_slot_id,
     receiptLabelId: input.receiptLabelId,
+    splits: input.splits,
   });
 }
 
 async function runAssignment(input: AssignCore): Promise<AssignResult> {
-  if (!isAllowedMethod(input.method)) {
+  let splitParts: PaymentSplitPart[] | null = null;
+  if (input.splits && input.splits.length > 0) {
+    const parsed = parseSplitParts(input.splits);
+    if (!parsed.ok) {
+      return { success: false, error: parsed.error };
+    }
+    splitParts = parsed.parts;
+  } else if (!isAllowedMethod(input.method)) {
     return { success: false, error: "אמצעי תשלום לא נתמך." };
   }
 
@@ -136,7 +156,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     await Promise.all([
       supabase
         .from("classes")
-        .select("id, capacity, title, price, billing_months, pick_one_slot, booking_mode, interest_only")
+        .select("id, capacity, title, price, billing_months, installments_max, pick_one_slot, booking_mode, interest_only")
         .eq("id", input.classId)
         .maybeSingle(),
       childIds.length > 0
@@ -289,7 +309,11 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
     customLabel: receiptLabel.description,
   });
 
-  const isCreditCard = !cls.interest_only && input.method === "credit_card";
+  const isCreditCard =
+    !cls.interest_only &&
+    (splitParts
+      ? splitParts.some((part) => part.method === "credit_card")
+      : input.method === "credit_card");
   const awaitingCardcom = isCreditCard && total > 0;
   const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
   const listTotal =
@@ -337,27 +361,56 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   let checkoutUrl: string | null = null;
 
   if (!cls.interest_only && input.method !== "none" && total > 0) {
-    const parts = splitAmount(total, created.length);
+    if (splitParts && !splitPartsMatchTotal(splitParts, total)) {
+      await supabase
+        .from("enrollments")
+        .delete()
+        .in(
+          "id",
+          created.map((enrollment) => enrollment.id)
+        );
+      return {
+        success: false,
+        error: `סכום חלקי הפיצול חייב להיות ${total.toFixed(2)} ₪.`,
+      };
+    }
+
+    const shares = splitAmount(total, created.length);
+    const allocated = splitParts
+      ? allocateSplitParts(splitParts, shares)
+      : shares.map((amount) => [
+          {
+            method: input.method as CollectionPaymentMethod,
+            amount,
+          },
+        ]);
     const paidAt = settledNow ? new Date().toISOString() : null;
 
     const { data: createdPayments, error: paymentError } = await supabase
       .from("payments")
       .insert(
-        created.map((enrollment, index) => ({
-          parent_id: input.parentId,
-          enrollment_id: enrollment.id,
-          amount: parts[index],
-          payment_method: input.method as Exclude<AssignChargeMethod, "none">,
-          status: settledNow ? ("paid" as const) : ("pending" as const),
-          paid_at: paidAt,
-          receipt_label_id: receiptLabel.labelId,
-          receipt_description: receiptLabel.description ?? chargeDescription,
-          office_collection: (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(
-            input.method
-          ),
-        }))
+        created.flatMap((enrollment, index) =>
+          allocated[index].map((part) => {
+            const card = part.method === "credit_card";
+            const partPaid =
+              !card &&
+              input.markPaid &&
+              isReceiptlessCollectionMethod(part.method);
+            return {
+              parent_id: input.parentId,
+              enrollment_id: enrollment.id,
+              amount: part.amount,
+              payment_method: part.method,
+              status: partPaid ? ("paid" as const) : ("pending" as const),
+              paid_at: partPaid ? paidAt : null,
+              receipt_label_id: receiptLabel.labelId,
+              receipt_description: receiptLabel.description ?? chargeDescription,
+              office_collection: !card,
+            };
+          })
+        )
       )
-      .select("id");
+      .select("id, payment_method, status");
 
     if (paymentError || !createdPayments?.length) {
       await supabase
@@ -370,20 +423,37 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       return { success: false, error: "יצירת החיוב נכשלה. נסו שוב." };
     }
 
+    for (const enrollment of created) {
+      await syncEnrollmentPaymentStatus(supabase, enrollment.id);
+    }
+
     if (awaitingCardcom) {
+      const cardPayments = createdPayments.filter(
+        (payment) => payment.payment_method === "credit_card"
+      );
+      const cardAmount = round2(
+        splitParts
+          ? splitParts
+              .filter((part) => part.method === "credit_card")
+              .reduce((sum, part) => sum + part.amount, 0)
+          : total
+      );
       const charge = await getPaymentProvider().createCharge({
-        amount: total,
+        amount: cardAmount,
         description: chargeDescription,
         parentId: input.parentId,
         method: "credit_card",
-        paymentIds: createdPayments.map((payment) => payment.id),
+        paymentIds: cardPayments.map((payment) => payment.id),
         metadata: {
           classId: input.classId,
           childIds,
           includeSelf,
           adminAssigned: true,
         },
-        installments: classInstallmentOptions(cls.billing_months),
+        installments: classInstallmentOptions(
+          cls.billing_months,
+          cls.installments_max
+        ),
       });
 
       if (!charge.success || !charge.redirectUrl) {

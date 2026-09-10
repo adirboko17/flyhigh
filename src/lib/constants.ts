@@ -305,6 +305,26 @@ export function isManualReceiptMethod(
 }
 
 /**
+ * אמצעי תשלום שעליהם המערכת מפיקה חשבונית מס-קבלה —
+ * אפשר להוציא עליהם חשבונית זיכוי מעמוד הזיכויים.
+ */
+export const INVOICE_REFUND_METHODS = [
+  ...OFFICE_RECEIPT_METHODS,
+  "credit_card",
+] as const satisfies readonly Enums<"payment_method">[];
+
+export type InvoiceRefundMethod = (typeof INVOICE_REFUND_METHODS)[number];
+
+export function isInvoiceRefundMethod(
+  method: Enums<"payment_method"> | null | undefined
+): method is InvoiceRefundMethod {
+  return (
+    method != null &&
+    (INVOICE_REFUND_METHODS as readonly string[]).includes(method)
+  );
+}
+
+/**
  * אישור בגבייה בלי קבלה או חשבונית.
  * כרטיסייה — תשלום פנימי. מכבי/עמית — הלקוח מקבל קבלה מהם ישירות.
  */
@@ -380,6 +400,27 @@ export const CLASS_WAITLIST_SKILL_LEVEL: Record<
   advanced: "מתקדמים",
 };
 
+export const CLASS_PROSPECT_STATUS: Record<
+  Enums<"class_prospect_status">,
+  { label: string; tone: BadgeTone }
+> = {
+  scheduled: { label: "מתוכנן", tone: "warning" },
+  arrived: { label: "הגיעה", tone: "success" },
+  no_show: { label: "לא הגיעה", tone: "danger" },
+  cancelled: { label: "בוטל", tone: "neutral" },
+};
+
+export function isClassProspectStatus(
+  value: string | null | undefined
+): value is Enums<"class_prospect_status"> {
+  return (
+    value === "scheduled" ||
+    value === "arrived" ||
+    value === "no_show" ||
+    value === "cancelled"
+  );
+}
+
 export const CLASS_WAITLIST_REQUEST_STATUS: Record<
   Enums<"class_waitlist_request_status">,
   { label: string; tone: BadgeTone }
@@ -419,6 +460,7 @@ export const ATTENDANCE_STATUS: Record<
   present: { label: "נוכח", tone: "success" },
   absent: { label: "נעדר", tone: "danger" },
   late: { label: "איחור", tone: "warning" },
+  advance_notice: { label: "עדכון מראש", tone: "info" },
 };
 
 export const ENROLLMENT_TYPE: Record<Enums<"enrollment_type">, string> = {

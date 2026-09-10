@@ -1,6 +1,7 @@
 import { RefundsList, type PendingRefund, type RefundTransaction } from "@/components/admin/RefundsList";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
+import { INVOICE_REFUND_METHODS } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
 import { cn } from "@/utils/cn";
 import {
@@ -40,10 +41,10 @@ export default async function AdminRefundsPage({
     supabase
       .from("payments")
       .select(
-        "id, amount, status, paid_at, created_at, parent_id, external_reference, receipt_description, profiles(full_name, phone, email), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_checkouts(transaction_id), payment_refunds(id, amount, created_at, note, document_number, document_url, sent_to_email)"
+        "id, amount, status, paid_at, created_at, parent_id, payment_method, external_reference, receipt_description, profiles(full_name, phone, email), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_checkouts(transaction_id), payment_receipts(amount), receipts(receipt_number, created_at), payment_refunds(id, amount, created_at, note, document_number, document_url, sent_to_email)"
       )
-      .eq("payment_method", "credit_card")
-      .in("status", ["paid", "refunded", "partial"])
+      .in("payment_method", [...INVOICE_REFUND_METHODS])
+      .in("status", ["pending", "paid", "refunded", "partial"])
       .or(
         `and(paid_at.gte.${queryStart}T00:00:00,paid_at.lte.${queryEnd}T23:59:59),and(paid_at.is.null,created_at.gte.${queryStart}T00:00:00,created_at.lte.${queryEnd}T23:59:59)`
       )
@@ -80,17 +81,47 @@ export default async function AdminRefundsPage({
         refunds.reduce((sum, refund) => sum + refund.amount, 0)
       );
       const amount = Number(payment.amount);
-      const occurredAt = payment.paid_at ?? payment.created_at;
+      const receiptPaid = round2(
+        (payment.payment_receipts ?? []).reduce(
+          (sum, receipt) => sum + Number(receipt.amount),
+          0
+        )
+      );
+      const invoiceNumbers = [
+        ...new Set(
+          (payment.receipts ?? [])
+            .map((doc) => doc.receipt_number?.trim())
+            .filter((value): value is string => Boolean(value))
+        ),
+      ];
+      const hasIssuedInvoice = invoiceNumbers.length > 0;
+      const invoicedAmount =
+        receiptPaid > 0
+          ? receiptPaid
+          : payment.status === "paid" ||
+              payment.status === "refunded" ||
+              hasIssuedInvoice
+            ? amount
+            : 0;
+      const invoiceIssuedAt = (payment.receipts ?? [])
+        .map((doc) => doc.created_at)
+        .sort()
+        .at(-1);
+      const occurredAt =
+        payment.paid_at ?? invoiceIssuedAt ?? payment.created_at;
 
       return {
         id: payment.id,
         amount,
+        invoicedAmount,
         refundedAmount,
-        remaining: round2(Math.max(0, amount - refundedAmount)),
+        remaining: round2(Math.max(0, invoicedAmount - refundedAmount)),
         status: payment.status,
         paidAt: payment.paid_at,
         createdAt: payment.created_at,
+        paymentMethod: payment.payment_method,
         cardcomReference,
+        invoiceNumbers,
         parentName: payment.profiles?.full_name ?? "לקוח לא ידוע",
         phone: payment.profiles?.phone ?? null,
         email: payment.profiles?.email ?? null,
@@ -103,7 +134,7 @@ export default async function AdminRefundsPage({
       };
     })
     .filter((payment) => israelDateOf(payment.occurredAt).startsWith(month))
-    .filter((payment) => Boolean(payment.cardcomReference));
+    .filter((payment) => payment.invoicedAmount > 0);
 
   const pendingRefunds: PendingRefund[] = (pendingRows ?? []).flatMap((row) => {
     const payment = row.payments;
@@ -144,7 +175,7 @@ export default async function AdminRefundsPage({
     <div className="space-y-6">
       <PageHeader
         title="זיכויים"
-        description={`זיכויים בהמתנה ועסקאות אשראי · ${monthTitle}`}
+        description={`זיכויים בהמתנה וחשבוניות מס-קבלה · ${monthTitle}`}
         action={
           <MonthSwitcher
             month={month}

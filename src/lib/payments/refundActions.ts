@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
-import { PAYMENT_METHOD } from "@/lib/constants";
+import { PAYMENT_METHOD, isInvoiceRefundMethod } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
 import {
   createStandaloneDocument,
@@ -233,19 +233,84 @@ export async function issuePaymentRefund(input: {
     return result;
   }
 
+  const result = await issueOfficeCreditInvoice({
+    paymentId: payment.id,
+    amount: input.amount,
+    note: input.note,
+  });
+  if (result.success) {
+    await clearPendingRefund(input.pendingRefundId, payment.id);
+  }
+  return result;
+}
+
+/**
+ * מפיק חשבונית זיכוי (מס-קבלה) בלי החזר לכרטיס — כמו בעמוד הזיכויים
+ * לתשלום מזומן / העברה / פייבוקס.
+ */
+export async function issueOfficeCreditInvoice(input: {
+  paymentId: string;
+  amount: number | string;
+  note?: string | null;
+}): Promise<RefundActionResult> {
+  const profile = await getSessionProfile();
+  if (profile?.role !== "admin") {
+    return { success: false, error: "אין לך הרשאה לבצע פעולה זו." };
+  }
+
   const amount = parseAmount(input.amount);
   if (amount === null || amount <= 0) {
     return { success: false, error: "נא להזין סכום זיכוי חיובי." };
   }
 
-  const { data: refunds } = await admin
-    .from("payment_refunds")
-    .select("amount")
-    .eq("payment_id", payment.id);
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payments")
+    .select(
+      "id, amount, parent_id, payment_method, receipt_description, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount), receipts(receipt_number), payment_refunds(amount)"
+    )
+    .eq("id", input.paymentId)
+    .maybeSingle();
+
+  if (!payment) {
+    return { success: false, error: "העסקה לא נמצאה." };
+  }
+
+  if (!isInvoiceRefundMethod(payment.payment_method)) {
+    return {
+      success: false,
+      error: "לחיוב הזה לא הופקה חשבונית מס-קבלה, ולכן אי אפשר להוציא חשבונית זיכוי.",
+    };
+  }
+
   const alreadyRefunded = round2(
-    (refunds ?? []).reduce((sum, refund) => sum + Number(refund.amount), 0)
+    (payment.payment_refunds ?? []).reduce(
+      (sum, refund) => sum + Number(refund.amount),
+      0
+    )
   );
-  const remaining = round2(Math.max(0, Number(payment.amount) - alreadyRefunded));
+  const receiptPaid = round2(
+    (payment.payment_receipts ?? []).reduce(
+      (sum, receipt) => sum + Number(receipt.amount),
+      0
+    )
+  );
+  const hasIssuedInvoice = (payment.receipts ?? []).some((doc) =>
+    Boolean(doc.receipt_number?.trim())
+  );
+  const invoiced =
+    receiptPaid > 0
+      ? receiptPaid
+      : hasIssuedInvoice
+        ? Number(payment.amount)
+        : 0;
+  if (invoiced <= 0) {
+    return {
+      success: false,
+      error: "לחיוב הזה לא הופקה חשבונית מס-קבלה, ולכן אי אפשר להוציא חשבונית זיכוי.",
+    };
+  }
+  const remaining = round2(Math.max(0, invoiced - alreadyRefunded));
   if (remaining <= 0) {
     return { success: false, error: "העסקה כבר זוכתה במלואה." };
   }
@@ -256,17 +321,16 @@ export async function issuePaymentRefund(input: {
     };
   }
 
-  const { data: paymentRow } = await admin
-    .from("payments")
-    .select(
-      "receipt_description, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title))"
-    )
-    .eq("id", payment.id)
-    .maybeSingle();
+  if (!isCardcomConfigured()) {
+    return {
+      success: false,
+      error: "קארדקום אינו מוגדר — לא ניתן להפיק חשבונית זיכוי.",
+    };
+  }
 
   const product =
-    paymentRow?.receipt_description?.trim() ||
-    subjectLabel(paymentRow?.enrollments ?? null) ||
+    payment.receipt_description?.trim() ||
+    subjectLabel(payment.enrollments) ||
     "זיכוי";
   const note = input.note?.trim() || null;
   const methodLabel =
@@ -276,13 +340,6 @@ export async function issuePaymentRefund(input: {
   let documentNumber: string | null = null;
   let documentUrl: string | null = null;
   let sentToEmail: string | null = null;
-
-  if (!isCardcomConfigured()) {
-    return {
-      success: false,
-      error: "קארדקום אינו מוגדר — לא ניתן להפיק חשבונית זיכוי.",
-    };
-  }
 
   try {
     const customer = await loadCustomer(payment.parent_id);
@@ -338,12 +395,11 @@ export async function issuePaymentRefund(input: {
     });
   }
 
-  await clearPendingRefund(input.pendingRefundId, payment.id);
-
   revalidatePath("/admin/refunds");
   revalidatePath("/admin/finance");
   revalidatePath("/admin/reports");
   revalidatePath("/admin/classes");
+  revalidatePath("/admin/collections");
   revalidatePath("/parent/dashboard");
   return { success: true };
 }

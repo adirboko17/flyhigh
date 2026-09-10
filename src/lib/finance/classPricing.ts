@@ -1,12 +1,17 @@
 /**
  * תמחור חוג: או סכום לתקופה, או מחיר לחודש × מספר חודשים.
- * מספר התשלומים באשראי נפרד מהמחיר — גם חוג לתקופה (שחייה) נפרס.
+ * מספר התשלומים באשראי נפרד מהמחיר — גם חוג במחיר לתקופה נפרס.
  */
 
-import { installmentOptions } from "@/lib/finance/installments";
+import {
+  CARDCOM_MAX_INSTALLMENTS,
+  installmentOptions,
+} from "@/lib/finance/installments";
 
-/** ברירת מחדל לכל החוגים. אירובי נשאר 11 דרך billing_months. */
+/** ברירת מחדל לכל החוגים. אירובי נשאר 11 דרך billing_months הישן. */
 export const DEFAULT_CLASS_INSTALLMENTS = 10;
+
+export { CARDCOM_MAX_INSTALLMENTS };
 
 export function parseBillingMonths(
   value: number | null | undefined
@@ -14,6 +19,16 @@ export function parseBillingMonths(
   const months = Math.floor(Number(value));
   if (!Number.isFinite(months) || months < 2 || months > 12) return null;
   return months;
+}
+
+export function parseInstallmentsMax(
+  value: number | string | null | undefined
+): number | null {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1 || n > CARDCOM_MAX_INSTALLMENTS) {
+    return null;
+  }
+  return n;
 }
 
 export function classPeriodTotal(
@@ -37,10 +52,22 @@ export function classSlotPeriodPrice(
   return classPeriodTotal(classPrice, billingMonths);
 }
 
-export function classInstallmentsMax(billingMonths?: number | null) {
-  return parseBillingMonths(billingMonths) ?? DEFAULT_CLASS_INSTALLMENTS;
+export function classInstallmentsMax(
+  billingMonths?: number | null,
+  installmentsMax?: number | null
+) {
+  return (
+    parseInstallmentsMax(installmentsMax) ??
+    parseBillingMonths(billingMonths) ??
+    DEFAULT_CLASS_INSTALLMENTS
+  );
 }
 
-export function classInstallmentOptions(billingMonths?: number | null) {
-  return installmentOptions(classInstallmentsMax(billingMonths));
+export function classInstallmentOptions(
+  billingMonths?: number | null,
+  installmentsMax?: number | null
+) {
+  return installmentOptions(
+    classInstallmentsMax(billingMonths, installmentsMax)
+  );
 }

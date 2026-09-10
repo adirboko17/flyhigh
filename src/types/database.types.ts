@@ -425,6 +425,50 @@ export type Database = {
           },
         ]
       }
+      class_prospects: {
+        Row: {
+          child_name: string | null
+          class_id: string
+          created_at: string
+          full_name: string
+          id: string
+          notes: string | null
+          phone: string | null
+          status: Database["public"]["Enums"]["class_prospect_status"]
+          trial_date: string
+        }
+        Insert: {
+          child_name?: string | null
+          class_id: string
+          created_at?: string
+          full_name: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["class_prospect_status"]
+          trial_date: string
+        }
+        Update: {
+          child_name?: string | null
+          class_id?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["class_prospect_status"]
+          trial_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_prospects_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_waitlist_requests: {
         Row: {
           child_age: number
@@ -532,6 +576,8 @@ export type Database = {
           age_min: number | null
           audience_type: Database["public"]["Enums"]["class_audience_type"]
           billing_months: number | null
+          /** מקסימום תשלומים בדף קארדקום (1–12). */
+          installments_max: number | null
           booking_mode: Database["public"]["Enums"]["class_booking_mode"]
           capacity: number | null
           category: string | null
@@ -566,6 +612,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
+          installments_max?: number | null
           booking_mode?: Database["public"]["Enums"]["class_booking_mode"]
           capacity?: number | null
           category?: string | null
@@ -599,6 +646,7 @@ export type Database = {
           age_min?: number | null
           audience_type?: Database["public"]["Enums"]["class_audience_type"]
           billing_months?: number | null
+          installments_max?: number | null
           booking_mode?: Database["public"]["Enums"]["class_booking_mode"]
           capacity?: number | null
           category?: string | null
@@ -1956,6 +2004,7 @@ export type Database = {
           available: number
           billable_session_count: number
           billing_months: number | null
+          installments_max: number | null
           capacity: number | null
           category: string
           day_of_week: number
@@ -1999,6 +2048,10 @@ export type Database = {
           starts_on: string | null
         }[]
       }
+      sync_enrollment_payment_status: {
+        Args: { p_enrollment_id: string }
+        Returns: undefined
+      }
       preview_coupon:
         | {
             Args: {
@@ -2038,9 +2091,10 @@ export type Database = {
       release_coupon: { Args: { p_redemption_id: string }; Returns: undefined }
     }
     Enums: {
-      attendance_status: "present" | "absent" | "late"
+      attendance_status: "present" | "absent" | "late" | "advance_notice"
       class_booking_mode: "series" | "appointment"
       class_audience_type: "age" | "grade" | "open"
+      class_prospect_status: "scheduled" | "arrived" | "no_show" | "cancelled"
       class_waitlist_request_status: "pending" | "contacted" | "closed"
       class_waitlist_skill_level: "beginner" | "advanced"
       class_gender_policy: "male" | "female" | "mixed"
@@ -2207,9 +2261,10 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      attendance_status: ["present", "absent", "late"],
+      attendance_status: ["present", "absent", "late", "advance_notice"],
       class_booking_mode: ["series", "appointment"],
       class_audience_type: ["age", "grade", "open"],
+      class_prospect_status: ["scheduled", "arrived", "no_show", "cancelled"],
       class_waitlist_request_status: ["pending", "contacted", "closed"],
       class_waitlist_skill_level: ["beginner", "advanced"],
       class_gender_policy: ["male", "female", "mixed"],

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
+import { CustomerAdvanceNotices } from "@/components/admin/CustomerAdvanceNotices";
 import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
 import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
 import { CustomerForm } from "@/components/admin/CustomerForm";
@@ -465,6 +466,8 @@ function CustomerDetail({
             parentId={customer.id}
             parentName={customer.full_name}
           />
+
+          <CustomerAdvanceNotices parentId={customer.id} />
 
           <CustomerDocuments parentId={customer.id} />
     </div>

@@ -15,9 +15,12 @@ import {
   approveCollectionPassCharge,
   deleteCollectionCharge,
   deletePaymentReceipt,
+  reopenCollectionCharge,
+  splitCollectionCharge,
   settleChargeRemaining,
   settleParentCharges,
   startCollectionCardcomCheckout,
+  updateCollectionChargeAmount,
   updateCollectionPaymentMethod,
   updatePaymentReceiptCustomText,
   updatePaymentReceiptLabel,
@@ -26,6 +29,11 @@ import {
   composeReceiptLine,
   type ReceiptLabelOption,
 } from "@/lib/receipt-labels";
+import {
+  PaymentSplitEditor,
+  emptySplitDrafts,
+  type PaymentSplitDraft,
+} from "@/components/admin/PaymentSplitEditor";
 import {
   COLLECTION_PAYMENT_METHODS,
   PAYMENT_METHOD,
@@ -689,9 +697,7 @@ function ChargeRow({
       </div>
 
       <div className="min-w-[7.5rem] text-end">
-        <p className="font-display text-lg font-bold tabular-nums text-ink-900">
-          {formatCurrency(charge.amount)}
-        </p>
+        <EditChargeAmountButton charge={charge} disabled={disabled} />
         {open ? (
           <p className="text-xs text-ink-500">
             שולם {formatCurrency(charge.amountPaid)} · נותר{" "}
@@ -706,16 +712,23 @@ function ChargeRow({
 
       <Badge tone={status.tone}>{status.label}</Badge>
 
-      <Button
-        type="button"
-        size="sm"
-        variant={open ? "primary" : "outline"}
-        className="ms-auto"
-        disabled={disabled}
-        onClick={onOpen}
-      >
-        {open ? (isReceiptless ? "אישור" : "רישום תקבול") : "היסטוריה"}
-      </Button>
+      <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+        {open && (
+          <SplitChargeButton charge={charge} disabled={disabled} />
+        )}
+        {!open && (
+          <ReopenChargeButton charge={charge} disabled={disabled} />
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant={open ? "primary" : "outline"}
+          disabled={disabled}
+          onClick={onOpen}
+        >
+          {open ? (isReceiptless ? "אישור" : "רישום תקבול") : "היסטוריה"}
+        </Button>
+      </div>
     </li>
   );
 }
@@ -896,9 +909,11 @@ function ChargeReceiptDialog({
         <div className="grid grid-cols-3 gap-2 rounded-2xl bg-ink-50 p-3 text-center">
           <div>
             <p className="text-xs text-ink-500">סכום חיוב</p>
-            <p className="font-display text-base font-bold tabular-nums text-ink-900">
-              {formatCurrency(charge.amount)}
-            </p>
+            <EditChargeAmountButton
+              charge={charge}
+              disabled={busy}
+              compact
+            />
           </div>
           <div>
             <p className="text-xs text-ink-500">שולם</p>
@@ -1078,19 +1093,13 @@ function ChargeReceiptDialog({
                       {receipt.note ? ` · ${receipt.note}` : ""}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
+                  <DeleteReceiptButton
+                    charge={charge}
+                    receipt={receipt}
                     disabled={busy}
-                    onClick={() =>
-                      run(`del:${receipt.id}`, () =>
-                        deletePaymentReceipt({ receiptId: receipt.id })
-                      )
-                    }
-                  >
-                    {busyId === `del:${receipt.id}` ? "מוחק..." : "מחק"}
-                  </Button>
+                    onError={onError}
+                    onDone={onDone}
+                  />
                 </li>
               ))}
             </ul>
@@ -1102,6 +1111,30 @@ function ChargeReceiptDialog({
           <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
             {receiptless.paidNote}
           </p>
+        )}
+
+        {open && (
+          <div className="border-t border-ink-100 pt-4">
+            <p className="mb-2 text-xs text-ink-500">
+              אפשר לפצל את היתרה לכמה אמצעי תשלום — כל חלק ייגבה בנפרד
+              ותופק לו חשבונית עם התקבול.
+            </p>
+            <SplitChargeButton charge={charge} disabled={busy} />
+          </div>
+        )}
+
+        {!open && (
+          <div className="border-t border-ink-100 pt-4">
+            <p className="mb-2 text-xs text-ink-500">
+              אם החיוב סומן כשולם בטעות, אפשר להחזיר אותו לחוב פתוח ולבחור
+              אילו תקבולים נשארים תקפים.
+            </p>
+            <ReopenChargeButton
+              charge={charge}
+              disabled={busy}
+              onReopened={onClose}
+            />
+          </div>
         )}
 
         {canRemoveCharge(charge) && (
@@ -1328,6 +1361,606 @@ function StatTile({
         {value}
       </p>
     </div>
+  );
+}
+
+function receiptTotal(charge: CollectionCharge) {
+  return round2(
+    charge.receipts.reduce((sum, receipt) => sum + receipt.amount, 0)
+  );
+}
+
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function EditChargeAmountButton({
+  charge,
+  disabled,
+  compact = false,
+}: {
+  charge: CollectionCharge;
+  disabled: boolean;
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(String(charge.amount));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const paid = receiptTotal(charge);
+  const receiptlessPaid =
+    isReceiptlessCollectionMethod(charge.method) && !isOpen(charge);
+  const typedAmount = Number(value);
+  const previewRemaining =
+    Number.isFinite(typedAmount) && typedAmount > 0
+      ? round2(Math.max(0, typedAmount - paid))
+      : null;
+
+  function openEditor() {
+    setValue(String(charge.amount));
+    setError(null);
+    setOpen(true);
+  }
+
+  async function handleSave() {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("נא להזין סכום חיוב חיובי.");
+      return;
+    }
+    if (paid > 0 && amount < paid) {
+      setError(
+        `לא ניתן להוריד את הסכום מתחת לתקבולים שכבר נרשמו (${formatCurrency(paid)}).`
+      );
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const result = await updateCollectionChargeAmount({
+      paymentId: charge.id,
+      amount,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setOpen(false);
+    router.refresh();
+  }
+
+  const who = charge.childName
+    ? `${charge.subject} · ${charge.childName}`
+    : charge.subject;
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={openEditor}
+        title="שינוי סכום"
+        className={cn(
+          "inline-flex items-center gap-1 rounded-lg text-ink-900 transition-colors hover:bg-brand-50 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50",
+          compact ? "justify-center px-1 py-0.5" : "justify-end px-1.5 py-0.5"
+        )}
+      >
+        <span
+          className={cn(
+            "font-display font-bold tabular-nums",
+            compact ? "text-base" : "text-lg"
+          )}
+        >
+          {formatCurrency(charge.amount)}
+        </span>
+        <Icon
+          name="edit"
+          size={14}
+          className="shrink-0 text-ink-400"
+        />
+        <span className="sr-only">שינוי סכום החיוב</span>
+      </button>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!loading) setOpen(false);
+        }}
+        title="שינוי סכום החיוב"
+        description={who}
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-ink-600">
+            אפשר להזין כל סכום שתרצו, בלי קשר לסכום שרשום עכשיו. היתרה לגבייה
+            תתעדכן בהתאם.
+          </p>
+          <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+            <p className="text-xs text-ink-500">סכום נוכחי</p>
+            <p className="font-display text-lg font-bold tabular-nums text-ink-900">
+              {formatCurrency(charge.amount)}
+            </p>
+            {paid > 0 && (
+              <p className="mt-1 text-xs text-ink-500">
+                כבר נרשמו תקבולים של {formatCurrency(paid)} — הסכום לא יכול
+                להיות נמוך מזה.
+              </p>
+            )}
+            {receiptlessPaid && (
+              <p className="mt-1 text-xs text-ink-500">
+                החיוב כבר אושר. הסכום הרשום ישתנה והסטטוס יישאר שולם.
+              </p>
+            )}
+            {!receiptlessPaid && previewRemaining !== null && (
+              <p className="mt-1 text-xs text-ink-500">
+                יתרה חדשה: {formatCurrency(previewRemaining)}
+              </p>
+            )}
+          </div>
+          <Field label="סכום חדש (₪)" required>
+            <Input
+              type="number"
+              min={paid > 0 ? paid : 0.01}
+              step="0.01"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              disabled={loading}
+              required
+              autoFocus
+            />
+          </Field>
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setOpen(false)}
+            >
+              חזרה
+            </Button>
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleSave()}
+            >
+              {loading ? "שומר..." : "שמירת הסכום"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function SplitChargeButton({
+  charge,
+  disabled,
+}: {
+  charge: CollectionCharge;
+  disabled: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [parts, setParts] = useState<PaymentSplitDraft[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const target = charge.remaining > 0 ? charge.remaining : charge.amount;
+  const hasReceipts = charge.receipts.length > 0;
+
+  function openEditor() {
+    setParts(emptySplitDrafts(target, charge.method));
+    setError(null);
+    setOpen(true);
+  }
+
+  async function handleSave() {
+    const parsed = parts.map((part) => ({
+      method: part.method,
+      amount: Number(part.amount),
+    }));
+    const sum = parsed.reduce((acc, part) => acc + (part.amount || 0), 0);
+    if (parts.length < 2) {
+      setError("פיצול תשלום דורש לפחות שני חלקים.");
+      return;
+    }
+    if (Math.abs(sum - target) > 0.05) {
+      setError(`סכום החלקים חייב להיות ${formatCurrency(target)}.`);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const result = await splitCollectionCharge({
+      paymentId: charge.id,
+      parts: parsed,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setOpen(false);
+    router.refresh();
+  }
+
+  const who = charge.childName
+    ? `${charge.subject} · ${charge.childName}`
+    : charge.subject;
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={openEditor}
+      >
+        פיצול תשלום
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!loading) setOpen(false);
+        }}
+        title="פיצול תשלום"
+        description={who}
+        className="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-ink-600">
+            {hasReceipts
+              ? `כבר נרשמו תקבולים של ${formatCurrency(charge.amountPaid)}. מפצלים רק את היתרה (${formatCurrency(target)}) לחיובים נפרדים — כל אחד עם אמצעי תשלום משלו.`
+              : "מפצלים את החיוב לכמה חיובים נפרדים. כל חלק יופיע בגבייה, וחשבונית מס-קבלה תופק עם רישום כל תקבול."}
+          </p>
+          <PaymentSplitEditor
+            parts={parts}
+            onChange={setParts}
+            total={target}
+            disabled={loading}
+          />
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setOpen(false)}
+            >
+              חזרה
+            </Button>
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleSave()}
+            >
+              {loading ? "מפצל..." : "פיצול החיוב"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function receiptIssuedTaxInvoice(method: CollectionPaymentMethod) {
+  return isManualReceiptMethod(method) || method === "credit_card";
+}
+
+function ReopenChargeButton({
+  charge,
+  disabled,
+  onReopened,
+}: {
+  charge: CollectionCharge;
+  disabled: boolean;
+  onReopened?: () => void;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [keepIds, setKeepIds] = useState<string[]>(() =>
+    charge.receipts.map((receipt) => receipt.id)
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const receiptlessPaid =
+    (isReceiptlessCollectionMethod(charge.method) ||
+      charge.receipts.length === 0) &&
+    !isOpen(charge);
+  const needsInvoice = receiptIssuedTaxInvoice(charge.method);
+  const removeIds = charge.receipts
+    .map((receipt) => receipt.id)
+    .filter((id) => !keepIds.includes(id));
+  const removeTotal = charge.receipts
+    .filter((receipt) => removeIds.includes(receipt.id))
+    .reduce((sum, receipt) => sum + receipt.amount, 0);
+  const keepTotal = charge.receipts
+    .filter((receipt) => keepIds.includes(receipt.id))
+    .reduce((sum, receipt) => sum + receipt.amount, 0);
+  const nextRemaining = receiptlessPaid
+    ? charge.amount
+    : round2(Math.max(0, charge.amount - keepTotal));
+
+  function openEditor() {
+    setKeepIds(charge.receipts.map((receipt) => receipt.id));
+    setError(null);
+    setOpen(true);
+  }
+
+  function toggleReceipt(id: string) {
+    setKeepIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    );
+  }
+
+  async function handleSave() {
+    if (!receiptlessPaid && removeIds.length === 0) {
+      setError("בטלו סימון של לפחות תקבול אחד כדי לפתוח מחדש יתרה.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const result = await reopenCollectionCharge({
+      paymentId: charge.id,
+      removeReceiptIds: receiptlessPaid ? [] : removeIds,
+      issueCreditInvoices: needsInvoice && removeIds.length > 0,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    setOpen(false);
+    onReopened?.();
+    router.refresh();
+  }
+
+  const who = charge.childName
+    ? `${charge.subject} · ${charge.childName}`
+    : charge.subject;
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={openEditor}
+      >
+        החזרה לחוב פתוח
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!loading) setOpen(false);
+        }}
+        title="החזרה לחוב פתוח"
+        description={who}
+        className="max-w-lg"
+      >
+        <div className="space-y-4">
+          {receiptlessPaid ? (
+            <p className="text-sm leading-relaxed text-ink-600">
+              החיוב אושר בלי תקבול ובלי חשבונית. ההחזרה תפתח אותו מחדש כחוב
+              פתוח על {formatCurrency(charge.amount)}.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm leading-relaxed text-ink-600">
+                סמנו תקבולים שנותרים תקפים. הסירו סימון מתקבול שנרשם בטעות —
+                הוא יורד מהחיוב והיתרה תחזור לחובות פתוחים.
+              </p>
+              <ul className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100">
+                {charge.receipts.map((receipt) => {
+                  const kept = keepIds.includes(receipt.id);
+                  return (
+                    <li key={receipt.id}>
+                      <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={kept}
+                          disabled={loading}
+                          onChange={() => toggleReceipt(receipt.id)}
+                          className="mt-1 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium tabular-nums text-ink-900">
+                              {formatCurrency(receipt.amount)}
+                            </span>
+                            {needsInvoice && (
+                              <Badge tone="info" className="text-xs">
+                                חשבונית מס קבלה
+                              </Badge>
+                            )}
+                            {!kept && (
+                              <Badge tone="warning" className="text-xs">
+                                יוסר
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-ink-500">
+                            {formatDate(receipt.receivedAt)}
+                            {receipt.note ? ` · ${receipt.note}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
+                <p className="text-xs text-ink-500">יתרה חדשה לחוב פתוח</p>
+                <p className="font-display text-lg font-bold tabular-nums text-red-600">
+                  {formatCurrency(nextRemaining)}
+                </p>
+                {removeIds.length > 0 && (
+                  <p className="mt-1 text-xs text-ink-500">
+                    מוסרים {removeIds.length} תקבולים בסך{" "}
+                    {formatCurrency(removeTotal)}
+                  </p>
+                )}
+              </div>
+              {needsInvoice && removeIds.length > 0 && (
+                <p className="rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-sm leading-relaxed text-ink-600">
+                  {charge.method === "credit_card"
+                    ? "על כל תקבול שיוסר תופק חשבונית זיכוי. בלי זה אי אפשר להחזיר לחוב פתוח — החשבונית אומרת שהכסף התקבל. הכסף לא יוחזר אוטומטית לכרטיס; לזיכוי כרטיס יש לעבור לעמוד הזיכויים."
+                    : "על כל תקבול שיוסר תופק חשבונית זיכוי. בלי זה אי אפשר להחזיר לחוב פתוח — חשבונית מס-קבלה אומרת שהכסף התקבל."}
+                </p>
+              )}
+            </>
+          )}
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setOpen(false)}
+            >
+              חזרה
+            </Button>
+            <Button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleSave()}
+            >
+              {loading ? "מחזיר..." : "החזרה לחוב פתוח"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function DeleteReceiptButton({
+  charge,
+  receipt,
+  disabled,
+  onError,
+  onDone,
+}: {
+  charge: CollectionCharge;
+  receipt: CollectionReceipt;
+  disabled: boolean;
+  onError: (message: string | null) => void;
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const needsInvoice = receiptIssuedTaxInvoice(charge.method);
+
+  async function handleDelete() {
+    setLoading(true);
+    setError(null);
+    onError(null);
+    const result = await deletePaymentReceipt({
+      receiptId: receipt.id,
+      issueCreditInvoice: needsInvoice,
+    });
+    setLoading(false);
+
+    if (!result.success) {
+      const message = result.error ?? "מחיקת התקבול נכשלה.";
+      setError(message);
+      onError(message);
+      return;
+    }
+
+    setOpen(false);
+    onDone();
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={disabled}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+      >
+        מחק
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!loading) setOpen(false);
+        }}
+        title="מחיקת תקבול"
+        description={`${formatCurrency(receipt.amount)} · ${formatDate(receipt.receivedAt)}`}
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-ink-600">
+            התקבול יוסר והיתרה תחושב מחדש. אם זו הייתה הסגירה האחרונה של
+            החיוב, הוא יחזור לחובות פתוחים.
+          </p>
+          {needsInvoice && (
+            <p className="rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3 text-sm leading-relaxed text-ink-600">
+              {charge.method === "credit_card"
+                ? "תופק חשבונית זיכוי על התקבול. בלי זה אי אפשר להסיר אותו — החשבונית אומרת שהכסף התקבל. הכסף לא יוחזר אוטומטית לכרטיס; לזיכוי כרטיס יש לעבור לעמוד הזיכויים."
+                : "תופק חשבונית זיכוי על התקבול. בלי זה אי אפשר להסיר אותו — חשבונית מס-קבלה אומרת שהכסף התקבל."}
+            </p>
+          )}
+          {error && (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={loading}
+              onClick={() => setOpen(false)}
+            >
+              חזרה
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              disabled={loading}
+              onClick={() => void handleDelete()}
+            >
+              {loading ? "מוחק..." : "מחיקת התקבול"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

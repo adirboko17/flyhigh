@@ -50,6 +50,7 @@ interface ClassEnrollmentCheckoutDialogProps {
   unitPrice: number;
   proration: ProratedClassPrice;
   billingMonths?: number | null;
+  installmentsMax?: number | null;
   selectedChildren: Child[];
   includeSelf?: boolean;
   siblingTiers: SiblingDiscountTier[];
@@ -67,6 +68,7 @@ export function ClassEnrollmentCheckoutDialog({
   unitPrice,
   proration,
   billingMonths,
+  installmentsMax: installmentsMaxProp,
   selectedChildren,
   includeSelf = false,
   siblingTiers,
@@ -93,7 +95,10 @@ export function ClassEnrollmentCheckoutDialog({
   );
 
   const months = parseBillingMonths(billingMonths);
-  const installmentsMax = classInstallmentsMax(billingMonths);
+  const installmentsMax = classInstallmentsMax(
+    billingMonths,
+    installmentsMaxProp
+  );
   const childIds = selectedChildren
     .map((child) => child.id)
     .filter((id) => id !== PARENT_TRAINEE_ID);

@@ -25,13 +25,19 @@ import { paymentHasRecordedMoney } from "@/lib/payments/recordedMoney";
 import { composeReceiptLine } from "@/lib/receipt-labels";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
+import { issueOfficeCreditInvoice } from "@/lib/payments/refundActions";
+import {
+  parseSplitParts,
+  splitPartsMatchTotal,
+  syncEnrollmentPaymentStatus,
+} from "@/lib/payments/splitParts";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database.types";
 
 export type CollectionActionResult =
-  | { success: true; checkoutUrl?: string }
+  | { success: true; checkoutUrl?: string; warning?: string }
   | { success: false; error: string };
 
 const NOT_ALLOWED: CollectionActionResult = {
@@ -66,6 +72,7 @@ type ChargeRow = {
   checkout_id: string | null;
   receipt_description: string | null;
   receipt_custom_text: string | null;
+  receipt_label_id: string | null;
   enrollments: {
     type: Enums<"enrollment_type">;
     children: { full_name: string } | null;
@@ -74,11 +81,11 @@ type ChargeRow = {
     pool_passes: { title: string } | null;
     private_lessons: { title: string } | null;
   } | null;
-  payment_receipts: { amount: number }[] | null;
+  payment_receipts: { id: string; amount: number }[] | null;
 };
 
 const CHARGE_SELECT =
-  "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)";
+  "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, receipt_label_id, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount)";
 
 function remainingOf(charge: ChargeRow) {
   if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
@@ -219,8 +226,8 @@ async function recordCollectionReceipt(input: {
     };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("payment_receipts").insert({
+  const admin = createAdminClient();
+  const { error } = await admin.from("payment_receipts").insert({
     payment_id: input.charge.id,
     amount: input.amount,
     received_at: input.receivedAt,
@@ -243,7 +250,6 @@ async function recordCollectionReceipt(input: {
     };
   }
 
-  const admin = createAdminClient();
   await admin.from("receipts").insert({
     parent_id: input.charge.parent_id,
     payment_id: input.charge.id,
@@ -332,9 +338,14 @@ export async function addPaymentReceipt(input: {
   });
 }
 
+function receiptIssuedTaxInvoice(method: Enums<"payment_method"> | null) {
+  return isManualReceiptMethod(method) || method === "credit_card";
+}
+
 /** מוחק תקבול בודד — היתרה והסטטוס מחושבים מחדש בטריגר. */
 export async function deletePaymentReceipt(input: {
   receiptId: string;
+  issueCreditInvoice?: boolean;
 }): Promise<CollectionActionResult> {
   const profile = await requireAdminProfile();
   if (!profile) return NOT_ALLOWED;
@@ -342,7 +353,9 @@ export async function deletePaymentReceipt(input: {
   const supabase = await createClient();
   const { data: receipt } = await supabase
     .from("payment_receipts")
-    .select("id, payment_id, payments(payment_method, office_collection)")
+    .select(
+      "id, amount, payment_id, payments(payment_method, office_collection)"
+    )
     .eq("id", input.receiptId)
     .maybeSingle();
 
@@ -354,6 +367,22 @@ export async function deletePaymentReceipt(input: {
     return { success: false, error: "תקבול זה אינו מנוהל דרך רשימת הגבייה." };
   }
 
+  if (receiptIssuedTaxInvoice(receipt.payments?.payment_method ?? null)) {
+    if (!input.issueCreditInvoice) {
+      return {
+        success: false,
+        error:
+          "אי אפשר להסיר תקבול עם חשבונית מס-קבלה בלי להפיק חשבונית זיכוי. אחרת החיוב יישאר פתוח והחשבונית תישאר בתוקף.",
+      };
+    }
+    const credit = await issueOfficeCreditInvoice({
+      paymentId: receipt.payment_id,
+      amount: Number(receipt.amount),
+      note: "ביטול תקבול בגבייה",
+    });
+    if (!credit.success) return credit;
+  }
+
   const { error } = await supabase
     .from("payment_receipts")
     .delete()
@@ -363,7 +392,140 @@ export async function deletePaymentReceipt(input: {
     return { success: false, error: "מחיקת התקבול נכשלה. נסו שוב." };
   }
 
-  revalidatePath("/admin/collections");
+  await revalidateAfterEnrollmentChange();
+  return { success: true };
+}
+
+/**
+ * מחזיר חיוב ששולם לחוב פתוח: משאירים תקבולים תקפים, מסירים את השאר,
+ * ואופציונלית מפיקים חשבונית זיכוי על כל תקבול שהוסרה לו חשבונית מס-קבלה.
+ */
+export async function reopenCollectionCharge(input: {
+  paymentId: string;
+  removeReceiptIds?: string[];
+  issueCreditInvoices?: boolean;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const charge = loaded.charge;
+  const removeIds = [...new Set(input.removeReceiptIds ?? [])];
+
+  if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
+    if (removeIds.length > 0) {
+      return {
+        success: false,
+        error: "לחיוב בלי תקבולים אין מה להסיר — רק לאשר את ההחזרה לחוב פתוח.",
+      };
+    }
+
+    const { error } = await supabase
+      .from("payments")
+      .update({
+        status: "pending",
+        paid_at: null,
+        office_collection: true,
+      })
+      .eq("id", charge.id);
+
+    if (error) {
+      return { success: false, error: "ההחזרה לחוב פתוח נכשלה. נסו שוב." };
+    }
+
+    await syncEnrollmentPaymentStatus(supabase, charge.enrollment_id);
+    await revalidateAfterEnrollmentChange();
+    return { success: true };
+  }
+
+  const receipts = charge.payment_receipts ?? [];
+  if (receipts.length === 0) {
+    if (charge.status !== "paid") {
+      return {
+        success: false,
+        error: "אין תקבולים להסרה, והחיוב אינו מסומן כשולם.",
+      };
+    }
+
+    const { error } = await supabase
+      .from("payments")
+      .update({
+        status: "pending",
+        paid_at: null,
+        office_collection: true,
+      })
+      .eq("id", charge.id);
+
+    if (error) {
+      return { success: false, error: "ההחזרה לחוב פתוח נכשלה. נסו שוב." };
+    }
+
+    await syncEnrollmentPaymentStatus(supabase, charge.enrollment_id);
+    await revalidateAfterEnrollmentChange();
+    return { success: true };
+  }
+
+  if (removeIds.length === 0) {
+    return {
+      success: false,
+      error: "בחרו לפחות תקבול אחד להסרה, אחרת החיוב נשאר שולם.",
+    };
+  }
+
+  const receiptById = new Map(receipts.map((receipt) => [receipt.id, receipt]));
+  const toRemove = removeIds.map((id) => receiptById.get(id));
+  if (toRemove.some((receipt) => !receipt)) {
+    return { success: false, error: "חלק מהתקבולים שנבחרו לא שייכים לחיוב הזה." };
+  }
+
+  const removed = toRemove.filter(
+    (receipt): receipt is { id: string; amount: number } => Boolean(receipt)
+  );
+
+  if (receiptIssuedTaxInvoice(charge.payment_method)) {
+    if (!input.issueCreditInvoices) {
+      return {
+        success: false,
+        error:
+          "אי אפשר להחזיר לחוב פתוח תקבול עם חשבונית מס-קבלה בלי להפיק חשבונית זיכוי.",
+      };
+    }
+    for (const receipt of removed) {
+      const credit = await issueOfficeCreditInvoice({
+        paymentId: charge.id,
+        amount: Number(receipt.amount),
+        note: "החזרה לחוב פתוח — ביטול תקבול",
+      });
+      if (!credit.success) {
+        return {
+          success: false,
+          error: `חשבונית הזיכוי נכשלה לפני הסרת התקבולים: ${credit.error}`,
+        };
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from("payment_receipts")
+    .delete()
+    .eq("payment_id", charge.id)
+    .in("id", removed.map((receipt) => receipt.id));
+
+  if (error) {
+    return {
+      success: false,
+      error: input.issueCreditInvoices
+        ? "חשבוניות הזיכוי הופקו, אבל הסרת התקבולים נכשלה. רעננו ובדקו את הגבייה."
+        : "הסרת התקבולים נכשלה. נסו שוב.",
+    };
+  }
+
+  await revalidateAfterEnrollmentChange();
   return { success: true };
 }
 
@@ -551,6 +713,232 @@ export async function deleteCollectionCharge(input: {
     return { success: false, error: "הסרת החיוב נכשלה. נסו שוב." };
   }
 
+  await revalidateAfterEnrollmentChange();
+  return { success: true };
+}
+
+/**
+ * מעדכן את סכום החיוב בגבייה לכל סכום חיובי — בלי קשר לסכום המקורי.
+ * היתרה והסטטוס מחושבים מחדש לפי התקבולים שכבר נרשמו.
+ */
+export async function updateCollectionChargeAmount(input: {
+  paymentId: string;
+  amount: number | string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const amount = parseAmount(input.amount);
+  if (amount === null || amount <= 0) {
+    return { success: false, error: "נא להזין סכום חיוב חיובי." };
+  }
+  if (amount > 99_999_999.99) {
+    return { success: false, error: "הסכום גבוה מדי." };
+  }
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const charge = loaded.charge;
+  if (round2(Number(charge.amount)) === amount) {
+    return { success: true };
+  }
+
+  const receiptPaid = round2(
+    (charge.payment_receipts ?? []).reduce(
+      (sum, receipt) => sum + Number(receipt.amount),
+      0
+    )
+  );
+  if (receiptPaid > 0 && amount < receiptPaid) {
+    return {
+      success: false,
+      error: `לא ניתן להוריד את הסכום מתחת לתקבולים שכבר נרשמו (${receiptPaid.toFixed(2)} ₪). מחקו תקבול אם זו טעות.`,
+    };
+  }
+
+  const receiptlessPaid = isReceiptlessChargeSettled(
+    charge.payment_method,
+    charge.status
+  );
+
+  let status = charge.status;
+  let paidAt: string | null | undefined;
+
+  if (!receiptlessPaid) {
+    if (receiptPaid <= 0) {
+      status = "pending";
+      paidAt = null;
+    } else if (receiptPaid < amount) {
+      status = "partial";
+    } else {
+      status = "paid";
+      if (charge.status !== "paid") {
+        paidAt = new Date().toISOString();
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      amount,
+      status,
+      ...(paidAt !== undefined ? { paid_at: paidAt } : {}),
+      ...(charge.checkout_id ? { checkout_id: null } : {}),
+    })
+    .eq("id", charge.id);
+
+  if (error) {
+    return { success: false, error: "עדכון סכום החיוב נכשל. נסו שוב." };
+  }
+
+  await syncEnrollmentPaymentStatus(supabase, charge.enrollment_id);
+
+  if (charge.checkout_id) {
+    await unlinkPendingCheckout(charge.checkout_id);
+  }
+
+  await revalidateAfterEnrollmentChange();
+  return { success: true };
+}
+
+/**
+ * מפצל חיוב פתוח לכמה חיובים עם אמצעי תשלום שונים.
+ * כל חלק נגבה בנפרד — וחשבונית מס-קבלה יוצאת עם כל תקבול.
+ */
+export async function splitCollectionCharge(input: {
+  paymentId: string;
+  parts: { method: string; amount: number | string }[];
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const parsed = parseSplitParts(input.parts);
+  if (!parsed.ok) {
+    return { success: false, error: parsed.error };
+  }
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const charge = loaded.charge;
+  if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
+    return {
+      success: false,
+      error: "אי אפשר לפצל חיוב שכבר אושר. החזירו אותו לחוב פתוח קודם.",
+    };
+  }
+
+  const remaining = remainingOf(charge);
+  if (remaining <= 0) {
+    return {
+      success: false,
+      error: "אי אפשר לפצל חיוב שכבר שולם במלואו.",
+    };
+  }
+
+  const receiptPaid = round2(
+    (charge.payment_receipts ?? []).reduce(
+      (sum, receipt) => sum + Number(receipt.amount),
+      0
+    )
+  );
+
+  if (!splitPartsMatchTotal(parsed.parts, remaining)) {
+    return {
+      success: false,
+      error: `סכום החלקים חייב להיות בדיוק ${remaining.toFixed(2)} ₪.`,
+    };
+  }
+
+  const shared = {
+    parent_id: charge.parent_id,
+    enrollment_id: charge.enrollment_id,
+    receipt_label_id: charge.receipt_label_id,
+    receipt_description: charge.receipt_description,
+    receipt_custom_text: charge.receipt_custom_text,
+    office_collection: true,
+    status: "pending" as const,
+    paid_at: null,
+    checkout_id: null,
+  };
+
+  if (receiptPaid > 0) {
+    const { error: keepError } = await supabase
+      .from("payments")
+      .update({
+        amount: receiptPaid,
+        status: "paid",
+        checkout_id: null,
+      })
+      .eq("id", charge.id);
+
+    if (keepError) {
+      return { success: false, error: "עדכון החיוב המקורי נכשל. נסו שוב." };
+    }
+
+    const { error: insertError } = await supabase.from("payments").insert(
+      parsed.parts.map((part) => ({
+        ...shared,
+        amount: part.amount,
+        payment_method: part.method,
+      }))
+    );
+
+    if (insertError) {
+      return {
+        success: false,
+        error: "החיוב המקורי עודכן, אבל יצירת החלקים החדשים נכשלה. רעננו ונסו שוב.",
+      };
+    }
+  } else {
+    const [first, ...rest] = parsed.parts;
+    const { error: updateError } = await supabase
+      .from("payments")
+      .update({
+        amount: first.amount,
+        payment_method: first.method,
+        office_collection: true,
+        status: "pending",
+        paid_at: null,
+        checkout_id: null,
+      })
+      .eq("id", charge.id);
+
+    if (updateError) {
+      return { success: false, error: "פיצול החיוב נכשל. נסו שוב." };
+    }
+
+    if (rest.length > 0) {
+      const { error: insertError } = await supabase.from("payments").insert(
+        rest.map((part) => ({
+          ...shared,
+          amount: part.amount,
+          payment_method: part.method,
+        }))
+      );
+
+      if (insertError) {
+        return {
+          success: false,
+          error: "החלק הראשון עודכן, אבל יצירת שאר החלקים נכשלה. רעננו ונסו שוב.",
+        };
+      }
+    }
+  }
+
+  if (charge.checkout_id) {
+    await unlinkPendingCheckout(charge.checkout_id);
+  }
+
+  await syncEnrollmentPaymentStatus(supabase, charge.enrollment_id);
   await revalidateAfterEnrollmentChange();
   return { success: true };
 }
@@ -744,19 +1132,7 @@ export async function approveCollectionPassCharge(input: {
     };
   }
 
-  if (loaded.charge.enrollment_id) {
-    const { error: enrollmentError } = await supabase
-      .from("enrollments")
-      .update({ payment_status: "paid" })
-      .eq("id", loaded.charge.enrollment_id);
-
-    if (enrollmentError) {
-      return {
-        success: false,
-        error: "החיוב אושר אך עדכון ההרשמה נכשל. רעננו ונסו שוב.",
-      };
-    }
-  }
+  await syncEnrollmentPaymentStatus(supabase, loaded.charge.enrollment_id);
 
   if (loaded.charge.checkout_id) {
     await unlinkPendingCheckout(loaded.charge.checkout_id);
