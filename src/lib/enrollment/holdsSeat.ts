@@ -9,10 +9,17 @@ export type SeatPayment = {
   office_collection?: boolean | null;
 };
 
+function asPaymentList(
+  payments: SeatPayment[] | SeatPayment | null | undefined
+): SeatPayment[] {
+  if (!payments) return [];
+  return Array.isArray(payments) ? payments : [payments];
+}
+
 export type SeatEnrollment = {
   status: Enums<"enrollment_status">;
   payment_status?: Enums<"enrollment_payment_status"> | null;
-  payments?: SeatPayment[] | null;
+  payments?: SeatPayment[] | SeatPayment | null;
   is_trial?: boolean | null;
   admin_assigned?: boolean | null;
 };
@@ -34,7 +41,7 @@ export function isAbandonedCardcomEnrollment(
     return false;
   }
 
-  const payments = enrollment.payments ?? [];
+  const payments = asPaymentList(enrollment.payments);
   if (payments.length === 0) return false;
   return payments.every((payment) =>
     isAbandonedCardcomCharge(
@@ -72,7 +79,7 @@ export function enrollmentHoldsSeat(enrollment: SeatEnrollment): boolean {
     return true;
   }
 
-  return (enrollment.payments ?? []).some((payment) => {
+  return asPaymentList(enrollment.payments).some((payment) => {
     if (payment.status === "paid" || payment.status === "partial") return true;
     if (payment.status !== "pending") return false;
     if (

@@ -21,20 +21,35 @@ export function CustomerRegistrations({
   parentName: string;
 }) {
   const [rows, setRows] = useState<CustomerRegistration[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setRows(null);
-    loadCustomerRegistrations(parentId, parentName).then((data) => {
-      if (!cancelled) setRows(data);
-    });
+    setError(null);
+    loadCustomerRegistrations(parentId, parentName)
+      .then((data) => {
+        if (!cancelled) setRows(data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("לא הצלחנו לטעון את ההרשמות.");
+          setRows([]);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [parentId, parentName]);
 
   function reload() {
-    loadCustomerRegistrations(parentId, parentName).then(setRows);
+    setError(null);
+    loadCustomerRegistrations(parentId, parentName)
+      .then((data) => setRows(data ?? []))
+      .catch(() => {
+        setError("לא הצלחנו לטעון את ההרשמות.");
+        setRows([]);
+      });
   }
 
   const current = useMemo(
@@ -72,6 +87,12 @@ export function CustomerRegistrations({
         <Card className="bg-ink-50/60">
           <CardContent className="py-8 text-center text-sm text-ink-400">
             טוען הרשמות...
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="bg-ink-50/60">
+          <CardContent className="py-8 text-center text-sm text-ink-500">
+            {error}
           </CardContent>
         </Card>
       ) : current.length === 0 && cancelledRows.length === 0 ? (
