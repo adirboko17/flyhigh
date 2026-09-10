@@ -269,7 +269,6 @@ export async function transferEnrollment(input: {
     }
 
     await syncEnrollmentPaymentStatus(supabase, enrollment.id);
-    void listPrice;
   }
 
   await revalidateAfterEnrollmentChange();

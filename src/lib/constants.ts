@@ -384,10 +384,10 @@ export type CollectionPaymentMethod =
   (typeof COLLECTION_PAYMENT_METHODS)[number];
 
 export function isCollectionPaymentMethod(
-  method: Enums<"payment_method"> | null
+  method: string | null | undefined
 ): method is CollectionPaymentMethod {
   return (
-    method !== null &&
+    method != null &&
     (COLLECTION_PAYMENT_METHODS as readonly string[]).includes(method)
   );
 }

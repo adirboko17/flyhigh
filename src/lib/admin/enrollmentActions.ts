@@ -45,10 +45,13 @@ export async function revalidateAfterEnrollmentChange() {
   revalidatePath("/parent/dashboard");
 }
 
-type LinkedPayment = RecordedMoneyPayment & {
+type LinkedPayment = Omit<
+  RecordedMoneyPayment,
+  "payment_receipts" | "payment_refunds"
+> & {
   amount: number;
   payment_receipts: { id: string; amount: number }[] | null;
-  payment_refunds?: { amount: number }[] | null;
+  payment_refunds: { id: string; amount: number }[] | null;
   receipts?: { receipt_number: string | null }[] | null;
   payment_checkouts?: { transaction_id: string | null } | null;
 };
@@ -96,7 +99,7 @@ function hasCardcomRefund(payment: LinkedPayment) {
 }
 
 const PAYMENT_PREVIEW_SELECT =
-  "id, amount, status, parent_id, payment_method, external_reference, office_collection, payment_receipts(id, amount), payment_refunds(amount), receipts(receipt_number), payment_checkouts(transaction_id)";
+  "id, amount, status, parent_id, payment_method, external_reference, office_collection, payment_receipts(id, amount), payment_refunds(id, amount), receipts(receipt_number), payment_checkouts(transaction_id)";
 
 async function loadEnrollmentPayments(
   supabase: Awaited<ReturnType<typeof createClient>>,

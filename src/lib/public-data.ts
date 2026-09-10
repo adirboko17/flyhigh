@@ -32,13 +32,8 @@ export const getPublicClasses = unstable_cache(
     const slotsByClass = new Map<string, PublicClass["weekly_slots"]>();
     for (const slot of slotRows ?? []) {
       const list = slotsByClass.get(slot.class_id) ?? [];
-      list.push({
-        day_of_week: slot.day_of_week,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        gender_policy: slot.gender_policy,
-        note: slot.note,
-      });
+      const { class_id: _classId, ...weeklySlot } = slot;
+      list.push(weeklySlot);
       slotsByClass.set(slot.class_id, list);
     }
 
