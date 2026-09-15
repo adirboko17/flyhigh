@@ -749,7 +749,7 @@ export function AssignToClassDialog({
               <span>
                 <span className="block font-medium">פיצול תשלום</span>
                 <span className="block text-xs text-ink-500">
-                  למשל חצי מכבי וחצי מזומן. כל חלק ייפתח כחיוב נפרד בגבייה,
+                  למשל חצי מכבי/לאומית וחצי מזומן. כל חלק ייפתח כחיוב נפרד בגבייה,
                   וחשבונית תופק עם כל תקבול. הלקוח לא רואה את זה.
                 </span>
               </span>
@@ -773,7 +773,7 @@ export function AssignToClassDialog({
                   className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-300"
                 />
                 {splitEnabled
-                  ? "חלקים במכבי / עמית / כרטיסייה כבר אושרו — לסמן כשולם"
+                  ? "חלקים במכבי/לאומית / עמית / כרטיסייה כבר אושרו — לסמן כשולם"
                   : "התשלום כבר התקבל — לסמן כשולם"}
               </label>
             )}

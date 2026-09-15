@@ -1097,7 +1097,7 @@ export async function approveCollectionPassCharge(input: {
   if (!isReceiptlessCollectionMethod(loaded.charge.payment_method)) {
     return {
       success: false,
-      error: "יש לבחור כרטיסייה, מכבי או עמית כאמצעי התשלום לפני האישור.",
+      error: "יש לבחור כרטיסייה, מכבי/לאומית או עמית כאמצעי התשלום לפני האישור.",
     };
   }
 

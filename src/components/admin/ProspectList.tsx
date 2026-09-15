@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { AdminSection } from "@/components/admin/AdminSection";
@@ -16,12 +16,19 @@ import {
 } from "@/lib/constants";
 import {
   deleteProspect,
+  listProspectClassSessions,
   saveProspect,
   updateProspectStatus,
+  type ProspectSessionOption,
 } from "@/lib/admin/prospectActions";
 import type { Enums } from "@/types/database.types";
 import { cn } from "@/utils/cn";
-import { formatDate, formatDateShort } from "@/utils/format";
+import {
+  formatClassSessionLabel,
+  formatDate,
+  formatDateShort,
+  formatTime,
+} from "@/utils/format";
 
 export type ProspectRow = {
   id: string;
@@ -30,7 +37,10 @@ export type ProspectRow = {
   phone: string | null;
   child_name: string | null;
   class_id: string;
+  session_id: string | null;
   trial_date: string;
+  session_start: string | null;
+  session_end: string | null;
   status: Enums<"class_prospect_status">;
   notes: string | null;
   classTitle: string;
@@ -54,6 +64,26 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
 
 function normalizeSearch(value: string) {
   return value.toLowerCase().trim().replace(/[\s\-()]/g, "");
+}
+
+function trialWhen(row: Pick<
+  ProspectRow,
+  "trial_date" | "session_start" | "session_end"
+>) {
+  if (!row.session_start) return formatDate(row.trial_date);
+  return formatClassSessionLabel({
+    session_date: row.trial_date,
+    start_time: row.session_start,
+    end_time: row.session_end,
+  });
+}
+
+function trialWhenShort(row: Pick<
+  ProspectRow,
+  "trial_date" | "session_start"
+>) {
+  if (!row.session_start) return formatDateShort(row.trial_date);
+  return `${formatDateShort(row.trial_date)} · ${formatTime(row.session_start)}`;
 }
 
 function telHref(phone: string | null) {
@@ -244,7 +274,7 @@ export function ProspectList({
                               overdue ? "font-semibold text-amber-700" : "text-ink-700"
                             )}
                           >
-                            {formatDate(row.trial_date)}
+                            {trialWhen(row)}
                             {overdue ? " · עבר" : ""}
                           </span>
                         </TD>
@@ -317,7 +347,7 @@ export function ProspectList({
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing === "new" ? "מתעניינת חדשה" : "עריכת מתעניינת"}
-        description="פרטים כמו בנייר: מי מגיעה, לאיזה חוג, ומתי שיעור הניסיון."
+        description="בחרו חוג, ואז מועד מתוך לוח המפגשים של אותו חוג."
       >
         {editing !== null && (
           <ProspectForm
@@ -368,7 +398,7 @@ function ProspectCard({
               overdue ? "font-semibold text-amber-700" : "text-ink-500"
             )}
           >
-            {formatDateShort(row.trial_date)}
+            {trialWhenShort(row)}
             {row.child_name ? ` · ${row.child_name}` : ""}
             {overdue ? " · עבר" : ""}
           </p>
@@ -451,13 +481,38 @@ function ProspectForm({
   const [phone, setPhone] = useState(existing?.phone ?? "");
   const [childName, setChildName] = useState(existing?.child_name ?? "");
   const [classId, setClassId] = useState(existing?.class_id ?? "");
-  const [trialDate, setTrialDate] = useState(existing?.trial_date ?? today);
+  const [sessionId, setSessionId] = useState(existing?.session_id ?? "");
+  const [sessions, setSessions] = useState<ProspectSessionOption[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [status, setStatus] = useState<Enums<"class_prospect_status">>(
     existing?.status ?? "scheduled"
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!classId) {
+      setSessions([]);
+      return;
+    }
+
+    let cancelled = false;
+    setSessionsLoading(true);
+    listProspectClassSessions(classId, existing?.session_id).then((result) => {
+      if (cancelled) return;
+      setSessions(result.sessions);
+      setSessionsLoading(false);
+      if (result.error) setError(result.error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, existing?.session_id]);
+
+  const upcomingSessions = sessions.filter((session) => session.session_date >= today);
+  const pastSessions = sessions.filter((session) => session.session_date < today);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -469,7 +524,7 @@ function ProspectForm({
       phone,
       childName,
       classId,
-      trialDate,
+      sessionId,
       notes,
       status,
     });
@@ -519,7 +574,11 @@ function ProspectForm({
         <Select
           id="prospect-class"
           value={classId}
-          onChange={(e) => setClassId(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setClassId(next);
+            if (next !== existing?.class_id) setSessionId("");
+          }}
           required
         >
           <option value="">בחירת חוג</option>
@@ -531,14 +590,53 @@ function ProspectForm({
         </Select>
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="מועד שיעור ניסיון" htmlFor="prospect-date" required>
-          <Input
-            id="prospect-date"
-            type="date"
-            value={trialDate}
-            onChange={(e) => setTrialDate(e.target.value)}
+        <Field
+          label="מועד שיעור ניסיון"
+          htmlFor="prospect-session"
+          hint={
+            !classId
+              ? "בחרו חוג כדי לראות את המועדים שלו"
+              : sessionsLoading
+                ? "טוען מועדים..."
+                : sessions.length === 0
+                  ? "אין מפגשים מתוכננים לחוג זה"
+                  : undefined
+          }
+          required
+        >
+          <Select
+            id="prospect-session"
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
             required
-          />
+            disabled={!classId || sessionsLoading || sessions.length === 0}
+          >
+            <option value="">
+              {!classId
+                ? "קודם בחירת חוג"
+                : sessionsLoading
+                  ? "טוען מועדים..."
+                  : "בחירת מועד"}
+            </option>
+            {upcomingSessions.length > 0 && (
+              <optgroup label="מפגשים קרובים">
+                {upcomingSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {formatClassSessionLabel(session)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {pastSessions.length > 0 && (
+              <optgroup label="מפגשים שעברו">
+                {pastSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {formatClassSessionLabel(session)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </Select>
         </Field>
         <Field label="סטטוס" htmlFor="prospect-status">
           <Select
@@ -573,7 +671,7 @@ function ProspectForm({
         <Button type="button" variant="outline" onClick={onClose}>
           ביטול
         </Button>
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || !sessionId}>
           {saving ? "שומר..." : existing ? "שמירה" : "הוספה"}
         </Button>
       </div>

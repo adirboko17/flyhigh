@@ -147,10 +147,10 @@ function receiptPreview(charge: CollectionCharge) {
 function receiptlessCopy(method: ReceiptlessCollectionMethod) {
   if (method === "maccabi") {
     return {
-      openTitle: "אישור תשלום ממכבי",
-      closedTitle: "תשלום ממכבי",
-      hint: "האישור מסמן שהכסף התקבל ממכבי ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות ממכבי.",
-      paidNote: "אושר שהכסף התקבל ממכבי. לא הופקה קבלה או חשבונית.",
+      openTitle: "אישור תשלום ממכבי/לאומית",
+      closedTitle: "תשלום ממכבי/לאומית",
+      hint: "האישור מסמן שהכסף התקבל ממכבי/לאומית ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות ממכבי/לאומית.",
+      paidNote: "אושר שהכסף התקבל ממכבי/לאומית. לא הופקה קבלה או חשבונית.",
     };
   }
   if (method === "amit") {
@@ -279,7 +279,7 @@ export function CollectionsList({
       <Card className="overflow-hidden">
         <div className="bg-brand-gradient px-5 py-4 text-white">
           <p className="text-xs font-medium text-white/70">
-            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי, עמית, פייבוקס, כרטיסייה, או אשראי במעמד הגבייה
+            תשלומים שנגבים מול המשרד — מזומן, העברה, מכבי/לאומית, עמית, פייבוקס, כרטיסייה, או אשראי במעמד הגבייה
           </p>
           <h1 className="font-display text-2xl font-bold leading-tight">גבייה</h1>
         </div>
@@ -370,7 +370,7 @@ export function CollectionsList({
       {parents.length === 0 ? (
         <EmptyState
           title="אין עדיין חיובים לגבייה"
-          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לפייבוקס, לכרטיסייה או לאשראי."
+          description="הרשמות שמשולמות במזומן, בהעברה בנקאית, במכבי/לאומית או בעמית יופיעו כאן אוטומטית. אפשר לשנות אמצעי תשלום לפייבוקס, לכרטיסייה או לאשראי."
         />
       ) : visibleParents.length === 0 ? (
         <EmptyState

@@ -11,6 +11,11 @@ import {
   type ClassSessionOption,
 } from "@/components/instructor/SessionNavigator";
 import {
+  listAttendanceProspects,
+  saveProspectAttendanceMarks,
+  type AttendanceProspect,
+} from "@/lib/attendance/prospectAttendance";
+import {
   attendanceRecordKey,
   type AttendanceStudent,
 } from "@/lib/attendance/students";
@@ -71,6 +76,10 @@ export function ClassAttendanceForm({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [marks, setMarks] = useState<Record<string, Status>>({});
+  const [prospects, setProspects] = useState<AttendanceProspect[]>([]);
+  const [prospectMarks, setProspectMarks] = useState<
+    Record<string, "arrived" | "no_show">
+  >({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -84,8 +93,18 @@ export function ClassAttendanceForm({
           child.weekly_slot_id === selectedSession.weekly_slot_id
       )
     : students;
+  const sessionProspects = date
+    ? prospects.filter(
+        (prospect) =>
+          (selectedSession != null && prospect.session_id === selectedSession.id) ||
+          (!prospect.session_id && prospect.trial_date === date)
+      )
+    : [];
   const markedCount = sessionStudents.filter(
     (child) => marks[child.id] !== undefined
+  ).length;
+  const markedProspectCount = sessionProspects.filter(
+    (prospect) => prospectMarks[prospect.id] !== undefined
   ).length;
   const unmarkedCount = sessionStudents.length - markedCount;
 
@@ -120,6 +139,31 @@ export function ClassAttendanceForm({
       cancelled = true;
     };
   }, [classId, weeklySlotId, preferredDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProspects() {
+      const result = await listAttendanceProspects(classId);
+      if (cancelled) return;
+      setProspects(result.prospects);
+    }
+
+    loadProspects();
+    return () => {
+      cancelled = true;
+    };
+  }, [classId]);
+
+  useEffect(() => {
+    const existing: Record<string, "arrived" | "no_show"> = {};
+    for (const prospect of sessionProspects) {
+      if (prospect.status === "arrived" || prospect.status === "no_show") {
+        existing[prospect.id] = prospect.status;
+      }
+    }
+    setProspectMarks(existing);
+  }, [date, selectedSession?.id, prospects]);
 
   useEffect(() => {
     if (students.length === 0 || !date) return;
@@ -191,6 +235,33 @@ export function ClassAttendanceForm({
       await supabase.from("attendance").insert(rows);
     }
 
+    if (sessionProspects.length > 0) {
+      const prospectResult = await saveProspectAttendanceMarks({
+        classId,
+        marks: sessionProspects.map((prospect) => ({
+          id: prospect.id,
+          status: prospectMarks[prospect.id] ?? "scheduled",
+        })),
+      });
+      if (prospectResult.error) {
+        setSaving(false);
+        window.alert(prospectResult.error);
+        return;
+      }
+      setProspects((current) =>
+        current.map((prospect) => {
+          const next = prospectMarks[prospect.id];
+          if (!sessionProspects.some((item) => item.id === prospect.id)) {
+            return prospect;
+          }
+          return {
+            ...prospect,
+            status: next ?? "scheduled",
+          };
+        })
+      );
+    }
+
     setSaving(false);
     setSaved(true);
     onSaved?.();
@@ -221,18 +292,20 @@ export function ClassAttendanceForm({
             <SessionNotesPanel sessionId={selectedSession.id} classId={classId} />
           )}
 
-          {sessionStudents.length === 0 ? (
+          {sessionStudents.length === 0 && sessionProspects.length === 0 ? (
             <p className="rounded-xl bg-ink-50 p-4 text-center text-sm text-ink-500">
-              אין נרשמים למועד זה.
+              אין נרשמים או מתעניינים למועד זה.
             </p>
           ) : loading ? (
             <p className="py-6 text-center text-sm text-ink-500">טוען נוכחות...</p>
           ) : (
             <div className="space-y-2">
-              <p className="text-xs text-ink-500">
-                «עדכון מראש» — ביטול לפחות 24 שעות לפני, ללא חיוב. נספר בכרטיס הלקוח
-                לסוף השנה.
-              </p>
+              {sessionStudents.length > 0 && (
+                <p className="text-xs text-ink-500">
+                  «עדכון מראש» — ביטול לפחות 24 שעות לפני, ללא חיוב. נספר בכרטיס
+                  הלקוח לסוף השנה.
+                </p>
+              )}
               {sessionStudents.map((child) => {
                 const current = marks[child.id];
                 return (
@@ -278,15 +351,94 @@ export function ClassAttendanceForm({
                   </div>
                 );
               })}
+              {sessionProspects.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-semibold text-ink-500">
+                    מתעניינים לשיעור ניסיון
+                  </p>
+                  {sessionProspects.map((prospect) => {
+                    const current = prospectMarks[prospect.id];
+                    const displayName = prospect.child_name
+                      ? `${prospect.full_name} · ${prospect.child_name}`
+                      : prospect.full_name;
+                    return (
+                      <div
+                        key={prospect.id}
+                        className={cn(
+                          "flex flex-col gap-2 rounded-xl border bg-white p-3 md:flex-row md:items-center md:justify-between",
+                          current === undefined
+                            ? "border-amber-200 bg-amber-50/30"
+                            : "border-ink-100"
+                        )}
+                      >
+                        <span className="min-w-0 truncate font-medium text-ink-800">
+                          {displayName}
+                          <span className="ms-2 text-xs font-semibold text-brand-700">
+                            ניסיון
+                          </span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProspectMarks((currentMarks) => {
+                                if (currentMarks[prospect.id] === "arrived") {
+                                  const next = { ...currentMarks };
+                                  delete next[prospect.id];
+                                  return next;
+                                }
+                                return { ...currentMarks, [prospect.id]: "arrived" };
+                              })
+                            }
+                            className={cn(
+                              "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors",
+                              current === "arrived"
+                                ? "bg-aqua-500 text-white"
+                                : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                            )}
+                          >
+                            הגיעה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProspectMarks((currentMarks) => {
+                                if (currentMarks[prospect.id] === "no_show") {
+                                  const next = { ...currentMarks };
+                                  delete next[prospect.id];
+                                  return next;
+                                }
+                                return { ...currentMarks, [prospect.id]: "no_show" };
+                              })
+                            }
+                            className={cn(
+                              "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors",
+                              current === "no_show"
+                                ? "bg-red-500 text-white"
+                                : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                            )}
+                          >
+                            לא הגיעה
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
-          {sessionStudents.length > 0 && (
+          {(sessionStudents.length > 0 || sessionProspects.length > 0) && (
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={save}
                 disabled={
-                  saving || loading || sessionsLoading || !date || markedCount === 0
+                  saving ||
+                  loading ||
+                  sessionsLoading ||
+                  !date ||
+                  (markedCount === 0 && markedProspectCount === 0)
                 }
               >
                 {saving ? "שומר..." : "שמירת נוכחות"}

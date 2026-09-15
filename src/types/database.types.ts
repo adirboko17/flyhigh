@@ -434,6 +434,7 @@ export type Database = {
           id: string
           notes: string | null
           phone: string | null
+          session_id: string | null
           status: Database["public"]["Enums"]["class_prospect_status"]
           trial_date: string
         }
@@ -445,6 +446,7 @@ export type Database = {
           id?: string
           notes?: string | null
           phone?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["class_prospect_status"]
           trial_date: string
         }
@@ -456,6 +458,7 @@ export type Database = {
           id?: string
           notes?: string | null
           phone?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["class_prospect_status"]
           trial_date?: string
         }
@@ -465,6 +468,13 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_prospects_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "class_sessions"
             referencedColumns: ["id"]
           },
         ]

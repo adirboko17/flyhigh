@@ -46,6 +46,17 @@ export function formatTime(time: string | null | undefined): string {
   return time.slice(0, 5);
 }
 
+export function formatClassSessionLabel(session: {
+  session_date: string;
+  start_time: string;
+  end_time?: string | null;
+}): string {
+  const time = session.end_time
+    ? `${formatTime(session.start_time)}–${formatTime(session.end_time)}`
+    : formatTime(session.start_time);
+  return `${formatDate(session.session_date)} · ${time}`;
+}
+
 /**
  * חישוב גיל מתאריך לידה.
  */

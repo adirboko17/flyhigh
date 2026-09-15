@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { Icon } from "@/components/icons/Icon";
 import { useCart } from "@/components/cart/CartProvider";
 import { cn } from "@/utils/cn";
+
+function subscribe() {
+  return () => {};
+}
+
+function useHydrated() {
+  return useSyncExternalStore(subscribe, () => true, () => false);
+}
 
 export function CartButton({
   light = false,
 }: {
   light?: boolean;
 }) {
-  const { ready, count } = useCart();
-  const visibleCount = ready ? count : 0;
+  const { count } = useCart();
+  const visibleCount = useHydrated() ? count : 0;
   const label =
     visibleCount === 0
       ? "עגלת קניות"

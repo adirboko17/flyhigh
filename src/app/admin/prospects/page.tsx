@@ -12,7 +12,7 @@ export default async function AdminProspectsPage() {
     supabase
       .from("class_prospects")
       .select(
-        "id, created_at, full_name, phone, child_name, class_id, trial_date, status, notes, classes(title)"
+        "id, created_at, full_name, phone, child_name, class_id, session_id, trial_date, status, notes, classes(title), class_sessions(start_time, end_time)"
       )
       .order("trial_date", { ascending: false }),
     supabase
@@ -28,10 +28,12 @@ export default async function AdminProspectsPage() {
     phone: string | null;
     child_name: string | null;
     class_id: string;
+    session_id: string | null;
     trial_date: string;
     status: ProspectRow["status"];
     notes: string | null;
     classes: { title: string } | null;
+    class_sessions: { start_time: string; end_time: string } | null;
   }>).map((row) => ({
     id: row.id,
     created_at: row.created_at,
@@ -39,7 +41,10 @@ export default async function AdminProspectsPage() {
     phone: row.phone,
     child_name: row.child_name,
     class_id: row.class_id,
+    session_id: row.session_id,
     trial_date: row.trial_date,
+    session_start: row.class_sessions?.start_time ?? null,
+    session_end: row.class_sessions?.end_time ?? null,
     status: row.status,
     notes: row.notes,
     classTitle: row.classes?.title?.trim() || "חוג שנמחק",
@@ -55,7 +60,7 @@ export default async function AdminProspectsPage() {
     <div className="space-y-6">
       <PageHeader
         title="מתעניינים"
-        description="מעקב אחרי מי שמגיעה לשיעור ניסיון — שם, חוג, מועד, והאם הגיעה. במקום הנייר."
+        description="מעקב אחרי מי שמגיעה לשיעור ניסיון — שם, חוג, מועד מהלוח, והאם הגיעה. הסימון מתעדכן גם מנוכחות החוג."
       />
       <ProspectList
         prospects={prospects}

@@ -239,7 +239,7 @@ export const PAYMENT_METHOD: Record<Enums<"payment_method">, string> = {
   standing_order: "הוראת קבע",
   cash: "מזומן",
   bank_transfer: "העברה בנקאית",
-  maccabi: "מכבי",
+  maccabi: "מכבי/לאומית",
   amit: "עמית",
   pool_pass: "כרטיסייה",
   external: "חיצוני",
@@ -261,7 +261,7 @@ export type DeferredPaymentMethod = (typeof DEFERRED_PAYMENT_METHODS)[number];
 export const DEFERRED_PAYMENT_HINT: Record<DeferredPaymentMethod, string> = {
   cash: "התשלום יימסר במזומן למורית.",
   bank_transfer: "העבירו לפי פרטי החשבון הבאים. התשלום יסומן עם קליטתו.",
-  maccabi: "התשלום יבוצע דרך אפליקציית מכבי.",
+  maccabi: "התשלום יבוצע דרך אפליקציית מכבי או לאומית.",
   amit: "התשלום יבוצע דרך עמית.",
 };
 
