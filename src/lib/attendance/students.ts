@@ -23,10 +23,11 @@ export function attendanceStudentsFromEnrollments(
   for (const enrollment of enrollments) {
     const name = participantDisplayName(
       enrollment.children?.full_name,
-      enrollment.profiles?.full_name
+      enrollment.profiles?.full_name,
+      "משתתף/ת"
     );
     const id = enrollment.child_id ?? enrollment.parent_id;
-    if (!id || !name || seen.has(id)) continue;
+    if (!id || seen.has(id)) continue;
     seen.add(id);
     list.push({
       id,

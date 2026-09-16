@@ -16,7 +16,11 @@ import {
 } from "@/components/instructor/InstructorClassCard";
 import type { AttendanceRecord } from "@/components/instructor/ClassAttendanceHistory";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole, getCurrentInstructor } from "@/lib/auth";
+import {
+  createSessionReadClient,
+  requireRole,
+  getCurrentInstructor,
+} from "@/lib/auth";
 import { dayLabel } from "@/lib/constants";
 import { formatHours } from "@/lib/finance/payroll";
 import { loadInstructorPayroll } from "@/lib/finance/instructorPayroll";
@@ -45,6 +49,7 @@ export default async function InstructorDashboard() {
   const profile = await requireRole(["instructor", "admin"]);
   const instructor = await getCurrentInstructor();
   const supabase = await createClient();
+  const dataClient = await createSessionReadClient();
 
   const today = todayInIsrael();
   const todayWeekday = new Date(`${today}T00:00:00Z`).getUTCDay();
@@ -100,14 +105,14 @@ export default async function InstructorDashboard() {
 
   if (classIds.length > 0) {
     const [{ data: enrollments }, { data: attendanceRows }] = await Promise.all([
-      supabase
+      dataClient
         .from("enrollments")
         .select(
           "class_id, weekly_slot_id, child_id, parent_id, children(id, full_name), profiles(full_name)"
         )
         .in("class_id", classIds)
         .eq("status", "active"),
-      supabase
+      dataClient
         .from("attendance")
         .select(
           "class_id, child_id, parent_id, date, status, children(full_name), profiles(full_name)"

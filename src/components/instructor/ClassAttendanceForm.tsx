@@ -53,6 +53,8 @@ interface ClassAttendanceFormProps {
   students: AttendanceStudent[];
   /** כשמוגדר — מציגים רק מפגשים של המועד הזה. */
   weeklySlotId?: string | null;
+  /** כמה מועדים של אותה מדריכה באותו חוג. */
+  weeklySlotIds?: string[] | null;
   /** מפגש מועדף (למשל התאריך שנלחץ בלוח השנה). */
   preferredDate?: string | null;
   /** הודעה כשאין מפגשים — ברירת מחדל מתאימה למדריכה. */
@@ -66,6 +68,7 @@ export function ClassAttendanceForm({
   instructorId,
   students,
   weeklySlotId = null,
+  weeklySlotIds = null,
   preferredDate = null,
   emptySessionsHint = "לא נמצאו מפגשים מתוכננים. פני למנהל המערכת לעדכון לוח המפגשים.",
   genderPolicy = null,
@@ -121,8 +124,17 @@ export function ClassAttendanceForm({
         .neq("status", "cancelled")
         .order("session_date")
         .order("start_time");
-      if (weeklySlotId) {
-        query = query.eq("weekly_slot_id", weeklySlotId);
+      const slotIds = [
+        ...new Set(
+          [...(weeklySlotIds ?? []), weeklySlotId].filter(
+            (id): id is string => Boolean(id)
+          )
+        ),
+      ];
+      if (slotIds.length === 1) {
+        query = query.eq("weekly_slot_id", slotIds[0]);
+      } else if (slotIds.length > 1) {
+        query = query.in("weekly_slot_id", slotIds);
       }
       const { data } = await query;
 
@@ -138,7 +150,7 @@ export function ClassAttendanceForm({
     return () => {
       cancelled = true;
     };
-  }, [classId, weeklySlotId, preferredDate]);
+  }, [classId, weeklySlotId, preferredDate, weeklySlotIds?.join(",")]);
 
   useEffect(() => {
     let cancelled = false;

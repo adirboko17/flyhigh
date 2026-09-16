@@ -3,10 +3,8 @@
 import { requireRole } from "@/lib/auth";
 import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
-import { chargeDescriptionForCheckout } from "@/lib/enrollment/receiptLabel";
 import { revalidateAfterEnrollmentChange } from "@/lib/admin/enrollmentActions";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
-import { syncEnrollmentPaymentStatus } from "@/lib/payments/splitParts";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,13 +29,13 @@ export type TransferPreview = {
   parentName: string;
   participantName: string;
   fromClassTitle: string;
+  currentClassId: string;
+  currentWeeklySlotId: string | null;
   alreadyPaid: number;
   classes: TransferClassOption[];
 };
 
-export type TransferResult =
-  | { success: true; extraCharged: number }
-  | { success: false; error: string };
+export type TransferResult = { success: true } | { success: false; error: string };
 
 function round2(value: number) {
   return Math.round(value * 100) / 100;
@@ -52,7 +50,7 @@ export async function loadTransferPreview(
   const { data: enrollment } = await supabase
     .from("enrollments")
     .select(
-      "id, parent_id, child_id, class_id, status, children(full_name), classes(title), profiles(full_name), payments(amount, status)"
+      "id, parent_id, child_id, class_id, weekly_slot_id, status, children(full_name), classes(title), profiles(full_name), payments(amount, status)"
     )
     .eq("id", enrollmentId)
     .maybeSingle();
@@ -128,25 +126,24 @@ export async function loadTransferPreview(
       enrollment.profiles?.full_name ??
       "מתאמן",
     fromClassTitle: enrollment.classes?.title ?? "חוג",
+    currentClassId: enrollment.class_id ?? "",
+    currentWeeklySlotId: enrollment.weekly_slot_id,
     alreadyPaid,
     classes,
   };
 }
 
 /**
- * מעביר הרשמה לחוג אחר.
- * אותו מחיר — בלי חיוב חדש. תוספת תשלום — חיוב פתוח חדש בגבייה.
+ * מעביר הרשמה לחוג או למועד אחר.
+ * התשלום הקיים נשאר על אותה הרשמה — בלי חיוב חדש.
  */
 export async function transferEnrollment(input: {
   enrollmentId: string;
   toClassId: string;
   weeklySlotId?: string | null;
-  extraAmount?: number | string | null;
 }): Promise<TransferResult> {
   await requireRole("admin");
   const supabase = await createClient();
-
-  const extra = round2(Math.max(0, Number(input.extraAmount) || 0));
 
   const { data: enrollment } = await supabase
     .from("enrollments")
@@ -158,10 +155,6 @@ export async function transferEnrollment(input: {
 
   if (!enrollment || enrollment.status === "cancelled") {
     return { success: false, error: "ההרשמה לא נמצאה." };
-  }
-
-  if (input.toClassId === enrollment.class_id) {
-    return { success: false, error: "נא לבחור חוג אחר, לא את החוג הנוכחי." };
   }
 
   const { data: target } = await supabase
@@ -185,10 +178,10 @@ export async function transferEnrollment(input: {
     };
   }
 
-  let weeklySlotId: string | null = null;
+  let weeklySlotId: string | null = enrollment.weekly_slot_id;
   if (target.pick_one_slot) {
     if (!input.weeklySlotId) {
-      return { success: false, error: "נא לבחור מועד בחוג החדש." };
+      return { success: false, error: "נא לבחור מועד." };
     }
     const { data: slot } = await supabase
       .from("class_weekly_slots")
@@ -200,25 +193,35 @@ export async function transferEnrollment(input: {
       return { success: false, error: "המועד שנבחר אינו שייך לחוג זה." };
     }
     weeklySlotId = slot.id;
+  } else {
+    weeklySlotId = null;
   }
 
-  const { data: existingInTarget } = await supabase
-    .from("enrollments")
-    .select(
-      "id, child_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
-    )
-    .eq("class_id", target.id)
-    .eq("parent_id", enrollment.parent_id)
-    .neq("id", enrollment.id)
-    .neq("status", "cancelled");
+  const sameClass = input.toClassId === enrollment.class_id;
+  const sameSlot = (weeklySlotId ?? null) === (enrollment.weekly_slot_id ?? null);
+  if (sameClass && sameSlot) {
+    return { success: false, error: "נא לבחור חוג או מועד אחר." };
+  }
 
-  const alreadyRegistered = (existingInTarget ?? []).some((row) => {
-    if (!enrollmentHoldsSeat(row)) return false;
-    if (enrollment.child_id) return row.child_id === enrollment.child_id;
-    return !row.child_id;
-  });
-  if (alreadyRegistered) {
-    return { success: false, error: "המתאמן כבר רשום לחוג הזה." };
+  if (!sameClass) {
+    const { data: existingInTarget } = await supabase
+      .from("enrollments")
+      .select(
+        "id, child_id, status, payment_status, admin_assigned, payments(status, payment_method, external_reference, office_collection)"
+      )
+      .eq("class_id", target.id)
+      .eq("parent_id", enrollment.parent_id)
+      .neq("id", enrollment.id)
+      .neq("status", "cancelled");
+
+    const alreadyRegistered = (existingInTarget ?? []).some((row) => {
+      if (!enrollmentHoldsSeat(row)) return false;
+      if (enrollment.child_id) return row.child_id === enrollment.child_id;
+      return !row.child_id;
+    });
+    if (alreadyRegistered) {
+      return { success: false, error: "המתאמן כבר רשום לחוג הזה." };
+    }
   }
 
   const { error: updateError } = await supabase
@@ -235,43 +238,7 @@ export async function transferEnrollment(input: {
     return { success: false, error: "ההחלפה נכשלה. נסו שוב." };
   }
 
-  if (extra > 0) {
-    const description = chargeDescriptionForCheckout({
-      productTitle: `תוספת החלפה · ${target.title}`,
-      participantCount: 1,
-      kind: "class",
-      customLabel: null,
-    });
-
-    const { error: paymentError } = await supabase.from("payments").insert({
-      parent_id: enrollment.parent_id,
-      enrollment_id: enrollment.id,
-      amount: extra,
-      payment_method: "bank_transfer",
-      status: "pending",
-      office_collection: true,
-      receipt_description: description,
-    });
-
-    if (paymentError) {
-      await supabase
-        .from("enrollments")
-        .update({
-          class_id: enrollment.class_id,
-          weekly_slot_id: enrollment.weekly_slot_id,
-          session_id: enrollment.session_id,
-        })
-        .eq("id", enrollment.id);
-      return {
-        success: false,
-        error: "ההחלפה לא נשמרה — יצירת חיוב התוספת נכשלה.",
-      };
-    }
-
-    await syncEnrollmentPaymentStatus(supabase, enrollment.id);
-  }
-
   await revalidateAfterEnrollmentChange();
   await revalidatePublicCatalog();
-  return { success: true, extraCharged: extra };
+  return { success: true };
 }
