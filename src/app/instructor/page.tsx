@@ -133,7 +133,18 @@ export default async function InstructorDashboard() {
       enrollmentsByClass.set(e.class_id, list);
     });
     for (const [classId, rows] of enrollmentsByClass) {
-      const students = attendanceStudentsFromEnrollments(rows);
+      const assignedSlotIds = new Set(
+        (mySlotsByClass.get(classId) ?? []).map((slot) => slot.id)
+      );
+      const visibleRows =
+        assignedSlotIds.size > 0
+          ? rows.filter(
+              (row) =>
+                row.weekly_slot_id != null &&
+                assignedSlotIds.has(row.weekly_slot_id)
+            )
+          : rows;
+      const students = attendanceStudentsFromEnrollments(visibleRows);
       studentsByClass.set(classId, students);
       counts.set(classId, students.length);
     }
@@ -179,6 +190,7 @@ export default async function InstructorDashboard() {
         students: studentsByClass.get(c.id) ?? [],
         attendanceHistory: historyByClass.get(c.id) ?? [],
         genderPolicy: c.gender_policy,
+        assignedSlotIds: mySlots.map((slot) => slot.id),
         isToday: dayOfWeek === todayWeekday && c.status === "active",
       };
     })

@@ -31,6 +31,8 @@ export interface InstructorClassData {
   students: AttendanceStudent[];
   attendanceHistory: AttendanceRecord[];
   genderPolicy: ClassGenderPolicy;
+  /** מועדים שמשובצים למדריכה בחוג הזה. */
+  assignedSlotIds?: string[];
   /** האם החוג מתקיים היום — הכרטיס מודגש והפעולה הופכת לראשית. */
   isToday: boolean;
 }
@@ -234,6 +236,7 @@ export function InstructorClassCard({
           classId={classData.id}
           instructorId={instructorId}
           students={students}
+          weeklySlotIds={classData.assignedSlotIds}
           genderPolicy={classData.genderPolicy}
         />
       </Modal>
