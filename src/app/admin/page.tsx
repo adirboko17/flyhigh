@@ -60,6 +60,7 @@ export default async function AdminDashboard() {
     { count: waitlistCount },
     { count: awaitingPrivateLessons },
     { count: awaitingActivities },
+    { count: awaitingPoolPasses },
     { data: recentEnrollments },
     { data: memberships },
   ] = await Promise.all([
@@ -120,6 +121,10 @@ export default async function AdminDashboard() {
       .eq("status", "awaiting_schedule"),
     supabase
       .from("activity_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "awaiting_schedule"),
+    supabase
+      .from("pool_pass_bookings")
       .select("id", { count: "exact", head: true })
       .eq("status", "awaiting_schedule"),
     supabase
@@ -247,18 +252,14 @@ export default async function AdminDashboard() {
       detail: "אפשר לשבץ אותם לחוגים עם מקום פנוי",
       href: "/admin/classes",
     },
-    (awaitingPrivateLessons ?? 0) > 0 && {
-      icon: "🎯",
+    (awaitingPrivateLessons ?? 0) +
+      (awaitingActivities ?? 0) +
+      (awaitingPoolPasses ?? 0) >
+      0 && {
+      icon: "📅",
       tone: "brand" as const,
-      title: `${awaitingPrivateLessons} ${awaitingPrivateLessons === 1 ? "שיעור פרטי" : "שיעורים פרטיים"} לתיאום`,
-      detail: "לקוחות שרכשו וממתינים לתיאום מועד",
-      href: "/admin/private-lessons",
-    },
-    (awaitingActivities ?? 0) > 0 && {
-      icon: "👨‍👩‍👧",
-      tone: "amber" as const,
-      title: `${awaitingActivities} ${awaitingActivities === 1 ? "פעילות" : "פעילויות"} לתיאום`,
-      detail: "לקוחות שרכשו פעילות וממתינים לתיאום מועד",
+      title: `${(awaitingPrivateLessons ?? 0) + (awaitingActivities ?? 0) + (awaitingPoolPasses ?? 0)} מועדים לתיאום`,
+      detail: "רכישות שממתינות לתיאום תאריך ושעה",
       href: "/admin/private-lessons",
     },
     pendingEnrollmentsCount > 0 && {

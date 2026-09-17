@@ -9,6 +9,7 @@ import { PoolPassForm } from "@/components/admin/PoolPassForm";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
@@ -21,10 +22,13 @@ export type AdminPoolPassRow = {
   entries_count: number;
   price: number;
   status: keyof typeof LISTING_STATUS;
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 interface PoolPassListProps {
   passes: AdminPoolPassRow[];
+  instructors?: ClassInstructorOption[];
   query?: string;
 }
 
@@ -41,7 +45,11 @@ function matchesPass(item: AdminPoolPassRow, query: string) {
   );
 }
 
-export function PoolPassList({ passes, query = "" }: PoolPassListProps) {
+export function PoolPassList({
+  passes,
+  instructors = [],
+  query = "",
+}: PoolPassListProps) {
   const router = useRouter();
   const [editing, setEditing] = useState<AdminPoolPassRow | "new" | null>(null);
 
@@ -83,6 +91,19 @@ export function PoolPassList({ passes, query = "" }: PoolPassListProps) {
                 <TR key={p.id}>
                   <TD className="max-w-[11rem] font-semibold text-ink-900 sm:max-w-none">
                     {p.title}
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {p.requires_schedule && (
+                        <Badge tone="info" className="px-1.5 py-0 text-[10px]">
+                          תיאום מועדים
+                        </Badge>
+                      )}
+                      {p.instructor_id && (
+                        <Badge tone="neutral" className="px-1.5 py-0 text-[10px]">
+                          {instructors.find((row) => row.id === p.instructor_id)
+                            ?.full_name ?? "מדריכה"}
+                        </Badge>
+                      )}
+                    </span>
                     {p.description && (
                       <span className="block line-clamp-2 text-xs font-normal text-ink-400">
                         {p.description}
@@ -134,6 +155,7 @@ export function PoolPassList({ passes, query = "" }: PoolPassListProps) {
         {editing !== null && (
           <PoolPassForm
             existing={editing === "new" ? undefined : editing}
+            instructors={instructors}
             onClose={() => setEditing(null)}
           />
         )}

@@ -12,13 +12,17 @@ import {
   updateActivityBookingStatus,
 } from "@/lib/activities/actions";
 import {
+  schedulePoolPassBookings,
+  updatePoolPassBookingStatus,
+} from "@/lib/pool-passes/actions";
+import {
   schedulePrivateLessonSlots,
   updatePrivateLessonSlotStatus,
 } from "@/lib/private-lessons/actions";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
 
-export type ScheduleKind = "private_lesson" | "activity";
+export type ScheduleKind = "private_lesson" | "activity" | "pool_pass";
 
 export type AdminScheduleRow = {
   id: string;
@@ -33,6 +37,13 @@ export type AdminScheduleRow = {
   childName: string | null;
   detail: string | null;
   amount: number | null;
+  kindLabel?: string;
+};
+
+const KIND_LABEL: Record<ScheduleKind, string> = {
+  private_lesson: "שיעור פרטי",
+  activity: "פעילות",
+  pool_pass: "כרטיסייה",
 };
 
 function todayInput() {
@@ -110,7 +121,7 @@ export function ScheduleBoard({ rows }: { rows: AdminScheduleRow[] }) {
         {rows.length === 0 ? (
           <EmptyState
             title="אין בקשות לתיאום"
-            description="כשלקוח רוכש שיעור פרטי או פעילות, הבקשה תופיע כאן. אחרי בחירת תאריך זה ייכנס ללוח השנה."
+            description="כשלקוח רוכש פריט שמסומן לתיאום מועדים, הבקשה תופיע כאן. אחרי בחירת תאריך זה ייכנס ללוח השנה."
             icon="📅"
             className="border-0 bg-transparent"
           />
@@ -161,6 +172,10 @@ function ScheduleRow({ row }: { row: AdminScheduleRow }) {
   ) {
     setError(null);
     startTransition(async () => {
+      const payload = {
+        sessionDate: next.date,
+        startTime: next.time,
+      };
       const result =
         next.status === "awaiting_schedule"
           ? row.kind === "activity"
@@ -168,29 +183,26 @@ function ScheduleRow({ row }: { row: AdminScheduleRow }) {
                 bookingId: row.id,
                 status: "awaiting_schedule",
               })
-            : await updatePrivateLessonSlotStatus({
-                slotId: row.id,
-                status: "awaiting_schedule",
-              })
+            : row.kind === "pool_pass"
+              ? await updatePoolPassBookingStatus({
+                  bookingId: row.id,
+                  status: "awaiting_schedule",
+                })
+              : await updatePrivateLessonSlotStatus({
+                  slotId: row.id,
+                  status: "awaiting_schedule",
+                })
           : row.kind === "activity"
             ? await scheduleActivityBookings({
-                bookings: [
-                  {
-                    bookingId: row.id,
-                    sessionDate: next.date,
-                    startTime: next.time,
-                  },
-                ],
+                bookings: [{ bookingId: row.id, ...payload }],
               })
-            : await schedulePrivateLessonSlots({
-                slots: [
-                  {
-                    slotId: row.id,
-                    sessionDate: next.date,
-                    startTime: next.time,
-                  },
-                ],
-              });
+            : row.kind === "pool_pass"
+              ? await schedulePoolPassBookings({
+                  bookings: [{ bookingId: row.id, ...payload }],
+                })
+              : await schedulePrivateLessonSlots({
+                  slots: [{ slotId: row.id, ...payload }],
+                });
 
       if (!result.success) {
         setError(result.error ?? "שמירת התיאום נכשלה.");
@@ -267,7 +279,7 @@ function ScheduleRow({ row }: { row: AdminScheduleRow }) {
       <TD className="min-w-[10rem]">
         <p className="font-semibold text-ink-900">{row.title}</p>
         <p className="text-xs font-normal text-ink-500">
-          {row.kind === "activity" ? "פעילות" : "שיעור פרטי"}
+          {row.kindLabel ?? KIND_LABEL[row.kind]}
           {row.detail ? ` · ${row.detail}` : ""}
         </p>
       </TD>

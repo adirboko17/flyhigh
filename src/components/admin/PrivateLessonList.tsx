@@ -9,6 +9,7 @@ import { PrivateLessonForm } from "@/components/admin/PrivateLessonForm";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
@@ -21,10 +22,13 @@ export type AdminPrivateLessonRow = {
   duration_minutes: number;
   price: number;
   status: keyof typeof LISTING_STATUS;
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 interface PrivateLessonListProps {
   lessons: AdminPrivateLessonRow[];
+  instructors?: ClassInstructorOption[];
   query?: string;
 }
 
@@ -43,6 +47,7 @@ function matchesLesson(item: AdminPrivateLessonRow, query: string) {
 
 export function PrivateLessonList({
   lessons,
+  instructors = [],
   query = "",
 }: PrivateLessonListProps) {
   const router = useRouter();
@@ -88,6 +93,19 @@ export function PrivateLessonList({
                 <TR key={lesson.id}>
                   <TD className="max-w-[11rem] font-semibold text-ink-900 sm:max-w-none">
                     {lesson.title}
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {lesson.requires_schedule && (
+                        <Badge tone="info" className="px-1.5 py-0 text-[10px]">
+                          תיאום מועדים
+                        </Badge>
+                      )}
+                      {lesson.instructor_id && (
+                        <Badge tone="neutral" className="px-1.5 py-0 text-[10px]">
+                          {instructors.find((row) => row.id === lesson.instructor_id)
+                            ?.full_name ?? "מדריכה"}
+                        </Badge>
+                      )}
+                    </span>
                     {lesson.description && (
                       <span className="block line-clamp-2 text-xs font-normal text-ink-400">
                         {lesson.description}
@@ -141,6 +159,7 @@ export function PrivateLessonList({
         {editing !== null && (
           <PrivateLessonForm
             existing={editing === "new" ? undefined : editing}
+            instructors={instructors}
             onClose={() => setEditing(null)}
           />
         )}

@@ -29,6 +29,7 @@ import {
   composeReceiptLine,
   type ReceiptLabelOption,
 } from "@/lib/receipt-labels";
+import { CollectionsExportDialog } from "@/components/admin/CollectionsExportDialog";
 import {
   PaymentSplitEditor,
   emptySplitDrafts,
@@ -81,6 +82,7 @@ export type CollectionParent = {
   name: string;
   phone: string | null;
   email: string | null;
+  receiptIdNumber: string | null;
   adminNote: string | null;
   charges: CollectionCharge[];
   openAmount: number;
@@ -193,6 +195,7 @@ export function CollectionsList({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [activeCharge, setActiveCharge] = useState<CollectionCharge | null>(null);
   const [noteParent, setNoteParent] = useState<CollectionParent | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const totals = useMemo(() => {
@@ -355,6 +358,21 @@ export function CollectionsList({
               );
             })}
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-ink-500">
+              {visibleParents.length} לקוחות מוצגים
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setExportOpen(true)}
+            >
+              <Icon name="download" size={16} />
+              ייצוא Excel
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -456,6 +474,13 @@ export function CollectionsList({
           </div>
         </Modal>
       )}
+
+      <CollectionsExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        statusFilter={statusFilter}
+        methodFilter={methodFilter}
+      />
     </div>
   );
 }

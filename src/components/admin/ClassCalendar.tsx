@@ -20,12 +20,17 @@ import { formatClassOccupancy } from "@/lib/classes/capacity";
 import type { ClassBookingMode } from "@/lib/classes/bookingMode";
 import { CLASS_SESSION_STATUS, DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { dayLabelLong, type CalendarDay } from "@/lib/scheduling/monthGrid";
+import {
+  ACTIVITY_CALENDAR_GROUP,
+  POOL_PASS_CALENDAR_GROUP,
+  PRIVATE_LESSON_CALENDAR_GROUP,
+} from "@/lib/schedule/calendarGroups";
 import { cn } from "@/utils/cn";
 
 export type CalendarSession = {
   id: string;
-  /** חוג רגיל, שיעור פרטי מתוזמן או פעילות לפי נפשות. */
-  kind: "class" | "private_lesson" | "activity";
+  /** חוג רגיל, שיעור פרטי מתוזמן, פעילות או כרטיסייה. */
+  kind: "class" | "private_lesson" | "activity" | "pool_pass";
   classId: string;
   title: string;
   category: string | null;
@@ -51,11 +56,14 @@ export type CalendarSession = {
   clientLabel?: string | null;
 };
 
-export const PRIVATE_LESSON_CALENDAR_GROUP = "private-lessons";
-export const ACTIVITY_CALENDAR_GROUP = "activities";
+export {
+  ACTIVITY_CALENDAR_GROUP,
+  POOL_PASS_CALENDAR_GROUP,
+  PRIVATE_LESSON_CALENDAR_GROUP,
+};
 
 function isBookedSession(kind: CalendarSession["kind"]) {
-  return kind === "private_lesson" || kind === "activity";
+  return kind === "private_lesson" || kind === "activity" || kind === "pool_pass";
 }
 
 export type CalendarView = "month" | "week";
@@ -168,7 +176,9 @@ export function ClassCalendar({
           ? "שיעורים פרטיים"
           : session.kind === "activity"
             ? "פעילויות"
-            : session.title;
+            : session.kind === "pool_pass"
+              ? "כרטיסיות"
+              : session.title;
       const existing = map.get(session.classId);
       if (existing) existing.count += 1;
       else map.set(session.classId, { id: session.classId, title, count: 1 });
@@ -1159,6 +1169,9 @@ function SessionRow({
           )}
           {session.kind === "activity" && (
             <Badge tone="warning">פעילות</Badge>
+          )}
+          {session.kind === "pool_pass" && (
+            <Badge tone="info">כרטיסייה</Badge>
           )}
           {!isPrivate && session.substituteInstructor && (
             <Badge tone="warning">החלפה</Badge>

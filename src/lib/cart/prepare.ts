@@ -81,6 +81,7 @@ export type PreparedCartLine = {
   paymentAmounts: number[];
   privateLessonQuantity: number | null;
   activityQuantity: number | null;
+  poolPassBookingCount: number | null;
   planId: string | null;
 };
 
@@ -335,6 +336,7 @@ async function prepareClassLine(
         paymentAmounts: booked.sessions.map(() => unitPrice),
         privateLessonQuantity: null,
         activityQuantity: null,
+        poolPassBookingCount: null,
         planId: null,
       },
     };
@@ -522,6 +524,7 @@ async function prepareClassLine(
       paymentAmounts: childAmounts,
       privateLessonQuantity: null,
       activityQuantity: null,
+      poolPassBookingCount: null,
       planId: null,
     },
   };
@@ -733,6 +736,7 @@ async function prepareTrialClassLine(
       paymentAmounts: [unitPrice],
       privateLessonQuantity: null,
       activityQuantity: null,
+      poolPassBookingCount: null,
       planId: null,
     },
   };
@@ -761,11 +765,12 @@ async function preparePlanLine(
   let extraHalfHourPrice: number | null = item.extraHalfHourPrice ?? null;
   let entriesCount: number | null = item.entriesCount ?? null;
   let durationMinutes: number | null = null;
+  let requiresSchedule = false;
 
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price")
+      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -777,10 +782,11 @@ async function preparePlanLine(
     priceTiers = parseActivityPriceTiers(data.price_tiers);
     extraHalfHourPrice = data.extra_half_hour_price;
     durationMinutes = data.duration_minutes;
+    requiresSchedule = data.requires_schedule;
   } else if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
-      .select("id, title, price, entries_count")
+      .select("id, title, price, entries_count, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -788,16 +794,18 @@ async function preparePlanLine(
     title = data.title;
     price = Number(data.price);
     entriesCount = data.entries_count;
+    requiresSchedule = data.requires_schedule;
   } else {
     const { data } = await supabase
       .from("private_lessons")
-      .select("id, title, price")
+      .select("id, title, price, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
     if (!data) return { success: false, error: `${item.title} אינו זמין לרכישה.` };
     title = data.title;
     price = Number(data.price);
+    requiresSchedule = data.requires_schedule;
   }
 
   const isActivity = isActivityProgram(programKind);
@@ -931,12 +939,20 @@ async function preparePlanLine(
       enrollmentRows,
       paymentChildIds: isActivity ? [activityChildId] : participants,
       paymentAmounts: amounts,
-      privateLessonQuantity: kind === "private_lesson" ? quantity : null,
-      activityQuantity: isActivity
-        ? isSession
-          ? participants.length
-          : quantity
-        : null,
+      privateLessonQuantity:
+        kind === "private_lesson" && requiresSchedule ? quantity : null,
+      activityQuantity:
+        kind === "program" && requiresSchedule
+          ? isActivity
+            ? isSession
+              ? participants.length
+              : quantity
+            : 1
+          : null,
+      poolPassBookingCount:
+        kind === "pool_pass" && requiresSchedule
+          ? Math.max(1, entriesCount ?? 1)
+          : null,
       planId,
     },
   };

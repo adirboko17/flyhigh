@@ -6,6 +6,8 @@ import { ActivityPriceTierEditor } from "@/components/admin/ActivityPriceTierEdi
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { TrackScheduleFields } from "@/components/admin/TrackScheduleFields";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import {
   HAFUGA_EXTRA_HALF_HOUR_PRICE,
@@ -35,6 +37,8 @@ export type ProgramFormData = {
   price_tiers?: Json | null;
   extra_half_hour_price?: number | null;
   duration_minutes?: number | null;
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 const emptyForm = {
@@ -44,11 +48,18 @@ const emptyForm = {
   duration_months: "1",
   kind: "membership" as ProgramKind,
   status: "active",
+  requires_schedule: false,
+  instructor_id: "",
 };
 
 function toFormState(existing?: ProgramFormData, defaultKind?: ProgramKind) {
   if (!existing) {
-    return { ...emptyForm, kind: defaultKind ?? "membership" };
+    const kind = defaultKind ?? "membership";
+    return {
+      ...emptyForm,
+      kind,
+      requires_schedule: isActivityProgram(kind),
+    };
   }
   return {
     title: existing.title,
@@ -57,11 +68,14 @@ function toFormState(existing?: ProgramFormData, defaultKind?: ProgramKind) {
     duration_months: String(existing.duration_months || 1),
     kind: existing.kind ?? defaultKind ?? "membership",
     status: existing.status,
+    requires_schedule: existing.requires_schedule,
+    instructor_id: existing.instructor_id ?? "",
   };
 }
 
 interface ProgramFormProps {
   existing?: ProgramFormData;
+  instructors?: ClassInstructorOption[];
   /** סוג קבוע כשפותחים את הטופס מתוך סקציית מנויים או פעילויות. */
   defaultKind?: ProgramKind;
   /** מסופק כשהטופס רץ בתוך מודאל — סוגר במקום לנווט, ובלי כרטיס עוטף. */
@@ -70,6 +84,7 @@ interface ProgramFormProps {
 
 export function ProgramForm({
   existing,
+  instructors = [],
   defaultKind,
   onClose,
 }: ProgramFormProps) {
@@ -184,6 +199,8 @@ export function ProgramForm({
       kind,
       price_tiers: serializeActivityPriceTiers(tiers),
       extra_half_hour_price: extraHalfHourPrice,
+      requires_schedule: form.requires_schedule,
+      instructor_id: form.instructor_id || null,
       // פריט חדש נוצר תמיד כפעיל; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
@@ -360,8 +377,9 @@ export function ProgramForm({
 
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 {usesGroupPricing
-                  ? "הלקוח בוחר כמה משתתפים ומשלם את מחיר המדרגה המתאימה לקבוצה. אחרי התשלום הבקשה מופיעה בתיאום מועדים."
-                  : "הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר. אחרי התשלום הבקשה מופיעה בתיאום מועדים כדי לחייג ולתאם מועד."}
+                  ? "הלקוח בוחר כמה משתתפים ומשלם את מחיר המדרגה המתאימה לקבוצה."
+                  : "הלקוח בוחר כמה משתתפים ומשלם מחיר × מספר."}{" "}
+                אם מסומן תיאום מועדים, הבקשה תופיע שם אחרי התשלום.
               </div>
             </>
           )}
@@ -410,6 +428,18 @@ export function ProgramForm({
           </Select>
         </Field>
       )}
+      <TrackScheduleFields
+        requiresSchedule={form.requires_schedule}
+        instructorId={form.instructor_id}
+        instructors={instructors}
+        onRequiresScheduleChange={(value) =>
+          setForm((current) => ({ ...current, requires_schedule: value }))
+        }
+        onInstructorChange={(instructorId) =>
+          setForm((current) => ({ ...current, instructor_id: instructorId }))
+        }
+        disabled={loading}
+      />
     </>
   );
 

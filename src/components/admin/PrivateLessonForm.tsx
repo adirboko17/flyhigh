@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { TrackScheduleFields } from "@/components/admin/TrackScheduleFields";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { cn } from "@/utils/cn";
 
 export type PrivateLessonFormData = {
@@ -16,6 +18,8 @@ export type PrivateLessonFormData = {
   duration_minutes: number;
   price: number;
   status: "draft" | "active" | "inactive";
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 const emptyForm = {
@@ -24,6 +28,8 @@ const emptyForm = {
   duration_minutes: "45",
   price: "",
   status: "active",
+  requires_schedule: true,
+  instructor_id: "",
 };
 
 function toFormState(existing?: PrivateLessonFormData) {
@@ -34,16 +40,20 @@ function toFormState(existing?: PrivateLessonFormData) {
     duration_minutes: existing.duration_minutes.toString(),
     price: existing.price.toString(),
     status: existing.status,
+    requires_schedule: existing.requires_schedule,
+    instructor_id: existing.instructor_id ?? "",
   };
 }
 
 interface PrivateLessonFormProps {
   existing?: PrivateLessonFormData;
+  instructors?: ClassInstructorOption[];
   onClose?: () => void;
 }
 
 export function PrivateLessonForm({
   existing,
+  instructors = [],
   onClose,
 }: PrivateLessonFormProps) {
   const router = useRouter();
@@ -80,6 +90,8 @@ export function PrivateLessonForm({
       description: form.description || null,
       duration_minutes: duration,
       price: Number(form.price) || 0,
+      requires_schedule: form.requires_schedule,
+      instructor_id: form.instructor_id || null,
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
         : "active",
@@ -158,6 +170,18 @@ export function PrivateLessonForm({
           </Field>
         )}
       </div>
+      <TrackScheduleFields
+        requiresSchedule={form.requires_schedule}
+        instructorId={form.instructor_id}
+        instructors={instructors}
+        onRequiresScheduleChange={(value) =>
+          setForm((current) => ({ ...current, requires_schedule: value }))
+        }
+        onInstructorChange={(instructorId) =>
+          setForm((current) => ({ ...current, instructor_id: instructorId }))
+        }
+        disabled={loading}
+      />
     </>
   );
 

@@ -466,6 +466,10 @@ export async function voidUnpaidCardcomCheckout(input: {
       .from("activity_bookings")
       .delete()
       .in("enrollment_id", enrollmentIds);
+    await admin
+      .from("pool_pass_bookings")
+      .delete()
+      .in("enrollment_id", enrollmentIds);
     await admin.from("enrollments").delete().in("id", enrollmentIds);
   }
   if (checkout.coupon_redemption_id) {

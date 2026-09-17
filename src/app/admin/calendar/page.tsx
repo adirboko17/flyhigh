@@ -1,7 +1,5 @@
 import {
-  ACTIVITY_CALENDAR_GROUP,
   ClassCalendar,
-  PRIVATE_LESSON_CALENDAR_GROUP,
   type CalendarSession,
   type CalendarView,
 } from "@/components/admin/ClassCalendar";
@@ -23,6 +21,10 @@ import {
 } from "@/lib/scheduling/monthGrid";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { enrollmentMatchesCalendarSession } from "@/lib/admin/calendarRosterMatch";
+import {
+  appointmentToCalendarSession,
+  loadScheduledAppointments,
+} from "@/lib/schedule/appointments";
 
 export const metadata = { title: "לוח שנה" };
 
@@ -52,9 +54,8 @@ export default async function AdminCalendarPage({
     { data: sessions },
     { data: enrollments },
     { data: instructors },
-    { data: privateSlots },
-    { data: activityBookings },
     { data: weeklySlots },
+    appointments,
   ] = await Promise.all([
     supabase
       .from("class_sessions")
@@ -79,28 +80,9 @@ export default async function AdminCalendarPage({
       .eq("status", "active")
       .order("full_name"),
     supabase
-      .from("private_lesson_slots")
-      .select(
-        "id, session_date, start_time, end_time, status, notes, profiles(full_name), children(full_name), private_lessons(title)"
-      )
-      .eq("status", "scheduled")
-      .gte("session_date", start)
-      .lte("session_date", end)
-      .order("session_date")
-      .order("start_time"),
-    supabase
-      .from("activity_bookings")
-      .select(
-        "id, session_date, start_time, end_time, status, notes, people_count, profiles(full_name), children(full_name), programs(title)"
-      )
-      .eq("status", "scheduled")
-      .gte("session_date", start)
-      .lte("session_date", end)
-      .order("session_date")
-      .order("start_time"),
-    supabase
       .from("class_weekly_slots")
       .select("id, instructor_id, instructors(full_name)"),
+    loadScheduledAppointments(supabase, { start, end }),
   ]);
 
   const slotInstructorById = new Map(
@@ -169,75 +151,12 @@ export default async function AdminCalendarPage({
     }
   );
 
-  const privateSessions: CalendarSession[] = (privateSlots ?? []).flatMap(
-    (slot) => {
-      if (!slot.session_date || !slot.start_time || !slot.end_time) return [];
-      const parent = slot.profiles?.full_name ?? "לקוח";
-      const child = slot.children?.full_name;
-      return [
-        {
-          id: slot.id,
-          kind: "private_lesson" as const,
-          classId: PRIVATE_LESSON_CALENDAR_GROUP,
-          title: slot.private_lessons?.title ?? "שיעור פרטי",
-          category: "שיעור פרטי",
-          instructorId: null,
-          instructor: null,
-          substituteInstructorId: null,
-          substituteInstructor: null,
-          date: slot.session_date,
-          startTime: slot.start_time.slice(0, 5),
-          endTime: slot.end_time.slice(0, 5),
-          status:
-            slot.status === "scheduled"
-              ? ("scheduled" as const)
-              : ("completed" as const),
-          notes: slot.notes,
-          capacity: 1,
-          registered: 1,
-          clientLabel: child ? `${parent} · ${child}` : parent,
-        },
-      ];
-    }
-  );
+  const appointmentSessions = appointments.flatMap((row) => {
+    const session = appointmentToCalendarSession(row);
+    return session ? [session] : [];
+  });
 
-  const activitySessions: CalendarSession[] = (activityBookings ?? []).flatMap(
-    (booking) => {
-      if (!booking.session_date || !booking.start_time || !booking.end_time) {
-        return [];
-      }
-      const parent = booking.profiles?.full_name ?? "לקוח";
-      const child = booking.children?.full_name;
-      const people = booking.people_count;
-      return [
-        {
-          id: booking.id,
-          kind: "activity" as const,
-          classId: ACTIVITY_CALENDAR_GROUP,
-          title: booking.programs?.title ?? "פעילות",
-          category: "פעילות",
-          instructorId: null,
-          instructor: null,
-          substituteInstructorId: null,
-          substituteInstructor: null,
-          date: booking.session_date,
-          startTime: booking.start_time.slice(0, 5),
-          endTime: booking.end_time.slice(0, 5),
-          status: "scheduled" as const,
-          notes: booking.notes,
-          capacity: people,
-          registered: people,
-          clientLabel: `${child ? `${parent} · ${child}` : parent} · ${people} ${people === 1 ? "משתתף" : "משתתפים"}`,
-        },
-      ];
-    }
-  );
-
-  const calendarSessions = [
-    ...classSessions,
-    ...privateSessions,
-    ...activitySessions,
-  ].sort(
+  const calendarSessions = [...classSessions, ...appointmentSessions].sort(
     (a, b) =>
       a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
   );

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       activity_bookings: {
         Row: {
+          attendance_status: Database["public"]["Enums"]["attendance_status"] | null
           child_id: string | null
           created_at: string
           end_time: string | null
@@ -30,6 +31,7 @@ export type Database = {
           status: Database["public"]["Enums"]["private_lesson_slot_status"]
         }
         Insert: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
           child_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["private_lesson_slot_status"]
         }
         Update: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
           child_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -1444,13 +1447,89 @@ export type Database = {
           },
         ]
       }
+      pool_pass_bookings: {
+        Row: {
+          attendance_status: Database["public"]["Enums"]["attendance_status"] | null
+          child_id: string | null
+          created_at: string
+          end_time: string | null
+          enrollment_id: string
+          id: string
+          notes: string | null
+          parent_id: string
+          pool_pass_id: string
+          session_date: string | null
+          start_time: string | null
+          status: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Insert: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id: string
+          id?: string
+          notes?: string | null
+          parent_id: string
+          pool_pass_id: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Update: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
+          child_id?: string | null
+          created_at?: string
+          end_time?: string | null
+          enrollment_id?: string
+          id?: string
+          notes?: string | null
+          parent_id?: string
+          pool_pass_id?: string
+          session_date?: string | null
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["private_lesson_slot_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_pass_bookings_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_pass_bookings_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_pass_bookings_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_pass_bookings_pool_pass_id_fkey"
+            columns: ["pool_pass_id"]
+            isOneToOne: false
+            referencedRelation: "pool_passes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pool_passes: {
         Row: {
           created_at: string
           description: string | null
           entries_count: number
           id: string
+          instructor_id: string | null
           price: number
+          requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1459,7 +1538,9 @@ export type Database = {
           description?: string | null
           entries_count?: number
           id?: string
+          instructor_id?: string | null
           price?: number
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1468,14 +1549,25 @@ export type Database = {
           description?: string | null
           entries_count?: number
           id?: string
+          instructor_id?: string | null
           price?: number
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pool_passes_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       private_lesson_slots: {
         Row: {
+          attendance_status: Database["public"]["Enums"]["attendance_status"] | null
           child_id: string | null
           created_at: string
           end_time: string | null
@@ -1489,6 +1581,7 @@ export type Database = {
           status: Database["public"]["Enums"]["private_lesson_slot_status"]
         }
         Insert: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
           child_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -1502,6 +1595,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["private_lesson_slot_status"]
         }
         Update: {
+          attendance_status?: Database["public"]["Enums"]["attendance_status"] | null
           child_id?: string | null
           created_at?: string
           end_time?: string | null
@@ -1551,7 +1645,9 @@ export type Database = {
           description: string | null
           duration_minutes: number
           id: string
+          instructor_id: string | null
           price: number
+          requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1560,7 +1656,9 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
+          instructor_id?: string | null
           price?: number
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1569,11 +1667,21 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
+          instructor_id?: string | null
           price?: number
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "private_lessons_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1632,9 +1740,11 @@ export type Database = {
           duration_months: number
           extra_half_hour_price: number | null
           id: string
+          instructor_id: string | null
           kind: Database["public"]["Enums"]["program_kind"]
           price: number
           price_tiers: Json
+          requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1646,9 +1756,11 @@ export type Database = {
           duration_months?: number
           extra_half_hour_price?: number | null
           id?: string
+          instructor_id?: string | null
           kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
           price_tiers?: Json
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
         }
@@ -1660,13 +1772,23 @@ export type Database = {
           duration_months?: number
           extra_half_hour_price?: number | null
           id?: string
+          instructor_id?: string | null
           kind?: Database["public"]["Enums"]["program_kind"]
           price?: number
           price_tiers?: Json
+          requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "programs_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "instructors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       receipt_labels: {
         Row: {
@@ -1952,6 +2074,13 @@ export type Database = {
             }[]
           }
       instructor_owns_class: { Args: { cid: string }; Returns: boolean }
+      instructor_assigned_parent: { Args: { pid: string }; Returns: boolean }
+      instructor_assigned_pool_pass: { Args: { pid: string }; Returns: boolean }
+      instructor_assigned_private_lesson: {
+        Args: { lid: string }
+        Returns: boolean
+      }
+      instructor_assigned_program: { Args: { pid: string }; Returns: boolean }
       instructor_substitutes_class: { Args: { cid: string }; Returns: boolean }
       instructor_teaches_child: { Args: { cid: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }

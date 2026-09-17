@@ -9,27 +9,44 @@ import {
 import { ProgramList, type AdminProgramRow } from "@/components/admin/ProgramList";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 
 interface TracksManagerProps {
   programs: AdminProgramRow[];
   passes: AdminPoolPassRow[];
   privateLessons: AdminPrivateLessonRow[];
+  instructors: ClassInstructorOption[];
 }
 
 export function TracksManager({
   programs,
   passes,
   privateLessons,
+  instructors,
 }: TracksManagerProps) {
   const [query, setQuery] = useState("");
 
   return (
     <div className="space-y-5">
       <TracksSearchBar query={query} onQueryChange={setQuery} />
-      <ProgramList programs={programs} query={query} kind="membership" />
-      <ProgramList programs={programs} query={query} kind="activity" />
-      <PoolPassList passes={passes} query={query} />
-      <PrivateLessonList lessons={privateLessons} query={query} />
+      <ProgramList
+        programs={programs}
+        instructors={instructors}
+        query={query}
+        kind="membership"
+      />
+      <ProgramList
+        programs={programs}
+        instructors={instructors}
+        query={query}
+        kind="activity"
+      />
+      <PoolPassList passes={passes} instructors={instructors} query={query} />
+      <PrivateLessonList
+        lessons={privateLessons}
+        instructors={instructors}
+        query={query}
+      />
     </div>
   );
 }

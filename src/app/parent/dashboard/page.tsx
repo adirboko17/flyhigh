@@ -80,7 +80,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only, booking_mode), class_sessions(session_date, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count)"
+        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only, booking_mode), class_sessions(session_date, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count), pool_pass_bookings(id, status, session_date, start_time, end_time)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -931,6 +931,15 @@ type EnrollmentRowData = {
         people_count: number;
       }[]
     | null;
+  pool_pass_bookings:
+    | {
+        id: string;
+        status: Enums<"private_lesson_slot_status">;
+        session_date: string | null;
+        start_time: string | null;
+        end_time: string | null;
+      }[]
+    | null;
   children: { full_name: string } | null;
 };
 
@@ -1067,13 +1076,16 @@ function PlanRow({
   const peopleCount = enrollment.people_count ?? null;
   const slots = enrollment.private_lesson_slots ?? [];
   const activityBookings = enrollment.activity_bookings ?? [];
+  const poolPassBookings = enrollment.pool_pass_bookings ?? [];
   const awaitingSlots = [
     ...slots.filter((s) => s.status === "awaiting_schedule"),
     ...activityBookings.filter((s) => s.status === "awaiting_schedule"),
+    ...poolPassBookings.filter((s) => s.status === "awaiting_schedule"),
   ];
   const scheduledSlots = [
     ...slots.filter((s) => s.status === "scheduled" && s.session_date),
     ...activityBookings.filter((s) => s.status === "scheduled" && s.session_date),
+    ...poolPassBookings.filter((s) => s.status === "scheduled" && s.session_date),
   ].sort((a, b) =>
     (a.session_date ?? "").localeCompare(b.session_date ?? "")
   );
@@ -1119,14 +1131,14 @@ function PlanRow({
             ? ` · בתוקף עד ${formatDate(enrollment.ends_on)}`
             : ""}
         </p>
-        {(isPrivate || isActivity) && awaitingSlots.length > 0 && (
+        {(awaitingSlots.length > 0) && (
           <p className="mt-1 text-xs font-medium text-amber-700">
-            {isActivity
+            {awaitingSlots.length === 1
               ? "ממתין לתיאום מועד"
               : `ממתין לתיאום תאריך ושעה (${awaitingSlots.length})`}
           </p>
         )}
-        {(isPrivate || isActivity) && scheduledSlots.length > 0 && (
+        {scheduledSlots.length > 0 && (
           <p className="mt-1 text-xs text-ink-500">
             מתוזמן:{" "}
             {scheduledSlots

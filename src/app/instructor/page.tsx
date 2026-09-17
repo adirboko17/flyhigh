@@ -14,6 +14,7 @@ import {
   InstructorClassCard,
   type InstructorClassData,
 } from "@/components/instructor/InstructorClassCard";
+import { AppointmentAttendanceList } from "@/components/instructor/AppointmentAttendanceList";
 import type { AttendanceRecord } from "@/components/instructor/ClassAttendanceHistory";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -25,6 +26,7 @@ import { dayLabel } from "@/lib/constants";
 import { formatHours } from "@/lib/finance/payroll";
 import { loadInstructorPayroll } from "@/lib/finance/instructorPayroll";
 import {
+  addDays,
   dayLabelLong,
   monthLabel,
   shortMonthLabel,
@@ -37,6 +39,7 @@ import {
   attendanceStudentsFromEnrollments,
 } from "@/lib/attendance/students";
 import { formatCurrency, formatTime } from "@/utils/format";
+import { loadScheduledAppointments } from "@/lib/schedule/appointments";
 
 export const metadata = { title: "דשבורד מדריכה" };
 
@@ -54,7 +57,7 @@ export default async function InstructorDashboard() {
   const today = todayInIsrael();
   const todayWeekday = new Date(`${today}T00:00:00Z`).getUTCDay();
 
-  const [{ data: ownedClasses }, { data: assignedSlots }, payroll] =
+  const [{ data: ownedClasses }, { data: assignedSlots }, payroll, appointments] =
     await Promise.all([
       instructor
         ? supabase
@@ -72,6 +75,12 @@ export default async function InstructorDashboard() {
             .order("start_time")
         : Promise.resolve({ data: [] }),
       loadInstructorPayroll(supabase, instructor, TREND_MONTHS),
+      instructor
+        ? loadScheduledAppointments(supabase, {
+            start: addDays(today, -30),
+            end: addDays(today, 90),
+          })
+        : Promise.resolve([]),
     ]);
 
   const ownedIds = new Set((ownedClasses ?? []).map((cls) => cls.id));
@@ -280,6 +289,18 @@ export default async function InstructorDashboard() {
       </section>
 
       <div className="flex flex-col gap-6">
+        {appointments.length > 0 && (
+          <section>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-bold text-ink-900">
+                נוכחות בתיאום מועדים
+              </h2>
+              <Badge tone="brand">{appointments.length}</Badge>
+            </div>
+            <AppointmentAttendanceList appointments={appointments} />
+          </section>
+        )}
+
         <section className="order-1 sm:order-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-bold text-ink-900">

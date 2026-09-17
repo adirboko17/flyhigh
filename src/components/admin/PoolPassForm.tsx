@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import { TrackScheduleFields } from "@/components/admin/TrackScheduleFields";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { cn } from "@/utils/cn";
 
 export type PoolPassFormData = {
@@ -16,6 +18,8 @@ export type PoolPassFormData = {
   entries_count: number;
   price: number;
   status: "draft" | "active" | "inactive";
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 const emptyForm = {
@@ -24,6 +28,8 @@ const emptyForm = {
   entries_count: "1",
   price: "",
   status: "active",
+  requires_schedule: false,
+  instructor_id: "",
 };
 
 function toFormState(existing?: PoolPassFormData) {
@@ -34,16 +40,23 @@ function toFormState(existing?: PoolPassFormData) {
     entries_count: existing.entries_count.toString(),
     price: existing.price.toString(),
     status: existing.status,
+    requires_schedule: existing.requires_schedule,
+    instructor_id: existing.instructor_id ?? "",
   };
 }
 
 interface PoolPassFormProps {
   existing?: PoolPassFormData;
+  instructors?: ClassInstructorOption[];
   /** מסופק כשהטופס רץ בתוך מודאל — סוגר במקום לנווט, ובלי כרטיס עוטף. */
   onClose?: () => void;
 }
 
-export function PoolPassForm({ existing, onClose }: PoolPassFormProps) {
+export function PoolPassForm({
+  existing,
+  instructors = [],
+  onClose,
+}: PoolPassFormProps) {
   const router = useRouter();
   const isEdit = Boolean(existing);
   const inModal = Boolean(onClose);
@@ -71,6 +84,8 @@ export function PoolPassForm({ existing, onClose }: PoolPassFormProps) {
       description: form.description || null,
       entries_count: Number(form.entries_count) || 1,
       price: Number(form.price) || 0,
+      requires_schedule: form.requires_schedule,
+      instructor_id: form.instructor_id || null,
       // כניסה חדשה נוצרת תמיד כפעילה; שינוי סטטוס נעשה במסך העריכה.
       status: isEdit
         ? (form.status as "draft" | "active" | "inactive")
@@ -148,6 +163,18 @@ export function PoolPassForm({ existing, onClose }: PoolPassFormProps) {
           </Field>
         )}
       </div>
+      <TrackScheduleFields
+        requiresSchedule={form.requires_schedule}
+        instructorId={form.instructor_id}
+        instructors={instructors}
+        onRequiresScheduleChange={(value) =>
+          setForm((current) => ({ ...current, requires_schedule: value }))
+        }
+        onInstructorChange={(instructorId) =>
+          setForm((current) => ({ ...current, instructor_id: instructorId }))
+        }
+        disabled={loading}
+      />
     </>
   );
 

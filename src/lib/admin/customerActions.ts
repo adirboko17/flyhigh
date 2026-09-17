@@ -173,7 +173,7 @@ async function childHasBlockingLinks(
   admin: ReturnType<typeof createAdminClient>,
   childId: string
 ) {
-  const [enrollments, waitlist, slots] = await Promise.all([
+  const [enrollments, waitlist, slots, activities, passes] = await Promise.all([
     admin
       .from("enrollments")
       .select("id", { count: "exact", head: true })
@@ -186,12 +186,22 @@ async function childHasBlockingLinks(
       .from("private_lesson_slots")
       .select("id", { count: "exact", head: true })
       .eq("child_id", childId),
+    admin
+      .from("activity_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("child_id", childId),
+    admin
+      .from("pool_pass_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("child_id", childId),
   ]);
 
   return (
     (enrollments.count ?? 0) > 0 ||
     (waitlist.count ?? 0) > 0 ||
-    (slots.count ?? 0) > 0
+    (slots.count ?? 0) > 0 ||
+    (activities.count ?? 0) > 0 ||
+    (passes.count ?? 0) > 0
   );
 }
 
@@ -523,8 +533,16 @@ export async function deleteCustomer(input: {
     .from("private_lesson_slots")
     .delete()
     .eq("parent_id", target.id);
+  const { error: activityError } = await admin
+    .from("activity_bookings")
+    .delete()
+    .eq("parent_id", target.id);
+  const { error: passError } = await admin
+    .from("pool_pass_bookings")
+    .delete()
+    .eq("parent_id", target.id);
 
-  if (slotsError) {
+  if (slotsError || activityError || passError) {
     return {
       success: false,
       error: "לא ניתן למחוק את הלקוח כי נותרו שיעורים פרטיים מקושרים.",

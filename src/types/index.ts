@@ -12,6 +12,7 @@ export type PoolPass = Tables<"pool_passes">;
 export type PrivateLesson = Tables<"private_lessons">;
 export type PrivateLessonSlot = Tables<"private_lesson_slots">;
 export type ActivityBooking = Tables<"activity_bookings">;
+export type PoolPassBooking = Tables<"pool_pass_bookings">;
 export type Enrollment = Tables<"enrollments">;
 export type Waitlist = Tables<"waitlist">;
 export type Attendance = Tables<"attendance">;

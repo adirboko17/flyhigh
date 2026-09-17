@@ -141,6 +141,11 @@ async function cancelLinkedBookings(
     .update({ status: "cancelled" })
     .eq("enrollment_id", enrollmentId)
     .in("status", ["awaiting_schedule", "scheduled"]);
+  await supabase
+    .from("pool_pass_bookings")
+    .update({ status: "cancelled" })
+    .eq("enrollment_id", enrollmentId)
+    .in("status", ["awaiting_schedule", "scheduled"]);
 }
 
 export async function loadEnrollmentCancellationPreview(

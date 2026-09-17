@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminRowActions } from "@/components/admin/AdminRowActions";
 import { CustomerAdvanceNotices } from "@/components/admin/CustomerAdvanceNotices";
+import { CustomerAttendance } from "@/components/admin/CustomerAttendance";
 import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
 import { CustomerPaymentInstructions } from "@/components/admin/CustomerPaymentInstructions";
 import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
@@ -218,7 +219,7 @@ export function CustomerList({ customers }: CustomerListProps) {
         open={selected !== null}
         onClose={() => setSelectedId(null)}
         title={selected?.full_name ?? "כרטיס לקוח"}
-        description="פרטי קשר, ילדים, הרשמות ומסמכים שהופקו"
+        description="פרטי קשר, ילדים, הרשמות, נוכחות ומסמכים שהופקו"
         className="max-w-2xl"
       >
         {selected && (
@@ -467,6 +468,8 @@ function CustomerDetail({
             parentId={customer.id}
             parentName={customer.full_name}
           />
+
+          <CustomerAttendance parentId={customer.id} />
 
           <CustomerPaymentInstructions parentId={customer.id} />
 

@@ -71,6 +71,7 @@ type PlanRecord = {
   priceTiers: ActivityPriceTier[];
   entriesCount: number | null;
   extraHalfHourPrice: number | null;
+  requiresSchedule: boolean;
 };
 
 function sessionActivity(plan: Pick<PlanRecord, "programKind" | "durationMinutes" | "priceTiers">) {
@@ -91,6 +92,7 @@ async function rollbackPlanPurchase(
   }
   await supabase.from("private_lesson_slots").delete().in("enrollment_id", enrollmentIds);
   await supabase.from("activity_bookings").delete().in("enrollment_id", enrollmentIds);
+  await supabase.from("pool_pass_bookings").delete().in("enrollment_id", enrollmentIds);
   await supabase.from("enrollments").delete().in("id", enrollmentIds);
 }
 
@@ -125,7 +127,7 @@ async function loadActivePlan(
   if (kind === "program") {
     const { data } = await supabase
       .from("programs")
-      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price")
+      .select("id, title, price, duration_months, duration_minutes, kind, price_tiers, extra_half_hour_price, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -140,6 +142,7 @@ async function loadActivePlan(
           priceTiers: parseActivityPriceTiers(data.price_tiers),
           entriesCount: null,
           extraHalfHourPrice: data.extra_half_hour_price,
+          requiresSchedule: data.requires_schedule,
         }
       : null;
   }
@@ -147,7 +150,7 @@ async function loadActivePlan(
   if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
-      .select("id, title, price, entries_count")
+      .select("id, title, price, entries_count, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -162,13 +165,14 @@ async function loadActivePlan(
           priceTiers: [],
           entriesCount: data.entries_count,
           extraHalfHourPrice: null,
+          requiresSchedule: data.requires_schedule,
         }
       : null;
   }
 
   const { data } = await supabase
     .from("private_lessons")
-    .select("id, title, price")
+    .select("id, title, price, requires_schedule")
     .eq("id", planId)
     .eq("status", "active")
     .maybeSingle();
@@ -183,6 +187,7 @@ async function loadActivePlan(
         priceTiers: [],
         entriesCount: null,
         extraHalfHourPrice: null,
+        requiresSchedule: data.requires_schedule,
       }
       : null;
 }
@@ -629,7 +634,9 @@ export async function completePlanPurchase(input: {
     return { success: false, error: "לא הצלחנו לשמור את הרכישה. נסו שוב." };
   }
 
-  if (kind === "private_lesson") {
+  const createdIds = createdEnrollments.map((enrollment) => enrollment.id);
+
+  if (kind === "private_lesson" && plan.requiresSchedule) {
     const slotRows = createdEnrollments.flatMap((enrollment) =>
       Array.from({ length: quantity }, () => ({
         enrollment_id: enrollment.id,
@@ -646,13 +653,7 @@ export async function completePlanPurchase(input: {
 
     if (slotsError) {
       await releaseCoupon();
-      await supabase
-        .from("enrollments")
-        .delete()
-        .in(
-          "id",
-          createdEnrollments.map((e) => e.id)
-        );
+      await rollbackPlanPurchase(supabase, createdIds);
       return {
         success: false,
         error: "לא הצלחנו לשריין את השיעורים לתיאום. נסו שוב.",
@@ -660,13 +661,13 @@ export async function completePlanPurchase(input: {
     }
   }
 
-  if (isActivity) {
+  if (kind === "program" && plan.requiresSchedule) {
     const bookingRows = createdEnrollments.map((enrollment) => ({
       enrollment_id: enrollment.id,
       parent_id: profile.id,
       child_id: enrollment.child_id,
       program_id: planId,
-      people_count: activityPeople,
+      people_count: isActivity ? activityPeople : 1,
       status: "awaiting_schedule" as const,
     }));
 
@@ -676,16 +677,36 @@ export async function completePlanPurchase(input: {
 
     if (bookingError) {
       await releaseCoupon();
-      await supabase
-        .from("enrollments")
-        .delete()
-        .in(
-          "id",
-          createdEnrollments.map((e) => e.id)
-        );
+      await rollbackPlanPurchase(supabase, createdIds);
       return {
         success: false,
         error: "לא הצלחנו לשריין את הפעילות לתיאום. נסו שוב.",
+      };
+    }
+  }
+
+  if (kind === "pool_pass" && plan.requiresSchedule) {
+    const bookingCount = Math.max(1, plan.entriesCount ?? 1);
+    const bookingRows = createdEnrollments.flatMap((enrollment) =>
+      Array.from({ length: bookingCount }, () => ({
+        enrollment_id: enrollment.id,
+        parent_id: profile.id,
+        child_id: enrollment.child_id,
+        pool_pass_id: planId,
+        status: "awaiting_schedule" as const,
+      }))
+    );
+
+    const { error: passError } = await supabase
+      .from("pool_pass_bookings")
+      .insert(bookingRows);
+
+    if (passError) {
+      await releaseCoupon();
+      await rollbackPlanPurchase(supabase, createdIds);
+      return {
+        success: false,
+        error: "לא הצלחנו לשריין את הכרטיסייה לתיאום. נסו שוב.",
       };
     }
   }

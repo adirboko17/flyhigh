@@ -9,6 +9,7 @@ import { ProgramForm } from "@/components/admin/ProgramForm";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
+import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
@@ -37,6 +38,8 @@ export type AdminProgramRow = {
   price_tiers?: Json | null;
   extra_half_hour_price?: number | null;
   duration_minutes?: number | null;
+  requires_schedule: boolean;
+  instructor_id: string | null;
 };
 
 const SECTION = {
@@ -73,6 +76,7 @@ const SECTION = {
 
 interface ProgramListProps {
   programs: AdminProgramRow[];
+  instructors?: ClassInstructorOption[];
   query?: string;
   kind: ProgramKind;
 }
@@ -126,6 +130,7 @@ function matchesProgram(item: AdminProgramRow, query: string) {
 
 export function ProgramList({
   programs,
+  instructors = [],
   query = "",
   kind,
 }: ProgramListProps) {
@@ -174,6 +179,19 @@ export function ProgramList({
                 <TR key={p.id}>
                   <TD className="max-w-[12rem] font-semibold text-ink-900 sm:max-w-none">
                     {p.title}
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {p.requires_schedule && (
+                        <Badge tone="info" className="px-1.5 py-0 text-[10px]">
+                          תיאום מועדים
+                        </Badge>
+                      )}
+                      {p.instructor_id && (
+                        <Badge tone="neutral" className="px-1.5 py-0 text-[10px]">
+                          {instructors.find((row) => row.id === p.instructor_id)
+                            ?.full_name ?? "מדריכה"}
+                        </Badge>
+                      )}
+                    </span>
                     {p.description && (
                       <span className="block line-clamp-2 text-xs font-normal text-ink-400">
                         {p.description}
@@ -229,6 +247,7 @@ export function ProgramList({
         {editing !== null && (
           <ProgramForm
             existing={editing === "new" ? undefined : editing}
+            instructors={instructors}
             defaultKind={kind}
             onClose={() => setEditing(null)}
           />

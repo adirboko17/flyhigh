@@ -384,6 +384,24 @@ export async function checkoutCart(input: {
         }
       }
 
+      if (line.poolPassBookingCount && line.planId) {
+        const bookingRows = enrollments.flatMap((enrollment) =>
+          Array.from({ length: line.poolPassBookingCount! }, () => ({
+            enrollment_id: enrollment.id,
+            parent_id: profile.id,
+            child_id: enrollment.child_id,
+            pool_pass_id: line.planId!,
+            status: "awaiting_schedule" as const,
+          }))
+        );
+        const { error: passError } = await supabase
+          .from("pool_pass_bookings")
+          .insert(bookingRows);
+        if (passError) {
+          throw new Error(`לא הצלחנו לשריין את ${line.title} לתיאום.`);
+        }
+      }
+
       if (line.activityQuantity && line.planId) {
         const { error: bookingError } = await supabase
           .from("activity_bookings")
@@ -454,6 +472,10 @@ export async function checkoutCart(input: {
         .from("activity_bookings")
         .delete()
         .in("enrollment_id", createdEnrollmentIds);
+      await supabase
+        .from("pool_pass_bookings")
+        .delete()
+        .in("enrollment_id", createdEnrollmentIds);
       await supabase.from("enrollments").delete().in("id", createdEnrollmentIds);
     }
     await releaseCoupon();
@@ -495,6 +517,10 @@ export async function checkoutCart(input: {
         .in("enrollment_id", createdEnrollmentIds);
       await supabase
         .from("activity_bookings")
+        .delete()
+        .in("enrollment_id", createdEnrollmentIds);
+      await supabase
+        .from("pool_pass_bookings")
         .delete()
         .in("enrollment_id", createdEnrollmentIds);
       await supabase.from("enrollments").delete().in("id", createdEnrollmentIds);

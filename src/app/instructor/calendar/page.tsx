@@ -3,6 +3,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { enrollmentMatchesCalendarSession } from "@/lib/admin/calendarRosterMatch";
 import { requireRole, getCurrentInstructor } from "@/lib/auth";
 import {
+  appointmentToCalendarSession,
+  loadScheduledAppointments,
+} from "@/lib/schedule/appointments";
+import {
   addDays,
   buildMonthGrid,
   buildWeekGrid,
@@ -80,7 +84,7 @@ export default async function InstructorCalendarPage({
     .filter(Boolean)
     .join(",");
 
-  const [{ data: sessions }, { data: enrollments }, { data: weeklySlots }] =
+  const [{ data: sessions }, { data: enrollments }, { data: weeklySlots }, appointments] =
     await Promise.all([
       supabase
         .from("class_sessions")
@@ -104,6 +108,7 @@ export default async function InstructorCalendarPage({
         .from("class_weekly_slots")
         .select("id, instructor_id, instructors(full_name)")
         .in("class_id", classIds.length > 0 ? classIds : [instructor.id]),
+      loadScheduledAppointments(supabase, { start, end }),
     ]);
 
   const slotInstructorById = new Map(
@@ -124,7 +129,7 @@ export default async function InstructorCalendarPage({
     else enrollmentsByClass.set(enrollment.class_id, [enrollment]);
   }
 
-  const calendarSessions: CalendarSession[] = (sessions ?? []).flatMap(
+  const classSessions: CalendarSession[] = (sessions ?? []).flatMap(
     (session) => {
       const cls = session.classes;
       if (!cls) return [];
@@ -171,6 +176,16 @@ export default async function InstructorCalendarPage({
       ];
     }
   );
+
+  const appointmentSessions = appointments.flatMap((row) => {
+    const session = appointmentToCalendarSession(row);
+    return session ? [session] : [];
+  });
+
+  const calendarSessions: CalendarSession[] = [
+    ...classSessions,
+    ...appointmentSessions,
+  ];
 
   return (
     <ClassCalendar
