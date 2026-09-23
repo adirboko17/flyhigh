@@ -22,6 +22,7 @@ import {
   startCollectionCardcomCheckout,
   updateCollectionChargeAmount,
   updateCollectionPaymentMethod,
+  waiveCollectionCharge,
   updatePaymentReceiptCustomText,
   updatePaymentReceiptLabel,
 } from "@/lib/collections/actions";
@@ -1410,6 +1411,7 @@ function EditChargeAmountButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"amount" | "no_charge">("amount");
   const [value, setValue] = useState(String(charge.amount));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1417,6 +1419,7 @@ function EditChargeAmountButton({
   const paid = receiptTotal(charge);
   const receiptlessPaid =
     isReceiptlessCollectionMethod(charge.method) && !isOpen(charge);
+  const canWaive = isOpen(charge) && charge.receipts.length === 0;
   const typedAmount = Number(value);
   const previewRemaining =
     Number.isFinite(typedAmount) && typedAmount > 0
@@ -1425,25 +1428,51 @@ function EditChargeAmountButton({
 
   function openEditor() {
     setValue(String(charge.amount));
+    setMode("amount");
     setError(null);
     setOpen(true);
   }
 
   async function handleSave() {
+    setLoading(true);
+    setError(null);
+
+    if (mode === "no_charge") {
+      if (!canWaive) {
+        setLoading(false);
+        setError(
+          "אפשר לסמן «ללא חיוב» רק על חיוב פתוח שעוד לא נרשמו לו תקבולים."
+        );
+        return;
+      }
+
+      const result = await waiveCollectionCharge({ paymentId: charge.id });
+      setLoading(false);
+
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
+      setOpen(false);
+      router.refresh();
+      return;
+    }
+
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) {
+      setLoading(false);
       setError("נא להזין סכום חיוב חיובי.");
       return;
     }
     if (paid > 0 && amount < paid) {
+      setLoading(false);
       setError(
         `לא ניתן להוריד את הסכום מתחת לתקבולים שכבר נרשמו (${formatCurrency(paid)}).`
       );
       return;
     }
 
-    setLoading(true);
-    setError(null);
     const result = await updateCollectionChargeAmount({
       paymentId: charge.id,
       amount,
@@ -1495,49 +1524,99 @@ function EditChargeAmountButton({
         onClose={() => {
           if (!loading) setOpen(false);
         }}
-        title="שינוי סכום החיוב"
+        title={mode === "no_charge" ? "ללא חיוב" : "שינוי סכום החיוב"}
         description={who}
         className="max-w-md"
       >
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setMode("amount");
+                setError(null);
+              }}
+              className={cn(
+                "rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-colors",
+                mode === "amount"
+                  ? "border-brand-600 bg-brand-50 text-brand-800"
+                  : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+              )}
+            >
+              שינוי סכום
+            </button>
+            <button
+              type="button"
+              disabled={loading || !canWaive}
+              onClick={() => {
+                setMode("no_charge");
+                setError(null);
+              }}
+              className={cn(
+                "rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                mode === "no_charge"
+                  ? "border-brand-600 bg-brand-50 text-brand-800"
+                  : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50"
+              )}
+            >
+              ללא חיוב
+            </button>
+          </div>
           <p className="text-sm leading-relaxed text-ink-600">
-            אפשר להזין כל סכום שתרצו, בלי קשר לסכום שרשום עכשיו. היתרה לגבייה
-            תתעדכן בהתאם.
+            {mode === "no_charge"
+              ? "החיוב יוסר מרשימת הגבייה. הלקוח לא יחויב, לא תירשם תקבול ולא תופק חשבונית. ההרשמה נשארת."
+              : "אפשר להזין כל סכום שתרצו, בלי קשר לסכום שרשום עכשיו. היתרה לגבייה תתעדכן בהתאם."}
           </p>
           <div className="rounded-2xl bg-ink-50 px-4 py-3 text-sm">
             <p className="text-xs text-ink-500">סכום נוכחי</p>
             <p className="font-display text-lg font-bold tabular-nums text-ink-900">
               {formatCurrency(charge.amount)}
             </p>
-            {paid > 0 && (
+            {mode === "no_charge" ? (
               <p className="mt-1 text-xs text-ink-500">
-                כבר נרשמו תקבולים של {formatCurrency(paid)} — הסכום לא יכול
-                להיות נמוך מזה.
+                אחרי השמירה לא יישאר חוב פתוח על החיוב הזה.
               </p>
-            )}
-            {receiptlessPaid && (
-              <p className="mt-1 text-xs text-ink-500">
-                החיוב כבר אושר. הסכום הרשום ישתנה והסטטוס יישאר שולם.
-              </p>
-            )}
-            {!receiptlessPaid && previewRemaining !== null && (
-              <p className="mt-1 text-xs text-ink-500">
-                יתרה חדשה: {formatCurrency(previewRemaining)}
-              </p>
+            ) : (
+              <>
+                {paid > 0 && (
+                  <p className="mt-1 text-xs text-ink-500">
+                    כבר נרשמו תקבולים של {formatCurrency(paid)} — הסכום לא יכול
+                    להיות נמוך מזה.
+                  </p>
+                )}
+                {receiptlessPaid && (
+                  <p className="mt-1 text-xs text-ink-500">
+                    החיוב כבר אושר. הסכום הרשום ישתנה והסטטוס יישאר שולם.
+                  </p>
+                )}
+                {!receiptlessPaid && previewRemaining !== null && (
+                  <p className="mt-1 text-xs text-ink-500">
+                    יתרה חדשה: {formatCurrency(previewRemaining)}
+                  </p>
+                )}
+              </>
             )}
           </div>
-          <Field label="סכום חדש (₪)" required>
-            <Input
-              type="number"
-              min={paid > 0 ? paid : 0.01}
-              step="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              disabled={loading}
-              required
-              autoFocus
-            />
-          </Field>
+          {!canWaive && (
+            <p className="text-xs leading-relaxed text-ink-500">
+              «ללא חיוב» זמין רק כשעוד לא נרשמו תקבולים והחיוב עדיין פתוח.
+            </p>
+          )}
+          {mode === "amount" && (
+            <Field label="סכום חדש (₪)" required>
+              <Input
+                type="number"
+                min={paid > 0 ? paid : 0.01}
+                step="0.01"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                disabled={loading}
+                required
+                autoFocus
+              />
+            </Field>
+          )}
           {error && (
             <p className="text-sm text-red-600" role="alert">
               {error}
@@ -1557,7 +1636,11 @@ function EditChargeAmountButton({
               disabled={loading}
               onClick={() => void handleSave()}
             >
-              {loading ? "שומר..." : "שמירת הסכום"}
+              {loading
+                ? "שומר..."
+                : mode === "no_charge"
+                  ? "שמירה ללא חיוב"
+                  : "שמירת הסכום"}
             </Button>
           </div>
         </div>

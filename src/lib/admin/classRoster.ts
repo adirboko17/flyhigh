@@ -4,6 +4,7 @@ import { createAdminDataClient } from "@/lib/admin/dataClient";
 import type {
   AdminClassAttendance,
   AdminClassEnrollment,
+  AdminClassProspect,
   AdminClassRow,
   AdminClassWaitlistEntry,
 } from "@/components/admin/ClassList";
@@ -30,14 +31,18 @@ export type AdminRosterSession = {
   status: "scheduled" | "cancelled" | "completed";
 };
 
+const PROSPECT_SELECT =
+  "id, full_name, phone, child_name, session_id, trial_date, status, class_sessions(session_date, start_time, end_time)";
+
 export async function loadClassRoster(classId: string): Promise<{
   enrollments: AdminClassEnrollment[];
   waitlist: AdminClassWaitlistEntry[];
   sessions: AdminRosterSession[];
+  prospects: AdminClassProspect[];
 }> {
   const supabase = await createAdminDataClient();
 
-  const [{ data: enrollments }, { data: waitlist }, { data: sessions }] =
+  const [{ data: enrollments }, { data: waitlist }, { data: sessions }, { data: prospects }] =
     await Promise.all([
       supabase
         .from("enrollments")
@@ -59,12 +64,20 @@ export async function loadClassRoster(classId: string): Promise<{
         .neq("status", "cancelled")
         .order("session_date")
         .order("start_time"),
+      supabase
+        .from("class_prospects")
+        .select(PROSPECT_SELECT)
+        .eq("class_id", classId)
+        .neq("status", "cancelled")
+        .order("trial_date")
+        .order("full_name"),
     ]);
 
   return {
     enrollments: (enrollments ?? []) as AdminClassEnrollment[],
     waitlist: (waitlist ?? []) as AdminClassWaitlistEntry[],
     sessions: (sessions ?? []) as AdminRosterSession[],
+    prospects: (prospects ?? []) as AdminClassProspect[],
   };
 }
 

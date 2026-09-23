@@ -807,6 +807,133 @@ export async function updateCollectionChargeAmount(input: {
 }
 
 /**
+ * מסיר חיוב פתוח בלי לגבות ובלי להפיק מסמך.
+ * אם אין חיובים נוספים להרשמה, היא נשארת פעילה במצב «ללא חיוב».
+ */
+export async function waiveCollectionCharge(input: {
+  paymentId: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  const supabase = await createClient();
+  const loaded = await loadCollectionCharge(supabase, input.paymentId);
+  if ("error" in loaded) {
+    return { success: false, error: loaded.error };
+  }
+
+  const { data: details } = await supabase
+    .from("payments")
+    .select(
+      "id, status, external_reference, enrollment_id, payment_receipts(id), payment_refunds(id)"
+    )
+    .eq("id", loaded.charge.id)
+    .maybeSingle();
+
+  if (!details) {
+    return { success: false, error: "החיוב לא נמצא." };
+  }
+
+  const { data: documents } = await supabase
+    .from("receipts")
+    .select("id")
+    .eq("payment_id", details.id);
+
+  const blocked =
+    details.status !== "pending" ||
+    (details.payment_receipts ?? []).length > 0 ||
+    (details.payment_refunds ?? []).length > 0 ||
+    (documents ?? []).length > 0 ||
+    Boolean(details.external_reference?.trim()) ||
+    isReceiptlessChargeSettled(loaded.charge.payment_method, details.status);
+
+  if (blocked) {
+    return {
+      success: false,
+      error:
+        "אפשר לסמן «ללא חיוב» רק על חיוב פתוח שעוד לא נרשם לו תקבול, סליקה או חשבונית.",
+    };
+  }
+
+  let siblingCount = 0;
+  let previousStatus: Enums<"enrollment_payment_status"> | null = null;
+
+  if (details.enrollment_id) {
+    const { count, error: countError } = await supabase
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("enrollment_id", details.enrollment_id)
+      .neq("id", details.id);
+
+    if (countError) {
+      return { success: false, error: "בדיקת החיובים של ההרשמה נכשלה. נסו שוב." };
+    }
+
+    siblingCount = count ?? 0;
+
+    if (siblingCount === 0) {
+      const { data: enrollment } = await supabase
+        .from("enrollments")
+        .select("payment_status")
+        .eq("id", details.enrollment_id)
+        .maybeSingle();
+
+      previousStatus = enrollment?.payment_status ?? null;
+
+      if (
+        previousStatus === "unpaid" ||
+        previousStatus === "partial" ||
+        previousStatus === "paid"
+      ) {
+        const { error: statusError } = await supabase
+          .from("enrollments")
+          .update({ payment_status: "no_charge" })
+          .eq("id", details.enrollment_id);
+
+        if (statusError) {
+          return {
+            success: false,
+            error: "עדכון ההרשמה ל«ללא חיוב» נכשל. החיוב נשאר כפי שהיה.",
+          };
+        }
+      }
+    }
+  }
+
+  if (loaded.charge.checkout_id) {
+    await unlinkPendingCheckout(loaded.charge.checkout_id);
+  }
+
+  const { error: deleteError } = await supabase
+    .from("payments")
+    .delete()
+    .eq("id", details.id);
+
+  if (deleteError) {
+    if (
+      details.enrollment_id &&
+      previousStatus &&
+      (previousStatus === "unpaid" ||
+        previousStatus === "partial" ||
+        previousStatus === "paid")
+    ) {
+      await supabase
+        .from("enrollments")
+        .update({ payment_status: previousStatus })
+        .eq("id", details.enrollment_id);
+    }
+    return { success: false, error: "הסרת החיוב נכשלה. נסו שוב." };
+  }
+
+  if (details.enrollment_id && siblingCount > 0) {
+    await syncEnrollmentPaymentStatus(supabase, details.enrollment_id);
+  }
+
+  await revalidateAfterEnrollmentChange();
+  return { success: true };
+}
+
+/**
  * מפצל חיוב פתוח לכמה חיובים עם אמצעי תשלום שונים.
  * כל חלק נגבה בנפרד — וחשבונית מס-קבלה יוצאת עם כל תקבול.
  */

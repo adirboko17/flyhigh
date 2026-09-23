@@ -19,8 +19,10 @@ import {
   schedulePrivateLessonSlots,
   updatePrivateLessonSlotStatus,
 } from "@/lib/private-lessons/actions";
+import { AppointmentAttendanceControls } from "@/components/schedule/AppointmentAttendanceControls";
 import { cn } from "@/utils/cn";
 import { formatCurrency, formatDate } from "@/utils/format";
+import type { Enums } from "@/types";
 
 export type ScheduleKind = "private_lesson" | "activity" | "pool_pass";
 
@@ -38,6 +40,8 @@ export type AdminScheduleRow = {
   detail: string | null;
   amount: number | null;
   kindLabel?: string;
+  attendanceStatus: Enums<"attendance_status"> | null;
+  instructorName: string | null;
 };
 
 const KIND_LABEL: Record<ScheduleKind, string> = {
@@ -141,6 +145,7 @@ export function ScheduleBoard({ rows }: { rows: AdminScheduleRow[] }) {
                 <TH>סטטוס</TH>
                 <TH>תאריך</TH>
                 <TH>שעה</TH>
+                <TH>נוכחות</TH>
               </TR>
             </THead>
             <TBody>
@@ -282,6 +287,11 @@ function ScheduleRow({ row }: { row: AdminScheduleRow }) {
           {row.kindLabel ?? KIND_LABEL[row.kind]}
           {row.detail ? ` · ${row.detail}` : ""}
         </p>
+        {row.instructorName && (
+          <p className="mt-0.5 text-xs text-ink-400">
+            מדריכה: {row.instructorName}
+          </p>
+        )}
       </TD>
       <TD className="w-44">
         <Select
@@ -319,6 +329,19 @@ function ScheduleRow({ row }: { row: AdminScheduleRow }) {
             if (date) commitDateTime(date, e.target.value);
           }}
         />
+      </TD>
+      <TD className="min-w-[16rem]">
+        {status === "scheduled" ? (
+          <AppointmentAttendanceControls
+            kind={row.kind}
+            id={row.id}
+            attendanceStatus={row.attendanceStatus}
+            disabled={isPending}
+            compact
+          />
+        ) : (
+          <p className="text-xs text-ink-400">אחרי תיאום מועד</p>
+        )}
       </TD>
     </TR>
   );

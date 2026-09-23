@@ -56,6 +56,7 @@ import { Modal } from "@/components/ui/Modal";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { setClassStatus } from "@/lib/admin/classStatus";
+import { updateProspectStatus } from "@/lib/admin/prospectActions";
 import {
   formatClassAudience,
   formatClassGenderPolicy,
@@ -63,6 +64,7 @@ import {
 } from "@/lib/class-audience";
 import {
   ATTENDANCE_STATUS,
+  CLASS_PROSPECT_STATUS,
   CLASS_STATUS,
   ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
@@ -182,7 +184,22 @@ export type AdminClassRow = {
   attendance: AdminClassAttendance[];
 };
 
-export type PanelTab = "enrollments" | "waitlist" | "attendance";
+export type AdminClassProspect = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  child_name: string | null;
+  session_id: string | null;
+  trial_date: string;
+  status: Enums<"class_prospect_status">;
+  class_sessions: {
+    session_date: string;
+    start_time: string;
+    end_time: string;
+  } | null;
+};
+
+export type PanelTab = "enrollments" | "prospects" | "waitlist" | "attendance";
 export type AttendanceMode = "mark" | "history" | "notes";
 
 interface ClassListProps {
@@ -992,6 +1009,7 @@ export function ClassDetailPanel({
     enrollments: AdminClassEnrollment[];
     waitlist: AdminClassWaitlistEntry[];
     sessions: AdminRosterSession[];
+    prospects: AdminClassProspect[];
   } | null>(null);
   const [rosterLoading, setRosterLoading] = useState(true);
   const [attendance, setAttendance] = useState<AdminClassAttendance[]>(
@@ -1140,8 +1158,18 @@ export function ClassDetailPanel({
     [enrollments]
   );
 
+  const prospects = useMemo(() => {
+    const rows = roster?.prospects ?? [];
+    return [...rows].sort((a, b) => {
+      const byDate = a.trial_date.localeCompare(b.trial_date);
+      if (byDate !== 0) return byDate;
+      return a.full_name.localeCompare(b.full_name, "he");
+    });
+  }, [roster]);
+
   const tabs: { id: PanelTab; label: string; count: number | null }[] = [
     { id: "enrollments", label: "נרשמים", count: enrollments.length },
+    { id: "prospects", label: "מתעניינים", count: roster ? prospects.length : null },
     { id: "waitlist", label: "המתנה", count: waiting.length },
     { id: "attendance", label: "נוכחות", count: null },
   ];
@@ -1189,8 +1217,16 @@ export function ClassDetailPanel({
     );
   }, [waiting, q]);
 
+  const filteredProspects = useMemo(() => {
+    if (!q) return prospects;
+    return prospects.filter((row) =>
+      personSearchHaystack(row.full_name, row.child_name, row.phone).includes(q)
+    );
+  }, [prospects, q]);
+
   const showListSearch =
     (tab === "enrollments" && enrollments.length + cancelled.length >= 6) ||
+    (tab === "prospects" && prospects.length >= 6) ||
     (tab === "waitlist" && waiting.length >= 6) ||
     (tab === "attendance" &&
       attendanceMode === "history" &&
@@ -1258,7 +1294,7 @@ export function ClassDetailPanel({
                 onClick={() => setTab(t.id)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-all sm:text-sm",
+                  "flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-1.5 py-2 text-[11px] font-semibold transition-all sm:gap-1.5 sm:px-2 sm:text-sm",
                   active
                     ? "bg-white text-brand-700 shadow-soft"
                     : "text-ink-500 hover:bg-white/70 hover:text-ink-800"
@@ -1282,7 +1318,7 @@ export function ClassDetailPanel({
           })}
         </div>
 
-        {appointment && sessionDates.length > 0 && (
+        {appointment && sessionDates.length > 0 && tab !== "prospects" && (
           <AppointmentDateBar
             dates={sessionDates}
             selectedDate={selectedDate}
@@ -1307,7 +1343,8 @@ export function ClassDetailPanel({
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-ink-50/40">
-          {rosterLoading && (tab === "enrollments" || tab === "waitlist") ? (
+          {rosterLoading &&
+          (tab === "enrollments" || tab === "waitlist" || tab === "prospects") ? (
             <p className="px-5 py-10 text-center text-sm text-ink-400">
               טוען את הרשימה...
             </p>
@@ -1361,6 +1398,25 @@ export function ClassDetailPanel({
                 })}
               </ul>
             ))}
+
+          {tab === "prospects" && !rosterLoading && (
+            <ProspectsTab
+              prospects={filteredProspects}
+              total={prospects.length}
+              onStatusChange={(id, status) =>
+                setRoster((current) =>
+                  current
+                    ? {
+                        ...current,
+                        prospects: current.prospects.map((row) =>
+                          row.id === id ? { ...row, status } : row
+                        ),
+                      }
+                    : current
+                )
+              }
+            />
+          )}
 
           {tab === "attendance" && (
             <AttendanceTab
@@ -1761,6 +1817,123 @@ function WaitlistRow({
         </span>
       </div>
     </li>
+  );
+}
+
+function prospectWhen(row: AdminClassProspect) {
+  const session = row.class_sessions;
+  if (!session) return formatDate(row.trial_date);
+  return `${formatDate(session.session_date)} · ${formatTime(session.start_time)}–${formatTime(session.end_time)}`;
+}
+
+function ProspectsTab({
+  prospects,
+  total,
+  onStatusChange,
+}: {
+  prospects: AdminClassProspect[];
+  total: number;
+  onStatusChange: (
+    id: string,
+    status: Enums<"class_prospect_status">
+  ) => void;
+}) {
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  async function mark(
+    row: AdminClassProspect,
+    next: "arrived" | "no_show"
+  ) {
+    const status = row.status === next ? "scheduled" : next;
+    setSavingId(row.id);
+    const result = await updateProspectStatus(row.id, status);
+    setSavingId(null);
+    if (result.error) {
+      window.alert(result.error);
+      return;
+    }
+    onStatusChange(row.id, status);
+  }
+
+  if (total === 0) {
+    return (
+      <div className="p-5">
+        <EmptyState
+          title="אין מתעניינים לחוג זה"
+          description="מי שנרשמה בדף המתעניינים לחוג הזה תופיע כאן, ואפשר לסמן אם הגיעה."
+        />
+      </div>
+    );
+  }
+
+  if (prospects.length === 0) {
+    return (
+      <div className="p-5">
+        <EmptyState title="לא נמצאו מתעניינים לפי החיפוש" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="px-4 pb-1 pt-3 text-xs leading-relaxed text-ink-500">
+        כל המתעניינות של החוג. סימון ההגעה מתעדכן גם בדף המתעניינים.
+      </p>
+      <ul className="divide-y divide-ink-100 border-y border-ink-100 bg-white">
+        {prospects.map((row) => {
+          const meta = CLASS_PROSPECT_STATUS[row.status];
+          const displayName = row.child_name
+            ? `${row.full_name} · ${row.child_name}`
+            : row.full_name;
+          const saving = savingId === row.id;
+          return (
+            <li key={row.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-ink-900">
+                    {displayName}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-ink-500">
+                    {[row.phone, prospectWhen(row)].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <Badge tone={meta.tone} className="shrink-0 px-1.5 py-0 text-[10px]">
+                  {meta.label}
+                </Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void mark(row, "arrived")}
+                  className={cn(
+                    "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors disabled:opacity-50",
+                    row.status === "arrived"
+                      ? "bg-aqua-500 text-white"
+                      : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                  )}
+                >
+                  הגיעה
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void mark(row, "no_show")}
+                  className={cn(
+                    "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors disabled:opacity-50",
+                    row.status === "no_show"
+                      ? "bg-red-500 text-white"
+                      : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                  )}
+                >
+                  לא הגיעה
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

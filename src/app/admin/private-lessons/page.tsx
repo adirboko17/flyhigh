@@ -13,21 +13,21 @@ export default async function AdminPrivateLessonsPage() {
       supabase
         .from("private_lesson_slots")
         .select(
-          "id, status, session_date, start_time, created_at, enrollment_id, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes)"
+          "id, status, session_date, start_time, created_at, enrollment_id, attendance_status, profiles(full_name, phone), children(full_name), private_lessons(title, duration_minutes, instructors(full_name))"
         )
         .in("status", ["awaiting_schedule", "scheduled"])
         .order("created_at", { ascending: false }),
       supabase
         .from("activity_bookings")
         .select(
-          "id, status, session_date, start_time, created_at, enrollment_id, people_count, profiles(full_name, phone), children(full_name), programs(title, duration_minutes, kind)"
+          "id, status, session_date, start_time, created_at, enrollment_id, people_count, attendance_status, profiles(full_name, phone), children(full_name), programs(title, duration_minutes, kind, instructors(full_name))"
         )
         .in("status", ["awaiting_schedule", "scheduled"])
         .order("created_at", { ascending: false }),
       supabase
         .from("pool_pass_bookings")
         .select(
-          "id, status, session_date, start_time, created_at, enrollment_id, profiles(full_name, phone), children(full_name), pool_passes(title)"
+          "id, status, session_date, start_time, created_at, enrollment_id, attendance_status, profiles(full_name, phone), children(full_name), pool_passes(title, instructors(full_name))"
         )
         .in("status", ["awaiting_schedule", "scheduled"])
         .order("created_at", { ascending: false }),
@@ -79,6 +79,8 @@ export default async function AdminPrivateLessonsPage() {
           childName: row.children?.full_name ?? null,
           detail: duration != null ? activityDurationLabel(duration) : null,
           amount: amountByEnrollment.get(row.enrollment_id) ?? null,
+          attendanceStatus: row.attendance_status,
+          instructorName: row.private_lessons?.instructors?.full_name ?? null,
         },
       ];
     }),
@@ -107,6 +109,8 @@ export default async function AdminPrivateLessonsPage() {
           detail: duration != null ? `${activityDurationLabel(duration)} · ${people}` : people,
           amount: amountByEnrollment.get(row.enrollment_id) ?? null,
           kindLabel: isActivity ? "פעילות" : "מנוי",
+          attendanceStatus: row.attendance_status,
+          instructorName: row.programs?.instructors?.full_name ?? null,
         },
       ];
     }),
@@ -128,6 +132,8 @@ export default async function AdminPrivateLessonsPage() {
           childName: row.children?.full_name ?? null,
           detail: null,
           amount: amountByEnrollment.get(row.enrollment_id) ?? null,
+          attendanceStatus: row.attendance_status,
+          instructorName: row.pool_passes?.instructors?.full_name ?? null,
         },
       ];
     }),
@@ -145,7 +151,7 @@ export default async function AdminPrivateLessonsPage() {
     <div className="space-y-8">
       <PageHeader
         title="תיאום מועדים"
-        description="טבלה אחת לכל רכישה שסומנה לתיאום מועדים. משנים סטטוס, בוחרים תאריך — והמועד נכנס ללוח השנה."
+        description="טבלה אחת לכל רכישה שסומנה לתיאום מועדים. משנים סטטוס, בוחרים תאריך, ואחרי התיאום מסמנים נוכחות כאן."
       />
       <ScheduleBoard rows={rows} />
     </div>
