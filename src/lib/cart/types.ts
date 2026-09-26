@@ -20,6 +20,8 @@ export type CartItem = {
   quantity?: number;
   programKind?: ProgramKind | null;
   entriesCount?: number | null;
+  /** מספר השיעורים בכרטיסיית שיעור פרטי. */
+  lessonsCount?: number | null;
   extraHalfHourPrice?: number | null;
 };
 

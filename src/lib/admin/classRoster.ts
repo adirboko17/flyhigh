@@ -10,6 +10,7 @@ import type {
 } from "@/components/admin/ClassList";
 import type { ClassBookingMode } from "@/lib/classes/bookingMode";
 import { enrollmentMatchesCalendarSession } from "@/lib/admin/calendarRosterMatch";
+import { parseVisitStatus } from "@/lib/attendance/prospectSchedule";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import {
   participantDisplayName,
@@ -32,7 +33,7 @@ export type AdminRosterSession = {
 };
 
 const PROSPECT_SELECT =
-  "id, full_name, phone, child_name, session_id, trial_date, status, class_sessions(session_date, start_time, end_time)";
+  "id, full_name, phone, child_name, session_id, trial_date, status, class_sessions(session_date, start_time, end_time, weekly_slot_id)";
 
 export async function loadClassRoster(classId: string): Promise<{
   enrollments: AdminClassEnrollment[];
@@ -42,7 +43,7 @@ export async function loadClassRoster(classId: string): Promise<{
 }> {
   const supabase = await createAdminDataClient();
 
-  const [{ data: enrollments }, { data: waitlist }, { data: sessions }, { data: prospects }] =
+  const [{ data: enrollments }, { data: waitlist }, { data: sessions }, { data: prospectRows }] =
     await Promise.all([
       supabase
         .from("enrollments")
@@ -73,11 +74,36 @@ export async function loadClassRoster(classId: string): Promise<{
         .order("full_name"),
     ]);
 
+  const loadedProspects = (prospectRows ?? []) as Array<
+    Omit<AdminClassProspect, "visits">
+  >;
+  const prospectIds = loadedProspects.map((row) => row.id);
+  const visitsByProspect = new Map<
+    string,
+    AdminClassProspect["visits"]
+  >();
+  if (prospectIds.length > 0) {
+    const { data: visitRows } = await supabase
+      .from("prospect_visits")
+      .select("prospect_id, session_id, status")
+      .in("prospect_id", prospectIds);
+    for (const visit of visitRows ?? []) {
+      const status = parseVisitStatus(visit.status);
+      if (!status) continue;
+      const list = visitsByProspect.get(visit.prospect_id) ?? [];
+      list.push({ session_id: visit.session_id, status });
+      visitsByProspect.set(visit.prospect_id, list);
+    }
+  }
+
   return {
     enrollments: (enrollments ?? []) as AdminClassEnrollment[],
     waitlist: (waitlist ?? []) as AdminClassWaitlistEntry[],
     sessions: (sessions ?? []) as AdminRosterSession[],
-    prospects: (prospects ?? []) as AdminClassProspect[],
+    prospects: loadedProspects.map((row) => ({
+      ...row,
+      visits: visitsByProspect.get(row.id) ?? [],
+    })),
   };
 }
 

@@ -297,6 +297,7 @@ export default async function ProgramsPage() {
                     planId={lesson.id}
                     planTitle={lesson.title}
                     price={lesson.price}
+                    lessonsCount={lesson.lessons_count}
                     durationMinutes={lesson.duration_minutes}
                     viewer={viewer}
                     familyDiscount={familyDiscount}
@@ -307,10 +308,16 @@ export default async function ProgramsPage() {
                       name={lesson.title}
                       desc={lesson.description}
                       price={formatCurrency(lesson.price)}
-                      stub={{
-                        kind: "minutes",
-                        count: lesson.duration_minutes,
-                      }}
+                      extraLine={
+                        lesson.lessons_count > 1
+                          ? `${lesson.duration_minutes} דקות לשיעור`
+                          : null
+                      }
+                      stub={
+                        lesson.lessons_count > 1
+                          ? { kind: "lessons", count: lesson.lessons_count }
+                          : { kind: "minutes", count: lesson.duration_minutes }
+                      }
                       features={template.features}
                       icon={template.icon}
                       accent={template.accent}

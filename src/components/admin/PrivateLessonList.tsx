@@ -13,6 +13,7 @@ import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
+import { isPrivateLessonSeries } from "@/lib/private-lessons/series";
 import { formatCurrency } from "@/utils/format";
 
 export type AdminPrivateLessonRow = {
@@ -20,6 +21,7 @@ export type AdminPrivateLessonRow = {
   title: string;
   description: string | null;
   duration_minutes: number;
+  lessons_count: number;
   price: number;
   status: keyof typeof LISTING_STATUS;
   requires_schedule: boolean;
@@ -73,7 +75,7 @@ export function PrivateLessonList({
       >
         {lessons.length === 0 ? (
           <SectionMessage>
-            אין שיעורים פרטיים — הוסיפו שיעור ראשון עם מחיר ומשך.
+            אין שיעורים פרטיים — הוסיפו שיעור בודד או כרטיסייה של כמה שיעורים.
           </SectionMessage>
         ) : filtered.length === 0 ? (
           <SectionMessage>לא נמצאו שיעורים התואמים לחיפוש.</SectionMessage>
@@ -83,6 +85,7 @@ export function PrivateLessonList({
               <TR>
                 <TH>שם</TH>
                 <TH className="hidden sm:table-cell">משך</TH>
+                <TH className="hidden md:table-cell">שיעורים</TH>
                 <TH>מחיר</TH>
                 <TH>סטטוס</TH>
                 <TH className="w-14 sm:w-28">פעולות</TH>
@@ -94,6 +97,11 @@ export function PrivateLessonList({
                   <TD className="max-w-[11rem] font-semibold text-ink-900 sm:max-w-none">
                     {lesson.title}
                     <span className="mt-1 flex flex-wrap gap-1">
+                      {isPrivateLessonSeries(lesson.lessons_count) && (
+                        <Badge tone="brand" className="px-1.5 py-0 text-[10px]">
+                          כרטיסייה · {lesson.lessons_count}
+                        </Badge>
+                      )}
                       {lesson.requires_schedule && (
                         <Badge tone="info" className="px-1.5 py-0 text-[10px]">
                           תיאום מועדים
@@ -114,6 +122,9 @@ export function PrivateLessonList({
                   </TD>
                   <TD className="hidden sm:table-cell">
                     {lesson.duration_minutes} דק׳
+                  </TD>
+                  <TD className="hidden md:table-cell">
+                    {lesson.lessons_count}
                   </TD>
                   <TD className="whitespace-nowrap font-medium">
                     {formatCurrency(lesson.price)}
@@ -153,7 +164,9 @@ export function PrivateLessonList({
         onClose={() => setEditing(null)}
         title={editing === "new" ? "שיעור פרטי" : "עריכת שיעור פרטי"}
         description={
-          editing === "new" ? "השיעור ייווצר כפעיל ויוצג בעמוד הבריכה." : undefined
+          editing === "new"
+            ? "שיעור בודד, או כרטיסייה של כמה שיעורים — כמו בכניסה לבריכה."
+            : undefined
         }
       >
         {editing !== null && (

@@ -51,6 +51,10 @@ import {
   FAMILY_DISCOUNT_LABEL,
   type FamilyDiscountSettings,
 } from "@/lib/finance/siblingDiscount";
+import {
+  isPrivateLessonSeries,
+  privateLessonCount,
+} from "@/lib/private-lessons/series";
 import { formatCurrency } from "@/utils/format";
 
 type Child = { id: string; full_name: string };
@@ -68,6 +72,8 @@ interface PlanPurchaseButtonProps {
   price: number;
   /** מספר הכניסות בכרטיסייה — מוצג בסיכום הרכישה. */
   entriesCount?: number | null;
+  /** מספר השיעורים בכרטיסיית שיעור פרטי. 1 = שיעור בודד. */
+  lessonsCount?: number | null;
   /** משך שיעור פרטי בדקות. */
   durationMinutes?: number | null;
   /** מנוי או פעילות — רלוונטי רק כש־planKind הוא program. */
@@ -86,6 +92,7 @@ export function PlanPurchaseButton({
   planTitle,
   price,
   entriesCount,
+  lessonsCount,
   durationMinutes,
   programKind,
   priceTiers = [],
@@ -109,9 +116,13 @@ export function PlanPurchaseButton({
   );
 
   const isActivity = isActivityProgram(programKind);
+  const lessonSeries =
+    planKind === "private_lesson" && isPrivateLessonSeries(lessonsCount);
   const ctaLabel =
     planKind === "private_lesson"
-      ? "רכישת שיעור פרטי"
+      ? lessonSeries
+        ? "רכישת כרטיסייה"
+        : "רכישת שיעור פרטי"
       : isActivity
         ? "רכישת הפעילות"
         : planKind === "program"
@@ -174,6 +185,7 @@ export function PlanPurchaseButton({
         planTitle={planTitle}
         price={price}
         entriesCount={entriesCount}
+        lessonsCount={lessonsCount}
         durationMinutes={durationMinutes}
         programKind={programKind}
         priceTiers={priceTiers}
@@ -192,6 +204,7 @@ interface PlanPurchaseTriggerProps {
   planTitle: string;
   price: number;
   entriesCount?: number | null;
+  lessonsCount?: number | null;
   durationMinutes?: number | null;
   programKind?: ProgramKind;
   priceTiers?: ActivityPriceTier[];
@@ -209,6 +222,7 @@ export function PlanPurchaseTrigger({
   planTitle,
   price,
   entriesCount,
+  lessonsCount,
   durationMinutes,
   programKind,
   priceTiers = [],
@@ -272,6 +286,7 @@ export function PlanPurchaseTrigger({
           planTitle={planTitle}
           price={price}
           entriesCount={entriesCount}
+          lessonsCount={lessonsCount}
           durationMinutes={durationMinutes}
           programKind={programKind}
           priceTiers={priceTiers}
@@ -293,6 +308,7 @@ interface PlanCheckoutDialogProps {
   planTitle: string;
   price: number;
   entriesCount?: number | null;
+  lessonsCount?: number | null;
   durationMinutes?: number | null;
   programKind?: ProgramKind;
   priceTiers?: ActivityPriceTier[];
@@ -310,6 +326,7 @@ function PlanCheckoutDialog({
   planTitle,
   price,
   entriesCount,
+  lessonsCount,
   durationMinutes,
   programKind,
   priceTiers = [],
@@ -321,6 +338,8 @@ function PlanCheckoutDialog({
   const router = useRouter();
   const hasChildren = kids.length > 0;
   const isPrivateLesson = planKind === "private_lesson";
+  const lessonSeries = isPrivateLesson && isPrivateLessonSeries(lessonsCount);
+  const seriesSize = privateLessonCount(lessonsCount);
   const isActivity = isActivityProgram(programKind);
   const groupPricing = isActivity && usesGroupPricing(priceTiers);
   const sessionActivity = isSessionActivity({
@@ -328,7 +347,8 @@ function PlanCheckoutDialog({
     durationMinutes,
     hasGroupPricing: groupPricing,
   });
-  const usesQuantity = isPrivateLesson || (isActivity && !sessionActivity);
+  const usesQuantity =
+    (isPrivateLesson && !lessonSeries) || (isActivity && !sessionActivity);
   const peopleCap = activityPeopleCap(priceTiers);
   const extraHalfHour = extraHalfHourLabel(extraHalfHourPrice);
 
@@ -403,7 +423,9 @@ function PlanCheckoutDialog({
     : planKind === "program"
       ? "מנוי"
       : planKind === "private_lesson"
-        ? "שיעור פרטי"
+        ? lessonSeries
+          ? "כרטיסייה"
+          : "שיעור פרטי"
         : isSingleEntry
           ? "כניסה"
           : "כרטיסייה";
@@ -493,6 +515,7 @@ function PlanCheckoutDialog({
       quantity: effectiveQuantity,
       programKind,
       entriesCount,
+      lessonsCount: lessonSeries ? seriesSize : null,
       extraHalfHourPrice,
     });
     if (!result.ok) {
@@ -587,6 +610,11 @@ function PlanCheckoutDialog({
                   ? "כניסה אחת לכל משתתף"
                   : `${entriesCount} כניסות לכל משתתף`}
               </p>
+            ) : lessonSeries ? (
+              <p className="mt-0.5 text-sm text-ink-500">
+                {seriesSize} שיעורים לכל משתתף
+                {durationMinutes ? ` · ${durationMinutes} דקות לשיעור` : ""}
+              </p>
             ) : (isPrivateLesson || sessionActivity) && durationMinutes ? (
               <p className="mt-0.5 text-sm text-ink-500">
                 {durationMinutes} דקות
@@ -609,7 +637,9 @@ function PlanCheckoutDialog({
                   ? "אחרי הרכישה ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
                   : isActivity
                     ? "בחרו כמה משתתפים יגיעו. אחרי התשלום ניצור איתכם קשר לתיאום מועד. לא בוחרים תאריך בעמוד זה."
-                    : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
+                    : lessonSeries
+                      ? "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לכל שיעור בכרטיסייה. לא בוחרים מועד בעמוד זה."
+                      : "אחרי הרכישה ניצור איתכם קשר לתיאום תאריך ושעה לשיעור. לא בוחרים מועד בעמוד זה."}
               </p>
             </div>
           )}
@@ -817,7 +847,9 @@ function PlanCheckoutDialog({
                   : planKind === "program"
                     ? "מנוי"
                     : planKind === "private_lesson"
-                      ? "שיעור"
+                      ? lessonSeries
+                        ? "כרטיסייה"
+                        : "שיעור"
                       : "כרטיסייה"}
               </span>
               <span className="shrink-0">
@@ -828,8 +860,10 @@ function PlanCheckoutDialog({
             </div>
             {isPrivateLesson && (
               <div className="flex justify-between gap-3 text-ink-600">
-                <span>כמות שיעורים</span>
-                <span className="shrink-0">{quantity}</span>
+                <span>{lessonSeries ? "שיעורים בכרטיסייה" : "כמות שיעורים"}</span>
+                <span className="shrink-0">
+                  {lessonSeries ? seriesSize : quantity}
+                </span>
               </div>
             )}
             {isActivity && !sessionActivity && (
@@ -952,7 +986,11 @@ function PlanCheckoutDialog({
                 ? ` · ${durationMinutes} דקות`
                 : ""}
               {isPrivateLesson &&
-                ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
+                ` · ${lessonSeries ? seriesSize : quantity} ${
+                  (lessonSeries ? seriesSize : quantity) === 1
+                    ? "שיעור"
+                    : "שיעורים"
+                }`}
               {couponDiscount > 0 && ` · כולל קופון ${coupon?.code}`}
             </p>
           </div>
@@ -1053,7 +1091,11 @@ function PlanCheckoutDialog({
                 ? ` · ${durationMinutes} דקות`
                 : ""}
               {isPrivateLesson &&
-                ` · ${quantity} ${quantity === 1 ? "שיעור" : "שיעורים"}`}
+                ` · ${lessonSeries ? seriesSize : quantity} ${
+                  (lessonSeries ? seriesSize : quantity) === 1
+                    ? "שיעור"
+                    : "שיעורים"
+                }`}
             </p>
             {(isPrivateLesson || isActivity) && (
               <p className="mt-2 text-sm text-ink-500">

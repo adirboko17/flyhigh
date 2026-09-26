@@ -11,10 +11,12 @@ import {
   type ClassSessionOption,
 } from "@/components/instructor/SessionNavigator";
 import {
+  dismissProspect,
   listAttendanceProspects,
   saveProspectAttendanceMarks,
   type AttendanceProspect,
 } from "@/lib/attendance/prospectAttendance";
+import { prospectAppearsOnSession } from "@/lib/attendance/prospectSchedule";
 import {
   attendanceRecordKey,
   type AttendanceStudent,
@@ -96,11 +98,15 @@ export function ClassAttendanceForm({
           child.weekly_slot_id === selectedSession.weekly_slot_id
       )
     : students;
-  const sessionProspects = date
-    ? prospects.filter(
-        (prospect) =>
-          (selectedSession != null && prospect.session_id === selectedSession.id) ||
-          (!prospect.session_id && prospect.trial_date === date)
+  const sessionProspects = selectedSession
+    ? prospects.filter((prospect) =>
+        prospectAppearsOnSession(
+          prospect,
+          selectedSession.id,
+          sessions,
+          prospect.visits,
+          todayInIsrael()
+        )
       )
     : [];
   const markedCount = sessionStudents.filter(
@@ -170,12 +176,13 @@ export function ClassAttendanceForm({
   useEffect(() => {
     const existing: Record<string, "arrived" | "no_show"> = {};
     for (const prospect of sessionProspects) {
-      if (prospect.status === "arrived" || prospect.status === "no_show") {
-        existing[prospect.id] = prospect.status;
-      }
+      const visit = prospect.visits.find(
+        (item) => item.session_id === selectedSession?.id
+      );
+      if (visit) existing[prospect.id] = visit.status;
     }
     setProspectMarks(existing);
-  }, [date, selectedSession?.id, prospects]);
+  }, [date, selectedSession?.id, prospects, sessions]);
 
   useEffect(() => {
     if (students.length === 0 || !date) return;
@@ -247,9 +254,10 @@ export function ClassAttendanceForm({
       await supabase.from("attendance").insert(rows);
     }
 
-    if (sessionProspects.length > 0) {
+    if (sessionProspects.length > 0 && selectedSession) {
       const prospectResult = await saveProspectAttendanceMarks({
         classId,
+        sessionId: selectedSession.id,
         marks: sessionProspects.map((prospect) => ({
           id: prospect.id,
           status: prospectMarks[prospect.id] ?? "scheduled",
@@ -260,16 +268,18 @@ export function ClassAttendanceForm({
         window.alert(prospectResult.error);
         return;
       }
+      const sessionId = selectedSession.id;
       setProspects((current) =>
         current.map((prospect) => {
-          const next = prospectMarks[prospect.id];
           if (!sessionProspects.some((item) => item.id === prospect.id)) {
             return prospect;
           }
-          return {
-            ...prospect,
-            status: next ?? "scheduled",
-          };
+          const next = prospectMarks[prospect.id];
+          const visits = prospect.visits.filter(
+            (visit) => visit.session_id !== sessionId
+          );
+          if (next) visits.push({ session_id: sessionId, status: next });
+          return { ...prospect, visits };
         })
       );
     }
@@ -277,6 +287,25 @@ export function ClassAttendanceForm({
     setSaving(false);
     setSaved(true);
     onSaved?.();
+    router.refresh();
+  }
+
+  async function removeProspect(prospect: AttendanceProspect) {
+    const name = prospect.child_name
+      ? `${prospect.full_name} · ${prospect.child_name}`
+      : prospect.full_name;
+    if (!window.confirm(`להוריד את ${name} מרשימת המתעניינות?`)) return;
+    const result = await dismissProspect({ classId, prospectId: prospect.id });
+    if (result.error) {
+      window.alert(result.error);
+      return;
+    }
+    setProspects((current) => current.filter((item) => item.id !== prospect.id));
+    setProspectMarks((current) => {
+      const next = { ...current };
+      delete next[prospect.id];
+      return next;
+    });
     router.refresh();
   }
 
@@ -366,7 +395,11 @@ export function ClassAttendanceForm({
               {sessionProspects.length > 0 && (
                 <div className="space-y-2 pt-2">
                   <p className="text-xs font-semibold text-ink-500">
-                    מתעניינים לשיעור ניסיון
+                    מתעניינות
+                  </p>
+                  <p className="text-xs leading-relaxed text-ink-500">
+                    אחרי סימון, או אם המועד עבר בלי שהגיעה, היא עוברת למפגש הבא
+                    עד שתירשם או שתורידו אותה.
                   </p>
                   {sessionProspects.map((prospect) => {
                     const current = prospectMarks[prospect.id];
@@ -431,6 +464,13 @@ export function ClassAttendanceForm({
                             )}
                           >
                             לא הגיעה
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void removeProspect(prospect)}
+                            className="min-h-9 rounded-lg px-3 text-sm font-semibold text-ink-500 transition-colors hover:bg-ink-100"
+                          >
+                            הורדה
                           </button>
                         </div>
                       </div>

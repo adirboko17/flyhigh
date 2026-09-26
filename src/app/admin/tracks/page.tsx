@@ -28,7 +28,7 @@ export default async function AdminTracksPage() {
     supabase
       .from("private_lessons")
       .select(
-        "id, title, description, duration_minutes, price, status, requires_schedule, instructor_id"
+        "id, title, description, duration_minutes, lessons_count, price, status, requires_schedule, instructor_id"
       )
       .order("created_at", { ascending: false }),
     getClassInstructorOptions(),

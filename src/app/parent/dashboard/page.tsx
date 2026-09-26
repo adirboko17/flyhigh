@@ -80,7 +80,7 @@ export default async function ParentDashboard() {
     supabase
       .from("enrollments")
       .select(
-        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only, booking_mode), class_sessions(session_date, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count), pool_pass_bookings(id, status, session_date, start_time, end_time)"
+        "*, people_count, classes(id, title, day_of_week, start_time, end_time, interest_only, booking_mode), class_sessions(session_date, start_time, end_time), programs(title, kind), pool_passes(title, entries_count), private_lessons(title, duration_minutes, lessons_count), children(full_name), private_lesson_slots(id, status, session_date, start_time, end_time), activity_bookings(id, status, session_date, start_time, end_time, people_count), pool_pass_bookings(id, status, session_date, start_time, end_time)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -911,7 +911,11 @@ type EnrollmentRowData = {
   } | null;
   programs: { title: string; kind?: "membership" | "activity" | null } | null;
   pool_passes: { title: string; entries_count: number } | null;
-  private_lessons: { title: string; duration_minutes: number } | null;
+  private_lessons: {
+    title: string;
+    duration_minutes: number;
+    lessons_count: number;
+  } | null;
   private_lesson_slots:
     | {
         id: string;
@@ -1122,6 +1126,10 @@ function PlanRow({
           {isPass && entries !== null && ` · ${entries} כניסות`}
           {isPrivate && duration !== null && ` · ${duration} דק׳`}
           {isPrivate && slots.length > 0 && ` · ${slots.length} שיעורים`}
+          {isPrivate &&
+            slots.length === 0 &&
+            (enrollment.private_lessons?.lessons_count ?? 1) > 1 &&
+            ` · ${enrollment.private_lessons?.lessons_count} שיעורים`}
           {isActivity && peopleCount !== null &&
             ` · ${peopleCount} ${peopleCount === 1 ? "משתתף" : "משתתפים"}`}
         </p>

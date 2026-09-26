@@ -21,6 +21,7 @@ import {
   updateProspectStatus,
   type ProspectSessionOption,
 } from "@/lib/admin/prospectActions";
+import { recordProspectVisit } from "@/lib/attendance/prospectAttendance";
 import type { Enums } from "@/types/database.types";
 import { cn } from "@/utils/cn";
 import {
@@ -39,6 +40,12 @@ export type ProspectRow = {
   class_id: string;
   session_id: string | null;
   trial_date: string;
+  next_session_id: string | null;
+  next_date: string | null;
+  next_start: string | null;
+  next_end: string | null;
+  arrived_count: number;
+  no_show_count: number;
   session_start: string | null;
   session_end: string | null;
   status: Enums<"class_prospect_status">;
@@ -78,12 +85,53 @@ function trialWhen(row: Pick<
   });
 }
 
-function trialWhenShort(row: Pick<
-  ProspectRow,
-  "trial_date" | "session_start"
->) {
-  if (!row.session_start) return formatDateShort(row.trial_date);
-  return `${formatDateShort(row.trial_date)} · ${formatTime(row.session_start)}`;
+function nextWhen(row: ProspectRow) {
+  if (row.status === "cancelled" || !row.next_date) {
+    if (row.status !== "cancelled" && row.trial_date) return "אין מפגש הבא";
+    return trialWhen(row);
+  }
+  if (!row.next_start) return formatDate(row.next_date);
+  return formatClassSessionLabel({
+    session_date: row.next_date,
+    start_time: row.next_start,
+    end_time: row.next_end,
+  });
+}
+
+function nextWhenShort(row: ProspectRow) {
+  if (row.status !== "cancelled" && !row.next_date) return "אין מפגש הבא";
+  if (row.status === "cancelled" || !row.next_date) {
+    if (!row.session_start) return formatDateShort(row.trial_date);
+    return `${formatDateShort(row.trial_date)} · ${formatTime(row.session_start)}`;
+  }
+  if (!row.next_start) return formatDateShort(row.next_date);
+  return `${formatDateShort(row.next_date)} · ${formatTime(row.next_start)}`;
+}
+
+function visitLine(row: ProspectRow) {
+  const parts: string[] = [];
+  if (row.arrived_count > 0) {
+    parts.push(
+      row.arrived_count === 1
+        ? "הגיעה פעם אחת"
+        : `הגיעה ${row.arrived_count} פעמים`
+    );
+  }
+  if (row.no_show_count > 0) {
+    parts.push(
+      row.no_show_count === 1
+        ? "לא הגיעה פעם אחת"
+        : `לא הגיעה ${row.no_show_count} פעמים`
+    );
+  }
+  if (
+    row.next_date &&
+    row.status === "scheduled" &&
+    row.next_date !== row.trial_date
+  ) {
+    parts.push(`ניסיון ראשון ${formatDateShort(row.trial_date)}`);
+  }
+  return parts.join(" · ");
 }
 
 function telHref(phone: string | null) {
@@ -124,15 +172,34 @@ export function ProspectList({
     });
 
     return rows.sort((a, b) => {
-      if (status === "scheduled") {
-        return a.trial_date.localeCompare(b.trial_date);
-      }
-      return b.trial_date.localeCompare(a.trial_date);
+      const aDate =
+        status === "scheduled" ? (a.next_date ?? "9999-99-99") : a.trial_date;
+      const bDate =
+        status === "scheduled" ? (b.next_date ?? "9999-99-99") : b.trial_date;
+      if (status === "scheduled") return aDate.localeCompare(bDate);
+      return bDate.localeCompare(aDate);
     });
   }, [prospects, query, status, classId]);
 
   function refresh() {
     startTransition(() => router.refresh());
+  }
+
+  async function handleVisit(row: ProspectRow, next: "arrived" | "no_show") {
+    if (!row.next_session_id) {
+      window.alert("אין מפגש הבא לסימון.");
+      return;
+    }
+    const result = await recordProspectVisit({
+      prospectId: row.id,
+      sessionId: row.next_session_id,
+      status: next,
+    });
+    if (result.error) {
+      window.alert(result.error);
+      return;
+    }
+    refresh();
   }
 
   async function handleStatus(id: string, next: Enums<"class_prospect_status">) {
@@ -225,10 +292,10 @@ export function ProspectList({
                 <ProspectCard
                   key={row.id}
                   row={row}
-                  today={today}
                   pending={pending}
                   onEdit={() => setEditing(row)}
                   onStatus={handleStatus}
+                  onVisit={handleVisit}
                   onDelete={async () => {
                     const result = await deleteProspect(row.id);
                     if (!result.error) refresh();
@@ -243,7 +310,7 @@ export function ProspectList({
                   <TR>
                     <TH>שם</TH>
                     <TH>חוג</TH>
-                    <TH>מועד ניסיון</TH>
+                    <TH>מועד הבא</TH>
                     <TH>סטטוס</TH>
                     <TH className="w-36"> </TH>
                   </TR>
@@ -251,8 +318,9 @@ export function ProspectList({
                 <TBody>
                   {filtered.map((row) => {
                     const meta = CLASS_PROSPECT_STATUS[row.status];
-                    const overdue =
-                      row.status === "scheduled" && row.trial_date < today;
+                    const stalled =
+                      row.status === "scheduled" && !row.next_session_id;
+                    const history = visitLine(row);
                     return (
                       <TR key={row.id}>
                         <TD>
@@ -271,26 +339,29 @@ export function ProspectList({
                           <span
                             className={cn(
                               "text-sm",
-                              overdue ? "font-semibold text-amber-700" : "text-ink-700"
+                              stalled ? "font-semibold text-amber-700" : "text-ink-700"
                             )}
                           >
-                            {trialWhen(row)}
-                            {overdue ? " · עבר" : ""}
+                            {nextWhen(row)}
                           </span>
+                          {history && (
+                            <p className="mt-0.5 text-xs text-ink-500">{history}</p>
+                          )}
                         </TD>
                         <TD>
                           <Badge tone={meta.tone}>{meta.label}</Badge>
                         </TD>
                         <TD>
                           <div className="flex items-center justify-end gap-1.5">
-                            {row.status === "scheduled" && (
+                            {row.status === "scheduled" && row.next_session_id && (
                               <>
                                 <Button
                                   type="button"
                                   size="sm"
                                   variant="secondary"
                                   disabled={pending}
-                                  onClick={() => handleStatus(row.id, "arrived")}
+                                  title="סימון למועד הבא, ואז היא עוברת הלאה"
+                                  onClick={() => handleVisit(row, "arrived")}
                                 >
                                   הגיעה
                                 </Button>
@@ -299,7 +370,8 @@ export function ProspectList({
                                   size="sm"
                                   variant="outline"
                                   disabled={pending}
-                                  onClick={() => handleStatus(row.id, "no_show")}
+                                  title="סימון למועד הבא, ואז היא עוברת הלאה"
+                                  onClick={() => handleVisit(row, "no_show")}
                                 >
                                   לא הגיעה
                                 </Button>
@@ -312,7 +384,7 @@ export function ProspectList({
                                 row.status === "scheduled"
                                   ? [
                                       {
-                                        label: "ביטול",
+                                        label: "הורדה מהרשימה",
                                         onClick: () =>
                                           handleStatus(row.id, "cancelled"),
                                       },
@@ -365,22 +437,23 @@ export function ProspectList({
 
 function ProspectCard({
   row,
-  today,
   pending,
   onEdit,
   onStatus,
+  onVisit,
   onDelete,
 }: {
   row: ProspectRow;
-  today: string;
   pending: boolean;
   onEdit: () => void;
   onStatus: (id: string, status: Enums<"class_prospect_status">) => Promise<void>;
+  onVisit: (row: ProspectRow, status: "arrived" | "no_show") => Promise<void>;
   onDelete: () => Promise<{ error?: string }>;
 }) {
   const meta = CLASS_PROSPECT_STATUS[row.status];
-  const overdue = row.status === "scheduled" && row.trial_date < today;
+  const stalled = row.status === "scheduled" && !row.next_session_id;
   const phoneLink = telHref(row.phone);
+  const history = visitLine(row);
 
   return (
     <li className="px-4 py-3.5">
@@ -395,13 +468,13 @@ function ProspectCard({
           <p
             className={cn(
               "mt-0.5 text-xs",
-              overdue ? "font-semibold text-amber-700" : "text-ink-500"
+              stalled ? "font-semibold text-amber-700" : "text-ink-500"
             )}
           >
-            {trialWhenShort(row)}
+            {nextWhenShort(row)}
             {row.child_name ? ` · ${row.child_name}` : ""}
-            {overdue ? " · עבר" : ""}
           </p>
+          {history && <p className="mt-0.5 text-xs text-ink-500">{history}</p>}
         </button>
         <div className="flex shrink-0 items-center gap-1">
           <Badge tone={meta.tone}>{meta.label}</Badge>
@@ -412,7 +485,7 @@ function ProspectCard({
               row.status === "scheduled"
                 ? [
                     {
-                      label: "ביטול",
+                      label: "הורדה מהרשימה",
                       onClick: () => onStatus(row.id, "cancelled"),
                     },
                   ]
@@ -438,14 +511,14 @@ function ProspectCard({
           {row.phone}
         </a>
       )}
-      {row.status === "scheduled" && (
+      {row.status === "scheduled" && row.next_session_id && (
         <div className="mt-3 flex gap-2">
           <Button
             type="button"
             size="sm"
             variant="secondary"
             disabled={pending}
-            onClick={() => onStatus(row.id, "arrived")}
+            onClick={() => onVisit(row, "arrived")}
           >
             הגיעה
           </Button>
@@ -454,7 +527,7 @@ function ProspectCard({
             size="sm"
             variant="outline"
             disabled={pending}
-            onClick={() => onStatus(row.id, "no_show")}
+            onClick={() => onVisit(row, "no_show")}
           >
             לא הגיעה
           </Button>

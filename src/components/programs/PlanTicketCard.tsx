@@ -5,6 +5,7 @@ import { cn } from "@/utils/cn";
 
 export type PlanTicketStub =
   | { kind: "entries"; count: number }
+  | { kind: "lessons"; count: number }
   | { kind: "months"; count: number }
   | { kind: "minutes"; count: number }
   | {
@@ -74,6 +75,13 @@ export function PlanTicketCard({
           unit: null as string | null,
           compactValue: true,
         }
+      : stub.kind === "lessons"
+        ? {
+            eyebrow: stub.count === 1 ? "שיעור" : "שיעורים",
+            value: String(stub.count),
+            unit: null as string | null,
+            compactValue: true,
+          }
       : stub.kind === "minutes"
         ? {
             eyebrow: "משך",

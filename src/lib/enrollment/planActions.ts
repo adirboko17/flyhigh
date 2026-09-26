@@ -35,6 +35,10 @@ import {
   type ProgramKind,
 } from "@/lib/programs";
 import { planInstallmentOptions } from "@/lib/finance/installments";
+import {
+  isPrivateLessonSeries,
+  privateLessonCount,
+} from "@/lib/private-lessons/series";
 import type { CheckoutPaymentMethod, CouponPreviewResult } from "./actions";
 
 /** רכישה של מסלול, כרטיסייה או שיעור פרטי. */
@@ -70,6 +74,8 @@ type PlanRecord = {
   programKind: ProgramKind | null;
   priceTiers: ActivityPriceTier[];
   entriesCount: number | null;
+  /** מספר השיעורים בכרטיסייה. null מחוץ לשיעור פרטי. */
+  lessonsCount: number | null;
   extraHalfHourPrice: number | null;
   requiresSchedule: boolean;
 };
@@ -103,6 +109,23 @@ function usesQuantity(
 ) {
   if (session) return false;
   return kind === "private_lesson" || isActivityProgram(programKind);
+}
+
+function purchaseQuantity(
+  kind: PlanKind,
+  plan: PlanRecord,
+  requested: number | undefined
+) {
+  if (kind === "private_lesson" && isPrivateLessonSeries(plan.lessonsCount)) {
+    return 1;
+  }
+  return normalizeQuantity(
+    kind,
+    plan.programKind,
+    requested,
+    activityPeopleCap(plan.priceTiers),
+    sessionActivity(plan)
+  );
 }
 
 function normalizeQuantity(
@@ -141,6 +164,7 @@ async function loadActivePlan(
           programKind: data.kind,
           priceTiers: parseActivityPriceTiers(data.price_tiers),
           entriesCount: null,
+          lessonsCount: null,
           extraHalfHourPrice: data.extra_half_hour_price,
           requiresSchedule: data.requires_schedule,
         }
@@ -164,6 +188,7 @@ async function loadActivePlan(
           programKind: null,
           priceTiers: [],
           entriesCount: data.entries_count,
+          lessonsCount: null,
           extraHalfHourPrice: null,
           requiresSchedule: data.requires_schedule,
         }
@@ -172,7 +197,7 @@ async function loadActivePlan(
 
   const { data } = await supabase
     .from("private_lessons")
-    .select("id, title, price, requires_schedule")
+    .select("id, title, price, requires_schedule, lessons_count")
     .eq("id", planId)
     .eq("status", "active")
     .maybeSingle();
@@ -186,10 +211,11 @@ async function loadActivePlan(
         programKind: null,
         priceTiers: [],
         entriesCount: null,
+        lessonsCount: data.lessons_count,
         extraHalfHourPrice: null,
         requiresSchedule: data.requires_schedule,
       }
-      : null;
+    : null;
 }
 
 /** ההשתתפויות בהזמנה: ילדים שנבחרו, ובנוסף ההורה עצמו אם סימן זאת. */
@@ -316,13 +342,7 @@ export async function previewPlanCoupon(input: {
     return { success: false, error: planNotFoundError(input.kind) };
   }
 
-  const quantity = normalizeQuantity(
-    input.kind,
-    plan.programKind,
-    input.quantity,
-    activityPeopleCap(plan.priceTiers),
-    sessionActivity(plan)
-  );
+  const quantity = purchaseQuantity(input.kind, plan, input.quantity);
   if (quantity === null) {
     return {
       success: false,
@@ -424,13 +444,7 @@ export async function completePlanPurchase(input: {
 
   const isActivity = isActivityProgram(plan.programKind);
   const isSession = sessionActivity(plan);
-  const quantity = normalizeQuantity(
-    kind,
-    plan.programKind,
-    input.quantity,
-    activityPeopleCap(plan.priceTiers),
-    isSession
-  );
+  const quantity = purchaseQuantity(kind, plan, input.quantity);
   if (quantity === null) {
     return {
       success: false,
@@ -637,8 +651,11 @@ export async function completePlanPurchase(input: {
   const createdIds = createdEnrollments.map((enrollment) => enrollment.id);
 
   if (kind === "private_lesson" && plan.requiresSchedule) {
+    const slotCount = isPrivateLessonSeries(plan.lessonsCount)
+      ? privateLessonCount(plan.lessonsCount)
+      : quantity;
     const slotRows = createdEnrollments.flatMap((enrollment) =>
-      Array.from({ length: quantity }, () => ({
+      Array.from({ length: slotCount }, () => ({
         enrollment_id: enrollment.id,
         parent_id: profile.id,
         child_id: enrollment.child_id,

@@ -41,7 +41,9 @@ type Viewer =
 
 function kindLabel(item: CartItem) {
   if (item.kind === "class") return item.isTrial ? "שיעור ניסיון" : "חוג";
-  if (item.kind === "private_lesson") return "שיעור פרטי";
+  if (item.kind === "private_lesson") {
+    return (item.lessonsCount ?? 1) > 1 ? "כרטיסיית שיעורים" : "שיעור פרטי";
+  }
   if (item.kind === "pool_pass") {
     return item.entriesCount === 1 ? "כניסה" : "כרטיסייה";
   }
@@ -399,9 +401,13 @@ function CartItemsList({
               ) : null}
               <p className="mt-1 text-sm text-ink-600">
                 {item.participantNames.join(" · ")}
-                {item.quantity && item.quantity > 1
-                  ? ` · כמות ${item.quantity}`
-                  : ""}
+                {item.kind === "private_lesson" &&
+                item.lessonsCount &&
+                item.lessonsCount > 1
+                  ? ` · ${item.lessonsCount} שיעורים`
+                  : item.quantity && item.quantity > 1
+                    ? ` · כמות ${item.quantity}`
+                    : ""}
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">

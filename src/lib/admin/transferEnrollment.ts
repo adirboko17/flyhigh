@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { isAppointmentClass } from "@/lib/classes/bookingMode";
 import { enrollmentHoldsSeat } from "@/lib/enrollment/holdsSeat";
 import { revalidateAfterEnrollmentChange } from "@/lib/admin/enrollmentActions";
+import { closeProspectsForRegistration } from "@/lib/admin/closeProspects";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { createClient } from "@/lib/supabase/server";
@@ -236,6 +237,14 @@ export async function transferEnrollment(input: {
 
   if (updateError) {
     return { success: false, error: "ההחלפה נכשלה. נסו שוב." };
+  }
+
+  if (!enrollment.is_trial) {
+    await closeProspectsForRegistration({
+      classId: target.id,
+      parentId: enrollment.parent_id,
+      childIds: [enrollment.child_id],
+    });
   }
 
   await revalidateAfterEnrollmentChange();

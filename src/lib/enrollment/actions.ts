@@ -7,6 +7,7 @@ import {
   type ClassGenderPolicy,
 } from "@/lib/class-audience";
 import { createSessionReadClient, requireRole } from "@/lib/auth";
+import { closeProspectsForRegistration } from "@/lib/admin/closeProspects";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { revalidatePath } from "next/cache";
 import {
@@ -712,6 +713,14 @@ export async function completeClassEnrollmentPayment(input: {
     });
   }
 
+  if (!awaitingCardcom && !(bookedSessions && "sessions" in bookedSessions)) {
+    await closeProspectsForRegistration({
+      classId,
+      parentId: profile.id,
+      childIds: [...uniqueChildIds, ...(includeSelf ? [null] : [])],
+    });
+  }
+
   return {
     success: true,
     enrollmentIds: createdEnrollments.map((e) => e.id),
@@ -847,6 +856,12 @@ export async function registerInterestForClass(input: {
   if (enrollmentError) {
     return { success: false, error: "לא הצלחנו לשמור את ההרשמה. נסו שוב." };
   }
+
+  await closeProspectsForRegistration({
+    classId: input.classId,
+    parentId: profile.id,
+    childIds: [...uniqueChildIds, ...(includeSelf ? [null] : [])],
+  });
 
   revalidatePath("/parent/dashboard");
   await revalidatePublicCatalog();

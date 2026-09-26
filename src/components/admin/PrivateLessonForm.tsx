@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
 import { TrackScheduleFields } from "@/components/admin/TrackScheduleFields";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
+import { isPrivateLessonSeries } from "@/lib/private-lessons/series";
 import { cn } from "@/utils/cn";
 
 export type PrivateLessonFormData = {
@@ -16,6 +17,7 @@ export type PrivateLessonFormData = {
   title: string;
   description: string | null;
   duration_minutes: number;
+  lessons_count: number;
   price: number;
   status: "draft" | "active" | "inactive";
   requires_schedule: boolean;
@@ -26,6 +28,7 @@ const emptyForm = {
   title: "",
   description: "",
   duration_minutes: "45",
+  lessons_count: "1",
   price: "",
   status: "active",
   requires_schedule: true,
@@ -38,6 +41,7 @@ function toFormState(existing?: PrivateLessonFormData) {
     title: existing.title,
     description: existing.description ?? "",
     duration_minutes: existing.duration_minutes.toString(),
+    lessons_count: existing.lessons_count.toString(),
     price: existing.price.toString(),
     status: existing.status,
     requires_schedule: existing.requires_schedule,
@@ -79,8 +83,14 @@ export function PrivateLessonForm({
     const supabase = createClient();
 
     const duration = Number(form.duration_minutes);
+    const lessonsCount = Number(form.lessons_count);
     if (!Number.isFinite(duration) || duration < 1) {
       setError("נא להזין משך שיעור תקין בדקות.");
+      setLoading(false);
+      return;
+    }
+    if (!Number.isInteger(lessonsCount) || lessonsCount < 1) {
+      setError("נא להזין מספר שיעורים שלם, לפחות 1.");
       setLoading(false);
       return;
     }
@@ -89,6 +99,7 @@ export function PrivateLessonForm({
       title: form.title,
       description: form.description || null,
       duration_minutes: duration,
+      lessons_count: lessonsCount,
       price: Number(form.price) || 0,
       requires_schedule: form.requires_schedule,
       instructor_id: form.instructor_id || null,
@@ -120,6 +131,8 @@ export function PrivateLessonForm({
     else router.push("/admin/tracks#private-lessons");
   }
 
+  const series = isPrivateLessonSeries(Number(form.lessons_count));
+
   const fields = (
     <>
       <Field label="שם" required>
@@ -150,7 +163,25 @@ export function PrivateLessonForm({
             required
           />
         </Field>
-        <Field label="מחיר (₪)" required>
+        <Field
+          label="מספר שיעורים"
+          required
+          hint={
+            series
+              ? "כרטיסייה: הלקוח מקבל את כל השיעורים במחיר הכולל."
+              : "1 = שיעור בודד. 2 ומעלה = כרטיסייה, כמו בכניסה לבריכה."
+          }
+        >
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            value={form.lessons_count}
+            onChange={set("lessons_count")}
+            required
+          />
+        </Field>
+        <Field label={series ? "מחיר הכרטיסייה (₪)" : "מחיר לשיעור (₪)"} required>
           <Input
             type="number"
             min={0}

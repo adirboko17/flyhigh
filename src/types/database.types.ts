@@ -482,6 +482,45 @@ export type Database = {
           },
         ]
       }
+      prospect_visits: {
+        Row: {
+          created_at: string
+          id: string
+          prospect_id: string
+          session_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          prospect_id: string
+          session_id: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          prospect_id?: string
+          session_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_visits_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "class_prospects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_visits_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "class_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_waitlist_requests: {
         Row: {
           child_age: number
@@ -1646,6 +1685,7 @@ export type Database = {
           duration_minutes: number
           id: string
           instructor_id: string | null
+          lessons_count: number
           price: number
           requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
@@ -1657,6 +1697,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           instructor_id?: string | null
+          lessons_count?: number
           price?: number
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
@@ -1668,6 +1709,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           instructor_id?: string | null
+          lessons_count?: number
           price?: number
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]

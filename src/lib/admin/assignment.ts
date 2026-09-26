@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
+import { closeProspectsForRegistration } from "@/lib/admin/closeProspects";
 import {
   DEFERRED_PAYMENT_METHODS,
   isReceiptlessCollectionMethod,
@@ -499,6 +500,13 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         .eq("parent_id", input.parentId)
         .is("child_id", null)
         .in("status", ["waiting", "offered"]);
+    }
+    if (!isAppointment) {
+      await closeProspectsForRegistration({
+        classId: input.classId,
+        parentId: input.parentId,
+        childIds: [...childIds, ...(includeSelf ? [null] : [])],
+      });
     }
   }
 

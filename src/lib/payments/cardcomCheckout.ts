@@ -1,4 +1,5 @@
 import { notifyAdminCardcomPaid } from "@/lib/notifications/adminPayment";
+import { closeProspectsForEnrollments } from "@/lib/admin/closeProspects";
 import { isAbandonedCardcomCharge } from "@/lib/constants";
 import { normalizeIdNumber } from "@/lib/health-declaration";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -328,8 +329,10 @@ export async function settleCardcomCheckout(input: {
     if (enrollmentIds.length > 0) {
       const { data: enrollments } = await admin
         .from("enrollments")
-        .select("class_id, child_id, parent_id")
+        .select("class_id, child_id, parent_id, is_trial, session_id")
         .in("id", enrollmentIds);
+
+      await closeProspectsForEnrollments(enrollments ?? []);
 
       for (const enrollment of enrollments ?? []) {
         if (!enrollment.class_id) continue;

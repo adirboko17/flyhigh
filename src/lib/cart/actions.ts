@@ -16,6 +16,7 @@ import { installmentOptions } from "@/lib/finance/installments";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { voidUnpaidCardcomCheckout } from "@/lib/payments/cardcomCheckout";
+import { closeProspectsForEnrollments } from "@/lib/admin/closeProspects";
 import { createClient } from "@/lib/supabase/server";
 
 const ALLOWED_METHODS: readonly CheckoutPaymentMethod[] = [
@@ -545,6 +546,12 @@ export async function checkoutCart(input: {
       paymentMethod,
       participants: [...new Set(lines.flatMap((line) => line.participantNames))],
     });
+  }
+
+  if (!awaitingCardcom) {
+    await closeProspectsForEnrollments(
+      lines.flatMap((line) => line.enrollmentRows)
+    );
   }
 
   return {

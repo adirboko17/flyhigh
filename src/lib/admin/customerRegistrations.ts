@@ -70,7 +70,7 @@ async function loadCustomerRegistrationsUnsafe(
       supabase
         .from("enrollments")
         .select(
-          "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, session_id, is_trial, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes)"
+          "id, type, status, payment_status, created_at, starts_on, ends_on, people_count, weekly_slot_id, session_id, is_trial, children(full_name), classes(title, day_of_week, start_time, end_time, interest_only), programs(title, kind, duration_minutes), pool_passes(title, entries_count), private_lessons(title, duration_minutes, lessons_count)"
         )
         .eq("parent_id", parentId)
         .order("created_at", { ascending: false }),
@@ -199,6 +199,10 @@ async function loadCustomerRegistrationsUnsafe(
       } else if (kind === "private_lesson") {
         const duration = lesson?.duration_minutes;
         if (duration != null) details.push(`${duration} דק׳`);
+        const lessons = lesson?.lessons_count;
+        if (lessons != null && lessons > 1) {
+          details.push(`${lessons} שיעורים`);
+        }
       } else if (kind === "activity") {
         const duration = program?.duration_minutes;
         if (duration != null) details.push(`${duration} דק׳`);

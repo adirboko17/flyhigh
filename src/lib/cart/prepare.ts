@@ -52,6 +52,10 @@ import { addMonths, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createSessionReadClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PlanKind } from "@/lib/enrollment/planActions";
+import {
+  isPrivateLessonSeries,
+  privateLessonCount,
+} from "@/lib/private-lessons/series";
 import type { Database } from "@/types/database.types";
 import {
   loadBookableAppointmentSessions,
@@ -764,6 +768,7 @@ async function preparePlanLine(
   let priceTiers: ActivityPriceTier[] = [];
   let extraHalfHourPrice: number | null = item.extraHalfHourPrice ?? null;
   let entriesCount: number | null = item.entriesCount ?? null;
+  let lessonsCount: number | null = item.lessonsCount ?? null;
   let durationMinutes: number | null = null;
   let requiresSchedule = false;
 
@@ -798,13 +803,14 @@ async function preparePlanLine(
   } else {
     const { data } = await supabase
       .from("private_lessons")
-      .select("id, title, price, requires_schedule")
+      .select("id, title, price, requires_schedule, lessons_count")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
     if (!data) return { success: false, error: `${item.title} אינו זמין לרכישה.` };
     title = data.title;
     price = Number(data.price);
+    lessonsCount = data.lessons_count;
     requiresSchedule = data.requires_schedule;
   }
 
@@ -814,13 +820,17 @@ async function preparePlanLine(
     durationMinutes,
     hasGroupPricing: priceTiers.length > 0,
   });
-  const quantity = normalizeQuantity(
-    kind,
-    programKind,
-    item.quantity,
-    activityPeopleCap(priceTiers),
-    isSession
-  );
+  const lessonSeries =
+    kind === "private_lesson" && isPrivateLessonSeries(lessonsCount);
+  const quantity = lessonSeries
+    ? 1
+    : normalizeQuantity(
+        kind,
+        programKind,
+        item.quantity,
+        activityPeopleCap(priceTiers),
+        isSession
+      );
   if (quantity === null) {
     return { success: false, error: `הכמות שנבחרה ל${title} אינה תקינה.` };
   }
@@ -940,7 +950,11 @@ async function preparePlanLine(
       paymentChildIds: isActivity ? [activityChildId] : participants,
       paymentAmounts: amounts,
       privateLessonQuantity:
-        kind === "private_lesson" && requiresSchedule ? quantity : null,
+        kind === "private_lesson" && requiresSchedule
+          ? lessonSeries
+            ? privateLessonCount(lessonsCount)
+            : quantity
+          : null,
       activityQuantity:
         kind === "program" && requiresSchedule
           ? isActivity

@@ -56,7 +56,14 @@ import { Modal } from "@/components/ui/Modal";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { setClassStatus } from "@/lib/admin/classStatus";
-import { updateProspectStatus } from "@/lib/admin/prospectActions";
+import {
+  dismissProspect,
+  recordProspectVisit,
+} from "@/lib/attendance/prospectAttendance";
+import {
+  currentProspectSession,
+  summarizeProspectVisits,
+} from "@/lib/attendance/prospectSchedule";
 import {
   formatClassAudience,
   formatClassGenderPolicy,
@@ -64,7 +71,6 @@ import {
 } from "@/lib/class-audience";
 import {
   ATTENDANCE_STATUS,
-  CLASS_PROSPECT_STATUS,
   CLASS_STATUS,
   ENROLLMENT_PAYMENT_STATUS,
   ENROLLMENT_STATUS,
@@ -192,10 +198,12 @@ export type AdminClassProspect = {
   session_id: string | null;
   trial_date: string;
   status: Enums<"class_prospect_status">;
+  visits: { session_id: string; status: "arrived" | "no_show" }[];
   class_sessions: {
     session_date: string;
     start_time: string;
     end_time: string;
+    weekly_slot_id: string | null;
   } | null;
 };
 
@@ -1401,20 +1409,11 @@ export function ClassDetailPanel({
 
           {tab === "prospects" && !rosterLoading && (
             <ProspectsTab
+              classId={cls.id}
               prospects={filteredProspects}
+              sessions={roster?.sessions ?? []}
               total={prospects.length}
-              onStatusChange={(id, status) =>
-                setRoster((current) =>
-                  current
-                    ? {
-                        ...current,
-                        prospects: current.prospects.map((row) =>
-                          row.id === id ? { ...row, status } : row
-                        ),
-                      }
-                    : current
-                )
-              }
+              onChanged={refreshRoster}
             />
           )}
 
@@ -1820,39 +1819,81 @@ function WaitlistRow({
   );
 }
 
-function prospectWhen(row: AdminClassProspect) {
-  const session = row.class_sessions;
-  if (!session) return formatDate(row.trial_date);
-  return `${formatDate(session.session_date)} · ${formatTime(session.start_time)}–${formatTime(session.end_time)}`;
+function prospectAnchor(row: AdminClassProspect) {
+  return {
+    session_id: row.session_id,
+    trial_date: row.trial_date,
+    weekly_slot_id: row.class_sessions?.weekly_slot_id ?? null,
+    status: row.status,
+  };
+}
+
+function visitSummary(visits: AdminClassProspect["visits"]) {
+  const counts = summarizeProspectVisits(visits);
+  const parts: string[] = [];
+  if (counts.arrived > 0) {
+    parts.push(
+      counts.arrived === 1 ? "הגיעה פעם אחת" : `הגיעה ${counts.arrived} פעמים`
+    );
+  }
+  if (counts.noShow > 0) {
+    parts.push(
+      counts.noShow === 1
+        ? "לא הגיעה פעם אחת"
+        : `לא הגיעה ${counts.noShow} פעמים`
+    );
+  }
+  return parts.join(" · ");
 }
 
 function ProspectsTab({
+  classId,
   prospects,
+  sessions,
   total,
-  onStatusChange,
+  onChanged,
 }: {
+  classId: string;
   prospects: AdminClassProspect[];
+  sessions: AdminRosterSession[];
   total: number;
-  onStatusChange: (
-    id: string,
-    status: Enums<"class_prospect_status">
-  ) => void;
+  onChanged: () => void;
 }) {
   const [savingId, setSavingId] = useState<string | null>(null);
+  const today = todayInIsrael();
 
   async function mark(
     row: AdminClassProspect,
+    sessionId: string,
     next: "arrived" | "no_show"
   ) {
-    const status = row.status === next ? "scheduled" : next;
     setSavingId(row.id);
-    const result = await updateProspectStatus(row.id, status);
+    const result = await recordProspectVisit({
+      prospectId: row.id,
+      sessionId,
+      status: next,
+    });
     setSavingId(null);
     if (result.error) {
       window.alert(result.error);
       return;
     }
-    onStatusChange(row.id, status);
+    onChanged();
+  }
+
+  async function remove(row: AdminClassProspect) {
+    const name = row.child_name
+      ? `${row.full_name} · ${row.child_name}`
+      : row.full_name;
+    if (!window.confirm(`להוריד את ${name} מרשימת המתעניינות?`)) return;
+    setSavingId(row.id);
+    const result = await dismissProspect({ classId, prospectId: row.id });
+    setSavingId(null);
+    if (result.error) {
+      window.alert(result.error);
+      return;
+    }
+    onChanged();
   }
 
   if (total === 0) {
@@ -1860,7 +1901,7 @@ function ProspectsTab({
       <div className="p-5">
         <EmptyState
           title="אין מתעניינים לחוג זה"
-          description="מי שנרשמה בדף המתעניינים לחוג הזה תופיע כאן, ואפשר לסמן אם הגיעה."
+          description="מי שנרשמה בדף המתעניינים לחוג הזה תופיע כאן, ותעבור למפגש הבא עד שתירשם או שתורידו אותה."
         />
       </div>
     );
@@ -1877,56 +1918,63 @@ function ProspectsTab({
   return (
     <div>
       <p className="px-4 pb-1 pt-3 text-xs leading-relaxed text-ink-500">
-        כל המתעניינות של החוג. סימון ההגעה מתעדכן גם בדף המתעניינים.
+        סימון הגעה או היעדרות מעביר אותה למפגש הבא. הרשמה לחוג מורידה אותה
+        אוטומטית, ואפשר גם להוריד ידנית.
       </p>
       <ul className="divide-y divide-ink-100 border-y border-ink-100 bg-white">
         {prospects.map((row) => {
-          const meta = CLASS_PROSPECT_STATUS[row.status];
+          const next = currentProspectSession(
+            prospectAnchor(row),
+            sessions,
+            row.visits,
+            today
+          );
+          const history = visitSummary(row.visits);
           const displayName = row.child_name
             ? `${row.full_name} · ${row.child_name}`
             : row.full_name;
+          const when = next
+            ? `${formatDate(next.session_date)} · ${formatTime(next.start_time)}${next.end_time ? `–${formatTime(next.end_time)}` : ""}`
+            : "אין מפגש הבא";
           const saving = savingId === row.id;
           return (
             <li key={row.id} className="px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink-900">
-                    {displayName}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-ink-500">
-                    {[row.phone, prospectWhen(row)].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-                <Badge tone={meta.tone} className="shrink-0 px-1.5 py-0 text-[10px]">
-                  {meta.label}
-                </Badge>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-ink-900">
+                  {displayName}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-ink-500">
+                  {[row.phone, when, history].filter(Boolean).join(" · ")}
+                </p>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
+                {next && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void mark(row, next.id, "arrived")}
+                      className="min-h-9 rounded-lg bg-ink-100 px-3.5 text-sm font-semibold text-ink-600 transition-colors hover:bg-ink-200 disabled:opacity-50"
+                    >
+                      הגיעה
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void mark(row, next.id, "no_show")}
+                      className="min-h-9 rounded-lg bg-ink-100 px-3.5 text-sm font-semibold text-ink-600 transition-colors hover:bg-ink-200 disabled:opacity-50"
+                    >
+                      לא הגיעה
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => void mark(row, "arrived")}
-                  className={cn(
-                    "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors disabled:opacity-50",
-                    row.status === "arrived"
-                      ? "bg-aqua-500 text-white"
-                      : "bg-ink-100 text-ink-600 hover:bg-ink-200"
-                  )}
+                  onClick={() => void remove(row)}
+                  className="min-h-9 rounded-lg px-3.5 text-sm font-semibold text-ink-500 transition-colors hover:bg-ink-100 disabled:opacity-50"
                 >
-                  הגיעה
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void mark(row, "no_show")}
-                  className={cn(
-                    "min-h-9 rounded-lg px-3.5 text-sm font-semibold transition-colors disabled:opacity-50",
-                    row.status === "no_show"
-                      ? "bg-red-500 text-white"
-                      : "bg-ink-100 text-ink-600 hover:bg-ink-200"
-                  )}
-                >
-                  לא הגיעה
+                  הורדה מהרשימה
                 </button>
               </div>
             </li>
