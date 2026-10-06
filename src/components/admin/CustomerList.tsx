@@ -29,9 +29,13 @@ import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
-import { deleteCustomer, saveCustomerAdminNote } from "@/lib/admin/customerActions";
+import { deleteCustomer, saveAdminHealthDeclaration, saveCustomerAdminNote } from "@/lib/admin/customerActions";
 import { HealthDeclarationModal } from "@/components/health/HealthDeclarationModal";
-import { declarationSchoolYear } from "@/lib/health-declaration";
+import {
+  declarationSchoolYear,
+  type HealthDeclarationDraft,
+} from "@/lib/health-declaration";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { formatSchoolGrade } from "@/lib/school-grade";
 import { calcAge, formatDate } from "@/utils/format";
 
@@ -448,7 +452,11 @@ function CustomerDetail({
             {customer.children.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {customer.children.map((child) => (
-                  <ChildCard key={child.id} child={child} />
+                  <ChildCard
+                    key={child.id}
+                    child={child}
+                    parentId={customer.id}
+                  />
                 ))}
               </div>
             ) : (
@@ -591,10 +599,46 @@ function DetailRow({
   );
 }
 
-function ChildCard({ child }: { child: CustomerChild }) {
+function ChildCard({
+  child,
+  parentId,
+}: {
+  child: CustomerChild;
+  parentId: string;
+}) {
+  const router = useRouter();
   const [healthOpen, setHealthOpen] = useState(false);
   const age = calcAge(child.birth_date);
   const grade = formatSchoolGrade(child.school_grade, child.grade_school_year);
+  const declared = child.healthDeclaration;
+  const today = todayInIsrael();
+  const healthInitial = useMemo<HealthDeclarationDraft | null>(() => {
+    if (declared) {
+      return {
+        idNumber: declared.id_number,
+        accepted: declared.accepted,
+        signedAt: declared.signed_at,
+      };
+    }
+    if (child.priorHealthIdNumber) {
+      return {
+        idNumber: child.priorHealthIdNumber,
+        accepted: false,
+        signedAt: today,
+      };
+    }
+    return null;
+  }, [child.priorHealthIdNumber, declared, today]);
+
+  async function saveHealth(draft: HealthDeclarationDraft) {
+    const result = await saveAdminHealthDeclaration({
+      parentId,
+      childId: child.id,
+      idNumber: draft.idNumber,
+    });
+    if (!result.success) return result.error;
+    router.refresh();
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -613,11 +657,11 @@ function ChildCard({ child }: { child: CustomerChild }) {
             {child.birth_date && (
               <Badge tone="neutral">{formatDate(child.birth_date)}</Badge>
             )}
-            <Badge tone={child.healthDeclaration ? "success" : "warning"}>
-              {child.healthDeclaration ? "הצהרת בריאות" : "חסרה הצהרה"}
+            <Badge tone={declared ? "success" : "warning"}>
+              {declared ? "הצהרת בריאות" : "חסרה הצהרה"}
             </Badge>
           </div>
-          {child.healthDeclaration && (
+          {declared ? (
             <button
               type="button"
               onClick={() => setHealthOpen(true)}
@@ -625,27 +669,31 @@ function ChildCard({ child }: { child: CustomerChild }) {
             >
               צפייה בהצהרת הבריאות
             </button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              className="mt-3"
+              onClick={() => setHealthOpen(true)}
+            >
+              מילוי ואישור הצהרה
+            </Button>
           )}
           {child.notes && (
             <p className="mt-2 text-sm text-ink-500">{child.notes}</p>
           )}
         </div>
       </CardContent>
-      {child.healthDeclaration && (
-        <HealthDeclarationModal
-          open={healthOpen}
-          onClose={() => setHealthOpen(false)}
-          childName={child.healthDeclaration.child_name || child.full_name}
-          today={child.healthDeclaration.signed_at}
-          schoolYear={declarationSchoolYear()}
-          initial={{
-            idNumber: child.healthDeclaration.id_number,
-            accepted: child.healthDeclaration.accepted,
-            signedAt: child.healthDeclaration.signed_at,
-          }}
-          readOnly
-        />
-      )}
+      <HealthDeclarationModal
+        open={healthOpen}
+        onClose={() => setHealthOpen(false)}
+        childName={declared?.child_name || child.full_name}
+        today={declared?.signed_at ?? today}
+        schoolYear={declarationSchoolYear()}
+        initial={healthInitial}
+        readOnly={Boolean(declared)}
+        onSave={declared ? undefined : saveHealth}
+      />
     </Card>
   );
 }

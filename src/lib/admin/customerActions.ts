@@ -4,9 +4,12 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import { isGenderType, MIN_PASSWORD_LENGTH } from "@/lib/constants";
 import {
+  declarationSchoolYear,
+  isValidIdNumber,
   normalizeIdNumber,
   receiptIdNumberError,
 } from "@/lib/health-declaration";
+import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { currentSchoolYear, parseSchoolGradeInput } from "@/lib/school-grade";
 import {
   createAdminClient,
@@ -261,6 +264,53 @@ export async function saveCustomerAdminNote(input: {
   if (noteError) return { success: false, error: noteError };
 
   refreshCustomerPaths(target.id);
+  return { success: true };
+}
+
+export async function saveAdminHealthDeclaration(input: {
+  parentId: string;
+  childId: string;
+  idNumber: string;
+}): Promise<CustomerActionResult> {
+  const caller = await requireAdminCaller();
+  if (!caller.ok) return { success: false, error: caller.error };
+
+  const client = requireAdminClient();
+  if (!client.ok) return { success: false, error: client.error };
+
+  const idNumber = normalizeIdNumber(input.idNumber);
+  if (!isValidIdNumber(idNumber)) {
+    return { success: false, error: "נא למלא מספר ת.ז. תקין (5–9 ספרות)." };
+  }
+
+  const { data: child } = await client.admin
+    .from("children")
+    .select("id, full_name, parent_id")
+    .eq("id", input.childId)
+    .maybeSingle();
+
+  if (!child || child.parent_id !== input.parentId || !child.full_name.trim()) {
+    return { success: false, error: "הילד/ה לא נמצאו אצל הלקוח." };
+  }
+
+  const { error } = await client.admin.from("health_declarations").insert({
+    child_id: child.id,
+    parent_id: child.parent_id,
+    child_name: child.full_name.trim(),
+    id_number: idNumber,
+    school_year: declarationSchoolYear(),
+    accepted: true,
+    signed_at: todayInIsrael(),
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return { success: false, error: "כבר קיימת הצהרת בריאות לשנה זו." };
+    }
+    return { success: false, error: "שמירת הצהרת הבריאות נכשלה." };
+  }
+
+  refreshCustomerPaths(child.parent_id);
   return { success: true };
 }
 

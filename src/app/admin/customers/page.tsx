@@ -14,6 +14,7 @@ export default async function AdminCustomersPage() {
     .eq("role", "parent")
     .order("created_at", { ascending: false });
 
+  const schoolYear = declarationSchoolYear();
   const customers = (parents ?? []).map((p) => ({
     id: p.id,
     full_name: p.full_name,
@@ -38,13 +39,17 @@ export default async function AdminCustomersPage() {
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
       .map((child) => {
-        const year = declarationSchoolYear();
+        const { health_declarations, ...childFields } = child;
+        const declarations = health_declarations ?? [];
         const current =
-          child.health_declarations?.find((row) => row.school_year === year) ??
-          child.health_declarations?.[0] ??
-          null;
+          declarations.find((row) => row.school_year === schoolYear) ?? null;
+        const prior = declarations.reduce<(typeof declarations)[number] | null>(
+          (latest, row) =>
+            !latest || row.school_year > latest.school_year ? row : latest,
+          null
+        );
         return {
-          ...child,
+          ...childFields,
           healthDeclaration: current
             ? {
                 id_number: current.id_number,
@@ -53,6 +58,7 @@ export default async function AdminCustomersPage() {
                 child_name: current.child_name,
               }
             : null,
+          priorHealthIdNumber: current ? null : prior?.id_number ?? null,
         };
       }),
   }));

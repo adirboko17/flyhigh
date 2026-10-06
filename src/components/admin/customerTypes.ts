@@ -13,6 +13,7 @@ export type CustomerChild = {
     accepted: boolean;
     child_name: string;
   } | null;
+  priorHealthIdNumber: string | null;
 };
 
 export type CustomerWithChildren = {

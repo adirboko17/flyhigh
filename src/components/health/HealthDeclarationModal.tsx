@@ -29,7 +29,9 @@ export function HealthDeclarationModal({
   schoolYear: number;
   initial?: HealthDeclarationDraft | null;
   readOnly?: boolean;
-  onSave?: (draft: HealthDeclarationDraft) => void | Promise<void | boolean>;
+  onSave?: (
+    draft: HealthDeclarationDraft
+  ) => void | Promise<void | boolean | string>;
 }) {
   const [idNumber, setIdNumber] = useState(initial?.idNumber ?? "");
   const [accepted, setAccepted] = useState(initial?.accepted ?? false);
@@ -69,6 +71,10 @@ export function HealthDeclarationModal({
       signedAt: today,
     });
     setSaving(false);
+    if (typeof result === "string" && result) {
+      setError(result);
+      return;
+    }
     if (result === false) {
       setError("שמירת הצהרת הבריאות נכשלה. נסו שוב.");
       return;
