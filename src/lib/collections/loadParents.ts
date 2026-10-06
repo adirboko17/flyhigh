@@ -3,7 +3,7 @@ import {
   isCollectionPaymentMethod,
   isReceiptlessChargeSettled,
 } from "@/lib/constants";
-import { subjectKind, subjectLabel } from "@/lib/finance/subject";
+import { chargeDisplaySubject, subjectKind } from "@/lib/finance/subject";
 import { addDays, todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import type {
@@ -92,7 +92,11 @@ export async function loadCollectionParents(): Promise<CollectionParent[]> {
       paidAt: charge.paid_at,
       createdAt: charge.created_at,
       childName: enrollment?.children?.full_name ?? null,
-      subject: subjectLabel(enrollment),
+      subject: chargeDisplaySubject({
+        enrollment,
+        receiptDescription: charge.receipt_description,
+        receiptCustomText: charge.receipt_custom_text,
+      }),
       subjectType: subjectKind(enrollment),
       enrollmentCancelled: enrollment?.status === "cancelled",
       receiptLabelId: charge.receipt_label_id,

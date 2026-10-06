@@ -507,6 +507,7 @@ function ClassCard({
   const [slotPickerOpen, setSlotPickerOpen] = useState(false);
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const status = CLASS_STATUS[cls.status];
+  const inactive = cls.status === "inactive";
   const registered = cls.registeredCount;
   const waiting = cls.waitlistCount;
   const rate = attendanceRate(cls);
@@ -516,39 +517,70 @@ function ClassCard({
   const activeSlot = cls.slots.find((slot) => slot.id === activeSlotId) ?? null;
 
   return (
-    <Card className="flex flex-col overflow-hidden">
-      <div className="relative h-32 w-full shrink-0 overflow-hidden bg-ink-100">
+    <Card
+      className={cn(
+        "flex flex-col overflow-hidden",
+        inactive && "border-ink-200 bg-ink-100"
+      )}
+    >
+      <div className="relative h-32 w-full shrink-0 overflow-hidden bg-ink-200">
         {cls.image_url ? (
           <Image
             src={cls.image_url}
             alt={cls.title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-            className="object-cover"
+            className={cn("object-cover", inactive && "grayscale")}
             unoptimized
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[var(--brand-gradient-soft)] text-4xl">
+          <div
+            className={cn(
+              "flex h-full w-full items-center justify-center text-4xl",
+              inactive ? "bg-ink-200 grayscale" : "bg-[var(--brand-gradient-soft)]"
+            )}
+          >
             🏊
           </div>
         )}
+        {inactive && (
+          <div
+            className="pointer-events-none absolute inset-0 bg-ink-900/25"
+            aria-hidden
+          />
+        )}
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
           <div className="flex flex-wrap gap-1.5">
-            <Badge tone={status.tone} className="shadow-soft">
+            <Badge
+              tone={status.tone}
+              className={cn(
+                "shadow-soft",
+                inactive && "bg-ink-800 px-3 py-1 text-sm text-white"
+              )}
+            >
               {status.label}
             </Badge>
             {cls.interest_only && (
-              <Badge tone="info" className="shadow-soft">
+              <Badge
+                tone="info"
+                className={cn("shadow-soft", inactive && "grayscale")}
+              >
                 הרשמת עניין
               </Badge>
             )}
             {cls.booking_mode === "appointment" && (
-              <Badge tone="info" className="shadow-soft">
+              <Badge
+                tone="info"
+                className={cn("shadow-soft", inactive && "grayscale")}
+              >
                 תורים לטיפול
               </Badge>
             )}
             {featuredRank && (
-              <Badge tone="brand" className="shadow-soft">
+              <Badge
+                tone="brand"
+                className={cn("shadow-soft", inactive && "grayscale")}
+              >
                 מוביל {featuredRank}
               </Badge>
             )}
@@ -644,7 +676,13 @@ function ClassCard({
         </div>
       </div>
 
-      <CardContent className="flex flex-col gap-3 p-4">
+      {/* grayscale רק על גוף הכרטיס — filter על האב כולא את תפריט הפעולות */}
+      <CardContent
+        className={cn(
+          "flex flex-col gap-3 p-4",
+          inactive && "grayscale"
+        )}
+      >
         <div>
           <h3 className="font-display text-lg font-bold leading-tight text-ink-900">
             {cls.title}

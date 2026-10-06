@@ -21,9 +21,9 @@ import {
 } from "@/lib/finance/recurringIncome";
 import {
   SUBJECT_KIND_LABEL,
+  chargeDisplaySubject,
   subjectClassCategory,
   subjectKind,
-  subjectLabel,
   type EnrollmentSubject,
 } from "@/lib/finance/subject";
 import { resolveSessionInstructorId } from "@/lib/instructors/sessionInstructor";
@@ -105,6 +105,8 @@ type PaymentRow = {
   parent_id: string;
   external_reference: string | null;
   office_collection: boolean | null;
+  receipt_description: string | null;
+  receipt_custom_text: string | null;
   profiles: { full_name: string | null } | null;
   enrollments: EnrollmentSubject | null;
   payment_receipts: { amount: number }[] | null;
@@ -116,6 +118,14 @@ function addToMap(map: Map<string, number>, key: string, amount: number) {
 
 function inRange(date: string, start: string, end: string) {
   return date >= start && date <= end;
+}
+
+function paymentSubject(payment: PaymentRow) {
+  return chargeDisplaySubject({
+    enrollment: payment.enrollments,
+    receiptDescription: payment.receipt_description,
+    receiptCustomText: payment.receipt_custom_text,
+  });
 }
 
 function paymentActivityDate(payment: Pick<PaymentRow, "paid_at" | "created_at">) {
@@ -213,7 +223,7 @@ function buildSnapshot(input: {
   for (const payment of paid) {
     const amount = Number(payment.amount);
     addToMap(methodTotals, payment.payment_method ?? "external", amount);
-    addToMap(subjectTotals, subjectLabel(payment.enrollments), amount);
+    addToMap(subjectTotals, paymentSubject(payment), amount);
     addToMap(kindTotals, subjectKind(payment.enrollments) ?? "other", amount);
     const category = subjectClassCategory(payment.enrollments);
     if (category) addToMap(categoryTotals, category, amount);
@@ -255,7 +265,7 @@ function buildSnapshot(input: {
       return {
         id: payment.id,
         parentName: payment.profiles?.full_name ?? "-",
-        subject: subjectLabel(payment.enrollments),
+        subject: paymentSubject(payment),
         amount: Number(payment.amount),
         method: payment.payment_method,
         methodLabel: payment.payment_method
@@ -340,7 +350,7 @@ export async function loadFinanceDashboard(input: {
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, office_collection, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, office_collection, receipt_description, receipt_custom_text, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
       )
       .or(
         `created_at.gte.${loadStart},paid_at.gte.${loadStart},status.eq.pending,status.eq.partial`

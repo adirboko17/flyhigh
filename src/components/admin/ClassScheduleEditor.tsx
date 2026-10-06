@@ -10,6 +10,7 @@ import {
   duplicateWeeklySlotIndexes,
   formatWeeklySlotLabel,
   groupSessionsByWeeklySlot,
+  moveSessionsWithWeeklySlot,
   nextWeeklySessionDate,
   nextWeeklySlotTimes,
   parseSessionCount,
@@ -85,11 +86,25 @@ export function ClassScheduleEditor({
     index: number,
     patch: Partial<(typeof value.weeklySlots)[number]>
   ) {
+    const previous = value.weeklySlots[index];
+    if (!previous) return;
+    const nextSlot = { ...previous, ...patch };
+    const nextKey = weeklySlotKey(nextSlot);
+    // מועד עם אותו יום ואותה שעת התחלה לא מזיז סדרה, כדי לא לערבב אותה עם המועד השני.
+    const blocksMove = value.weeklySlots.some(
+      (slot, slotIndex) =>
+        slotIndex !== index &&
+        Boolean(slot.startTime.trim()) &&
+        (weeklySlotKey(slot) === nextKey || weeklySlotKey(slot) === weeklySlotKey(previous))
+    );
     commit({
       ...value,
       weeklySlots: value.weeklySlots.map((slot, i) =>
-        i === index ? { ...slot, ...patch } : slot
+        i === index ? nextSlot : slot
       ),
+      sessions: blocksMove
+        ? value.sessions
+        : moveSessionsWithWeeklySlot(value.sessions, previous, nextSlot, value),
     });
   }
 

@@ -1,3 +1,4 @@
+import { composeReceiptLine } from "@/lib/receipt-labels";
 import type { Enums } from "@/types/database.types";
 
 /** ההרשמה כפי שהיא נשלפת יחד עם חיוב, לצורך תיאור "על מה שילמו". */
@@ -37,6 +38,22 @@ export function subjectLabel(enrollment: EnrollmentSubject | null): string {
 
 export function subjectKind(enrollment: EnrollmentSubject | null): SubjectKind {
   return enrollment?.type ?? null;
+}
+
+/**
+ * שם החיוב ברשימות: מוצר ההרשמה, או בחיוב משרדי בלי הרשמה — הטקסט שעל הקבלה.
+ */
+export function chargeDisplaySubject(input: {
+  enrollment: EnrollmentSubject | null;
+  receiptDescription?: string | null;
+  receiptCustomText?: string | null;
+}): string {
+  if (input.enrollment) return subjectLabel(input.enrollment);
+  return composeReceiptLine({
+    base: input.receiptDescription,
+    customText: input.receiptCustomText,
+    fallback: "חיוב כללי",
+  });
 }
 
 /** קטגוריית חוג להכנסות — רק לחיובים מסוג חוג. */

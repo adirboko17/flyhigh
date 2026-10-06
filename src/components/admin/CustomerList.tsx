@@ -8,6 +8,7 @@ import { CustomerAttendance } from "@/components/admin/CustomerAttendance";
 import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
 import { CustomerPaymentInstructions } from "@/components/admin/CustomerPaymentInstructions";
 import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
+import { CustomerChargeCard } from "@/components/admin/CustomerChargeDialog";
 import { CustomerForm } from "@/components/admin/CustomerForm";
 import type {
   CustomerChild,
@@ -364,7 +365,7 @@ function CustomerDetail({
           <Avatar name={customer.full_name} className="h-12 w-12 shrink-0" />
           <p className="text-sm text-ink-500">הצטרף {formatDate(customer.created_at)}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onEdit}>
             עריכה
           </Button>
@@ -422,6 +423,8 @@ function CustomerDetail({
             profileId={customer.id}
             note={customer.admin_note}
           />
+
+          <CustomerChargeCard customer={customer} />
 
           <div>
             <div className="mb-3 flex items-center justify-between">

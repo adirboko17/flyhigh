@@ -2,6 +2,7 @@
 
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { subjectLabel } from "@/lib/finance/subject";
+import { composeReceiptLine } from "@/lib/receipt-labels";
 
 export type CustomerIssuedDocument = {
   id: string;
@@ -30,7 +31,7 @@ export async function loadCustomerDocuments(
     supabase
       .from("receipts")
       .select(
-        "id, created_at, receipt_number, receipt_url, sent_to_email, payment_id, payments(amount, receipt_description, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)))"
+        "id, created_at, receipt_number, receipt_url, sent_to_email, payment_id, payments(amount, receipt_description, receipt_custom_text, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)))"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),
@@ -78,9 +79,11 @@ export async function loadCustomerDocuments(
     if (matchedRefund) usedRefundIds.add(matchedRefund.id);
 
     const payment = receipt.payments;
-    const product =
-      payment?.receipt_description?.trim() ||
-      subjectLabel(payment?.enrollments ?? null);
+    const product = composeReceiptLine({
+      base: payment?.receipt_description,
+      customText: payment?.receipt_custom_text,
+      fallback: subjectLabel(payment?.enrollments ?? null),
+    });
 
     documents.push({
       id: receipt.id,

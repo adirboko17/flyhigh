@@ -1272,3 +1272,117 @@ export async function approveCollectionPassCharge(input: {
   return { success: true };
 }
 
+const CHARGE_TEXT_MAX = 120;
+
+/**
+ * פותח חיוב משרדי ללקוח בלי הרשמה — מסגירה בטלפון.
+ * אשראי ממשיך מיד לדף הסליקה. שאר האמצעים נפתחים כחוב בעמוד הגבייה.
+ */
+export async function createCustomerCharge(input: {
+  parentId: string;
+  amount: number | string;
+  method: CollectionPaymentMethod;
+  receiptLabelId: string | null;
+  description: string;
+  customText: string;
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  if (!isCollectionPaymentMethod(input.method)) {
+    return { success: false, error: "אמצעי התשלום שנבחר אינו תקין." };
+  }
+
+  if (input.method === "credit_card" && !isCardcomConfigured()) {
+    return {
+      success: false,
+      error: "קארדקום אינו מוגדר — לא ניתן לחייב באשראי.",
+    };
+  }
+
+  const amount = parseAmount(input.amount);
+  if (amount === null || amount <= 0) {
+    return { success: false, error: "נא להזין סכום חיוב חיובי." };
+  }
+  if (amount > 99_999_999.99) {
+    return { success: false, error: "הסכום גבוה מדי." };
+  }
+
+  const description = input.description.trim();
+  const customText = input.customText.trim();
+  if (description.length > CHARGE_TEXT_MAX || customText.length > CHARGE_TEXT_MAX) {
+    return {
+      success: false,
+      error: `התיאור והטקסט המותאם יכולים להכיל עד ${CHARGE_TEXT_MAX} תווים.`,
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: parent } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", input.parentId)
+    .maybeSingle();
+
+  if (!parent || parent.role !== "parent") {
+    return { success: false, error: "הלקוח לא נמצא." };
+  }
+
+  const resolved = await resolveReceiptLabelForCheckout(
+    supabase,
+    input.receiptLabelId
+  );
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
+  }
+
+  if (!resolved.labelId && !description && !customText) {
+    return {
+      success: false,
+      error: "נא להזין תיאור לחיוב, לבחור שם לקבלה, או לכתוב טקסט מותאם.",
+    };
+  }
+
+  const { data: created, error } = await supabase
+    .from("payments")
+    .insert({
+      parent_id: input.parentId,
+      enrollment_id: null,
+      amount,
+      payment_method: input.method,
+      status: "pending",
+      office_collection: true,
+      receipt_label_id: resolved.labelId,
+      receipt_description: resolved.description ?? (description || null),
+      receipt_custom_text: customText || null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    return { success: false, error: "יצירת החיוב נכשלה. נסו שוב." };
+  }
+
+  if (input.method === "credit_card") {
+    const checkout = await startCollectionCardcomCheckout({
+      paymentId: created.id,
+    });
+    if (!checkout.success || !checkout.checkoutUrl) {
+      await supabase.from("payments").delete().eq("id", created.id);
+      return {
+        success: false,
+        error: checkout.success
+          ? "לא הצלחנו לפתוח את דף הסליקה."
+          : checkout.error,
+      };
+    }
+    revalidatePath("/admin/customers");
+    return { success: true, checkoutUrl: checkout.checkoutUrl };
+  }
+
+  revalidatePath("/admin/collections");
+  revalidatePath("/admin/customers");
+  revalidatePath("/parent/dashboard");
+  return { success: true };
+}
+

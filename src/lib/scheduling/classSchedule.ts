@@ -341,6 +341,101 @@ export function mergeGeneratedSessions(
   );
 }
 
+/**
+ * מעביר את המפגשים של מועד ליום ולשעות החדשים לפני יצירה מחדש,
+ * כדי שלא יישאר עותק של הסדרה הישנה כ"מפגשים אחרים".
+ * שינוי שעה באותו יום שומר את התאריכים. שינוי יום ממפה לפי הסדר
+ * אל תאריכי היום החדש, וכל מפגש שומר סטטוס, הערות ומזהה.
+ */
+export function moveSessionsWithWeeklySlot(
+  sessions: ClassSessionDraft[],
+  previous: WeeklySlot,
+  next: WeeklySlot,
+  schedule: Pick<ClassScheduleState, "rangeStart" | "rangeEnd" | "sessionCount">
+): ClassSessionDraft[] {
+  if (parseClockMinutes(previous.startTime) == null || parseClockMinutes(previous.endTime) == null) {
+    return sessions;
+  }
+  if (parseClockMinutes(next.startTime) == null || parseClockMinutes(next.endTime) == null) {
+    return sessions;
+  }
+
+  const dayChanged = previous.dayOfWeek !== next.dayOfWeek;
+  const startChanged = previous.startTime.slice(0, 5) !== next.startTime.slice(0, 5);
+  const endChanged = previous.endTime.slice(0, 5) !== next.endTime.slice(0, 5);
+  if (!dayChanged && !startChanged && !endChanged) return sessions;
+
+  const oldKey = weeklySlotKey(previous);
+  const ownedIndexes = sessions
+    .map((session, index) => ({ session, index }))
+    .filter(
+      ({ session }) =>
+        Boolean(session.sessionDate) && sessionSlotKey(session) === oldKey
+    )
+    .sort(
+      (a, b) =>
+        a.session.sessionDate.localeCompare(b.session.sessionDate) ||
+        a.session.startTime.localeCompare(b.session.startTime)
+    )
+    .map(({ index }) => index);
+
+  if (ownedIndexes.length === 0) return sessions;
+
+  const startTime = next.startTime.slice(0, 5);
+  const endTime = next.endTime.slice(0, 5);
+
+  if (!dayChanged) {
+    const owned = new Set(ownedIndexes);
+    return sessions.map((session, index) =>
+      owned.has(index) ? { ...session, startTime, endTime } : session
+    );
+  }
+
+  // לפי אורך הסדרה עצמה, לא לפי מספר המפגשים הפעילים — כדי שגם ביטול באמצע יעבור.
+  const generated = generateWeeklySessions(
+    [next],
+    schedule.rangeStart,
+    schedule.rangeEnd,
+    ownedIndexes.length
+  );
+  const moved = sessions.slice();
+  const paired = Math.min(ownedIndexes.length, generated.length);
+  for (let i = 0; i < paired; i++) {
+    const target = generated[i];
+    moved[ownedIndexes[i]] = {
+      ...sessions[ownedIndexes[i]],
+      sessionDate: target.sessionDate,
+      startTime: target.startTime.slice(0, 5),
+      endTime: target.endTime.slice(0, 5),
+    };
+  }
+
+  const usedDates = new Set(
+    moved
+      .filter((session) => sessionSlotKey(session) === weeklySlotKey(next))
+      .map((session) => session.sessionDate)
+  );
+  for (let i = paired; i < ownedIndexes.length; i++) {
+    const current = sessions[ownedIndexes[i]];
+    const shifted = shiftDateToWeekday(current.sessionDate, next.dayOfWeek);
+    if (usedDates.has(shifted)) continue;
+    moved[ownedIndexes[i]] = {
+      ...current,
+      sessionDate: shifted,
+      startTime,
+      endTime,
+    };
+    usedDates.add(shifted);
+  }
+  return moved;
+}
+
+function shiftDateToWeekday(sessionDate: string, dayOfWeek: number): string {
+  const cursor = parseLocalDate(sessionDate);
+  cursor.setDate(cursor.getDate() + (dayOfWeek - cursor.getDay()));
+  return formatLocalDate(cursor);
+}
+
 export function formatWeeklyDays(days: number[]): string {
   return [...new Set(days)]
     .sort((a, b) => a - b)
