@@ -7,9 +7,18 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Input";
+import {
+  QuantityPackageFields,
+  type PackageDraft,
+} from "@/components/admin/QuantityPackageFields";
 import { TrackScheduleFields } from "@/components/admin/TrackScheduleFields";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
-import { cn } from "@/utils/cn";
+import {
+  columnsFromPackages,
+  normalizePackageDraft,
+  packagesFromProduct,
+} from "@/lib/catalog/quantityPackages";
+import type { Json } from "@/types/database.types";
 
 export type PoolPassFormData = {
   id: string;
@@ -17,6 +26,7 @@ export type PoolPassFormData = {
   description: string | null;
   entries_count: number;
   price: number;
+  price_tiers?: Json | null;
   status: "draft" | "active" | "inactive";
   requires_schedule: boolean;
   instructor_id: string | null;
@@ -25,20 +35,26 @@ export type PoolPassFormData = {
 const emptyForm = {
   title: "",
   description: "",
-  entries_count: "1",
-  price: "",
-  status: "active",
+  packages: [{ quantity: "1", price: "" }] as PackageDraft[],
+  status: "active" as const,
   requires_schedule: false,
   instructor_id: "",
 };
 
 function toFormState(existing?: PoolPassFormData) {
   if (!existing) return emptyForm;
+  const packages = packagesFromProduct(
+    existing.entries_count,
+    existing.price,
+    existing.price_tiers
+  );
   return {
     title: existing.title,
     description: existing.description ?? "",
-    entries_count: existing.entries_count.toString(),
-    price: existing.price.toString(),
+    packages: packages.map((pack) => ({
+      quantity: String(pack.quantity),
+      price: String(pack.price),
+    })),
     status: existing.status,
     requires_schedule: existing.requires_schedule,
     instructor_id: existing.instructor_id ?? "",
@@ -79,11 +95,20 @@ export function PoolPassForm({
     setLoading(true);
     const supabase = createClient();
 
+    const normalized = normalizePackageDraft(form.packages);
+    if (!normalized.ok) {
+      setError(normalized.error);
+      setLoading(false);
+      return;
+    }
+    const saved = columnsFromPackages(normalized.packages);
+
     const payload = {
       title: form.title,
       description: form.description || null,
-      entries_count: Number(form.entries_count) || 1,
-      price: Number(form.price) || 0,
+      entries_count: saved.count,
+      price: saved.price,
+      price_tiers: saved.price_tiers,
       requires_schedule: form.requires_schedule,
       instructor_id: form.instructor_id || null,
       // כניסה חדשה נוצרת תמיד כפעילה; שינוי סטטוס נעשה במסך העריכה.
@@ -133,36 +158,22 @@ export function PoolPassForm({
           placeholder="תיאור קצר..."
         />
       </Field>
-      <div className={cn("grid gap-5 sm:grid-cols-2", isEdit && "sm:grid-cols-3")}>
-        <Field label="מספר כניסות" required>
-          <Input
-            type="number"
-            min={1}
-            value={form.entries_count}
-            onChange={set("entries_count")}
-            required
-          />
+      {isEdit && (
+        <Field label="סטטוס">
+          <Select value={form.status} onChange={set("status")}>
+            <option value="draft">טיוטה</option>
+            <option value="active">פעיל</option>
+            <option value="inactive">לא פעיל</option>
+          </Select>
         </Field>
-        <Field label="מחיר (₪)" required>
-          <Input
-            type="number"
-            min={0}
-            step="1"
-            value={form.price}
-            onChange={set("price")}
-            required
-          />
-        </Field>
-        {isEdit && (
-          <Field label="סטטוס">
-            <Select value={form.status} onChange={set("status")}>
-              <option value="draft">טיוטה</option>
-              <option value="active">פעיל</option>
-              <option value="inactive">לא פעיל</option>
-            </Select>
-          </Field>
-        )}
-      </div>
+      )}
+      <QuantityPackageFields
+        unitPlural="כניסות"
+        unitSingular="כניסה"
+        rows={form.packages}
+        disabled={loading}
+        onChange={(packages) => setForm((current) => ({ ...current, packages }))}
+      />
       <TrackScheduleFields
         requiresSchedule={form.requires_schedule}
         instructorId={form.instructor_id}

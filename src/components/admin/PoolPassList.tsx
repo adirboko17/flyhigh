@@ -12,7 +12,9 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
+import { packageOffer } from "@/lib/catalog/quantityPackages";
 import { LISTING_STATUS } from "@/lib/constants";
+import type { Json } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 
 export type AdminPoolPassRow = {
@@ -21,6 +23,7 @@ export type AdminPoolPassRow = {
   description: string | null;
   entries_count: number;
   price: number;
+  price_tiers?: Json | null;
   status: keyof typeof LISTING_STATUS;
   requires_schedule: boolean;
   instructor_id: string | null;
@@ -83,15 +86,31 @@ export function PoolPassList({
                 <TH className="hidden sm:table-cell">מספר כניסות</TH>
                 <TH>מחיר</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-14 sm:w-28">פעולות</TH>
+                <TH className="w-28 sm:w-40">פעולות</TH>
               </TR>
             </THead>
             <TBody>
-              {filtered.map((p) => (
-                <TR key={p.id}>
+              {filtered.map((p) => {
+                const offer = packageOffer(
+                  p.entries_count,
+                  p.price,
+                  p.price_tiers,
+                  "entries"
+                );
+                return (
+                <TR
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => setEditing(p)}
+                >
                   <TD className="max-w-[11rem] font-semibold text-ink-900 sm:max-w-none">
                     {p.title}
                     <span className="mt-1 flex flex-wrap gap-1">
+                      {offer.multi && (
+                        <Badge tone="brand" className="px-1.5 py-0 text-[10px]">
+                          {offer.packages.length} חבילות
+                        </Badge>
+                      )}
                       {p.requires_schedule && (
                         <Badge tone="info" className="px-1.5 py-0 text-[10px]">
                           תיאום מועדים
@@ -110,9 +129,27 @@ export function PoolPassList({
                       </span>
                     )}
                   </TD>
-                  <TD className="hidden sm:table-cell">{p.entries_count}</TD>
+                  <TD className="hidden sm:table-cell">
+                    {offer.multi
+                      ? offer.packages.map((pack) => pack.quantity).join(" / ")
+                      : p.entries_count}
+                  </TD>
                   <TD className="whitespace-nowrap font-medium">
-                    {formatCurrency(p.price)}
+                    {offer.multi ? (
+                      <>
+                        החל מ־{formatCurrency(offer.fromPrice)}
+                        <span className="block text-xs font-normal text-ink-400">
+                          {offer.packages
+                            .map(
+                              (pack) =>
+                                `${pack.quantity} · ${formatCurrency(pack.price)}`
+                            )
+                            .join(" · ")}
+                        </span>
+                      </>
+                    ) : (
+                      formatCurrency(p.price)
+                    )}
                   </TD>
                   <TD>
                     <Badge tone={LISTING_STATUS[p.status].tone}>
@@ -120,6 +157,17 @@ export function PoolPassList({
                     </Badge>
                   </TD>
                   <TD>
+                    <div
+                      className="flex items-center justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                    <button
+                      type="button"
+                      onClick={() => setEditing(p)}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                    >
+                      עריכה
+                    </button>
                     <AdminRowActions
                       onEdit={() => setEditing(p)}
                       itemLabel={p.title}
@@ -136,9 +184,11 @@ export function PoolPassList({
                         return result;
                       }}
                     />
+                    </div>
                   </TD>
                 </TR>
-              ))}
+                );
+              })}
             </TBody>
           </Table>
         )}
@@ -149,7 +199,9 @@ export function PoolPassList({
         onClose={() => setEditing(null)}
         title={editing === "new" ? "כניסה לבריכה" : "עריכת כניסה לבריכה"}
         description={
-          editing === "new" ? "הכניסה תיווצר כפעילה ותוצג באתר." : undefined
+          editing === "new"
+            ? "אפשר להגדיר כניסה אחת, כרטיסייה, או כמה חבילות מחיר לאותו מוצר."
+            : undefined
         }
       >
         {editing !== null && (

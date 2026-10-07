@@ -13,7 +13,9 @@ import type { ClassInstructorOption } from "@/lib/admin/classInstructors";
 import { revalidatePublicCatalog } from "@/lib/catalog/revalidate";
 import { createClient } from "@/lib/supabase/client";
 import { LISTING_STATUS } from "@/lib/constants";
+import { packageOffer } from "@/lib/catalog/quantityPackages";
 import { isPrivateLessonSeries } from "@/lib/private-lessons/series";
+import type { Json } from "@/types/database.types";
 import { formatCurrency } from "@/utils/format";
 
 export type AdminPrivateLessonRow = {
@@ -23,6 +25,7 @@ export type AdminPrivateLessonRow = {
   duration_minutes: number;
   lessons_count: number;
   price: number;
+  price_tiers?: Json | null;
   status: keyof typeof LISTING_STATUS;
   requires_schedule: boolean;
   instructor_id: string | null;
@@ -88,19 +91,36 @@ export function PrivateLessonList({
                 <TH className="hidden md:table-cell">שיעורים</TH>
                 <TH>מחיר</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-14 sm:w-28">פעולות</TH>
+                <TH className="w-28 sm:w-40">פעולות</TH>
               </TR>
             </THead>
             <TBody>
-              {filtered.map((lesson) => (
-                <TR key={lesson.id}>
+              {filtered.map((lesson) => {
+                const offer = packageOffer(
+                  lesson.lessons_count,
+                  lesson.price,
+                  lesson.price_tiers,
+                  "lessons"
+                );
+                return (
+                <TR
+                  key={lesson.id}
+                  className="cursor-pointer"
+                  onClick={() => setEditing(lesson)}
+                >
                   <TD className="max-w-[11rem] font-semibold text-ink-900 sm:max-w-none">
                     {lesson.title}
                     <span className="mt-1 flex flex-wrap gap-1">
-                      {isPrivateLessonSeries(lesson.lessons_count) && (
+                      {offer.multi ? (
                         <Badge tone="brand" className="px-1.5 py-0 text-[10px]">
-                          כרטיסייה · {lesson.lessons_count}
+                          {offer.packages.length} חבילות
                         </Badge>
+                      ) : (
+                        isPrivateLessonSeries(lesson.lessons_count) && (
+                          <Badge tone="brand" className="px-1.5 py-0 text-[10px]">
+                            כרטיסייה · {lesson.lessons_count}
+                          </Badge>
+                        )
                       )}
                       {lesson.requires_schedule && (
                         <Badge tone="info" className="px-1.5 py-0 text-[10px]">
@@ -124,10 +144,26 @@ export function PrivateLessonList({
                     {lesson.duration_minutes} דק׳
                   </TD>
                   <TD className="hidden md:table-cell">
-                    {lesson.lessons_count}
+                    {offer.multi
+                      ? offer.packages.map((pack) => pack.quantity).join(" / ")
+                      : lesson.lessons_count}
                   </TD>
                   <TD className="whitespace-nowrap font-medium">
-                    {formatCurrency(lesson.price)}
+                    {offer.multi ? (
+                      <>
+                        החל מ־{formatCurrency(offer.fromPrice)}
+                        <span className="block text-xs font-normal text-ink-400">
+                          {offer.packages
+                            .map(
+                              (pack) =>
+                                `${pack.quantity} · ${formatCurrency(pack.price)}`
+                            )
+                            .join(" · ")}
+                        </span>
+                      </>
+                    ) : (
+                      formatCurrency(lesson.price)
+                    )}
                   </TD>
                   <TD>
                     <Badge tone={LISTING_STATUS[lesson.status].tone}>
@@ -135,6 +171,17 @@ export function PrivateLessonList({
                     </Badge>
                   </TD>
                   <TD>
+                    <div
+                      className="flex items-center justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                    <button
+                      type="button"
+                      onClick={() => setEditing(lesson)}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                    >
+                      עריכה
+                    </button>
                     <AdminRowActions
                       onEdit={() => setEditing(lesson)}
                       itemLabel={lesson.title}
@@ -151,9 +198,11 @@ export function PrivateLessonList({
                         return result;
                       }}
                     />
+                    </div>
                   </TD>
                 </TR>
-              ))}
+                );
+              })}
             </TBody>
           </Table>
         )}
@@ -165,7 +214,7 @@ export function PrivateLessonList({
         title={editing === "new" ? "שיעור פרטי" : "עריכת שיעור פרטי"}
         description={
           editing === "new"
-            ? "שיעור בודד, או כרטיסייה של כמה שיעורים — כמו בכניסה לבריכה."
+            ? "שיעור בודד, כרטיסייה, או כמה חבילות מחיר — למשל 5 שיעורים ב-750 ו-10 ב-1,000."
             : undefined
         }
       >

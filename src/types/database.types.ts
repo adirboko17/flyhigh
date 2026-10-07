@@ -1568,6 +1568,7 @@ export type Database = {
           id: string
           instructor_id: string | null
           price: number
+          price_tiers: Json
           requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -1579,6 +1580,7 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           price?: number
+          price_tiers?: Json
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -1590,6 +1592,7 @@ export type Database = {
           id?: string
           instructor_id?: string | null
           price?: number
+          price_tiers?: Json
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string
@@ -1687,6 +1690,7 @@ export type Database = {
           instructor_id: string | null
           lessons_count: number
           price: number
+          price_tiers: Json
           requires_schedule: boolean
           status: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -1699,6 +1703,7 @@ export type Database = {
           instructor_id?: string | null
           lessons_count?: number
           price?: number
+          price_tiers?: Json
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title: string
@@ -1711,6 +1716,7 @@ export type Database = {
           instructor_id?: string | null
           lessons_count?: number
           price?: number
+          price_tiers?: Json
           requires_schedule?: boolean
           status?: Database["public"]["Enums"]["listing_status"]
           title?: string

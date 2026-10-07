@@ -22,13 +22,13 @@ export default async function AdminTracksPage() {
     supabase
       .from("pool_passes")
       .select(
-        "id, title, description, entries_count, price, status, requires_schedule, instructor_id"
+        "id, title, description, entries_count, price, price_tiers, status, requires_schedule, instructor_id"
       )
       .order("created_at", { ascending: false }),
     supabase
       .from("private_lessons")
       .select(
-        "id, title, description, duration_minutes, lessons_count, price, status, requires_schedule, instructor_id"
+        "id, title, description, duration_minutes, lessons_count, price, price_tiers, status, requires_schedule, instructor_id"
       )
       .order("created_at", { ascending: false }),
     getClassInstructorOptions(),

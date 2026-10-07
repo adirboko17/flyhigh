@@ -171,12 +171,16 @@ export function ProgramList({
                 <TH>{copy.priceCol}</TH>
                 <TH>{copy.extraCol}</TH>
                 <TH>סטטוס</TH>
-                <TH className="w-14 sm:w-28">פעולות</TH>
+                <TH className="w-28 sm:w-40">פעולות</TH>
               </TR>
             </THead>
             <TBody>
               {filtered.map((p) => (
-                <TR key={p.id}>
+                <TR
+                  key={p.id}
+                  className="cursor-pointer"
+                  onClick={() => setEditing(p)}
+                >
                   <TD className="max-w-[12rem] font-semibold text-ink-900 sm:max-w-none">
                     {p.title}
                     <span className="mt-1 flex flex-wrap gap-1">
@@ -214,6 +218,17 @@ export function ProgramList({
                     </Badge>
                   </TD>
                   <TD>
+                    <div
+                      className="flex items-center justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                    <button
+                      type="button"
+                      onClick={() => setEditing(p)}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                    >
+                      עריכה
+                    </button>
                     <AdminRowActions
                       onEdit={() => setEditing(p)}
                       itemLabel={p.title}
@@ -230,6 +245,7 @@ export function ProgramList({
                         return result;
                       }}
                     />
+                    </div>
                   </TD>
                 </TR>
               ))}

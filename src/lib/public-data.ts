@@ -132,7 +132,7 @@ export const getPublicPlans = unstable_cache(
       privateLessons: privateLessons ?? [],
     };
   },
-  ["public-plans-v2"],
+  ["public-plans-v3"],
   {
     revalidate: PUBLIC_DATA_REVALIDATE_SECONDS,
     tags: ["public-plans"],

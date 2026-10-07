@@ -1075,9 +1075,12 @@ function PlanRow({
   const isPass = enrollment.type === "pool_pass";
   const isPrivate = enrollment.type === "private_lesson";
   const isActivity = enrollment.programs?.kind === "activity";
-  const entries = enrollment.pool_passes?.entries_count ?? null;
-  const duration = enrollment.private_lessons?.duration_minutes ?? null;
   const peopleCount = enrollment.people_count ?? null;
+  const entries =
+    isPass && peopleCount != null && peopleCount > 0
+      ? peopleCount
+      : (enrollment.pool_passes?.entries_count ?? null);
+  const duration = enrollment.private_lessons?.duration_minutes ?? null;
   const slots = enrollment.private_lesson_slots ?? [];
   const activityBookings = enrollment.activity_bookings ?? [];
   const poolPassBookings = enrollment.pool_pass_bookings ?? [];
@@ -1128,8 +1131,8 @@ function PlanRow({
           {isPrivate && slots.length > 0 && ` · ${slots.length} שיעורים`}
           {isPrivate &&
             slots.length === 0 &&
-            (enrollment.private_lessons?.lessons_count ?? 1) > 1 &&
-            ` · ${enrollment.private_lessons?.lessons_count} שיעורים`}
+            (peopleCount ?? enrollment.private_lessons?.lessons_count ?? 1) > 1 &&
+            ` · ${peopleCount ?? enrollment.private_lessons?.lessons_count} שיעורים`}
           {isActivity && peopleCount !== null &&
             ` · ${peopleCount} ${peopleCount === 1 ? "משתתף" : "משתתפים"}`}
         </p>

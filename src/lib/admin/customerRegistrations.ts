@@ -192,14 +192,14 @@ async function loadCustomerRegistrationsUnsafe(
         if (row.ends_on) details.push(`בתוקף עד ${formatDate(row.ends_on)}`);
         else if (row.starts_on) details.push(`מ-${formatDate(row.starts_on)}`);
       } else if (kind === "pool_pass") {
-        const entries = pass?.entries_count;
+        const entries = row.people_count ?? pass?.entries_count;
         if (entries != null) {
           details.push(entries === 1 ? "כניסה אחת" : `${entries} כניסות`);
         }
       } else if (kind === "private_lesson") {
         const duration = lesson?.duration_minutes;
         if (duration != null) details.push(`${duration} דק׳`);
-        const lessons = lesson?.lessons_count;
+        const lessons = row.people_count ?? lesson?.lessons_count;
         if (lessons != null && lessons > 1) {
           details.push(`${lessons} שיעורים`);
         }

@@ -17,6 +17,7 @@ import {
   programDurationLabel,
 } from "@/lib/program-cards";
 import { parseActivityPriceTiers } from "@/lib/finance/activityPricing";
+import { packageOffer } from "@/lib/catalog/quantityPackages";
 import { isActivityProgram } from "@/lib/programs";
 import { loadFamilyDiscountSettings } from "@/lib/finance/siblingDiscount";
 import { getPublicPlans } from "@/lib/public-data";
@@ -224,6 +225,12 @@ export default async function ProgramsPage() {
           <div className="grid gap-5 sm:grid-cols-2">
             {poolPasses.map((pass, index) => {
               const template = poolPassCardTemplate(pass.entries_count);
+              const offer = packageOffer(
+                pass.entries_count,
+                pass.price,
+                pass.price_tiers,
+                "entries"
+              );
 
               return (
                 <ScrollReveal
@@ -235,8 +242,9 @@ export default async function ProgramsPage() {
                     planKind="pool_pass"
                     planId={pass.id}
                     planTitle={pass.title}
-                    price={pass.price}
+                    price={offer.multi ? offer.fromPrice : pass.price}
                     entriesCount={pass.entries_count}
+                    quantityPackages={offer.multi ? offer.packages : undefined}
                     viewer={viewer}
                     familyDiscount={familyDiscount}
                     className="h-full hover:translate-y-0 hover:shadow-none"
@@ -245,8 +253,15 @@ export default async function ProgramsPage() {
                       compact
                       name={pass.title}
                       desc={pass.description}
-                      price={formatCurrency(pass.price)}
-                      stub={{ kind: "entries", count: pass.entries_count }}
+                      price={formatCurrency(
+                        offer.multi ? offer.fromPrice : pass.price
+                      )}
+                      pricePrefix={offer.pricePrefix}
+                      priceRows={offer.priceRows}
+                      stub={{
+                        kind: "entries",
+                        count: offer.multi ? offer.leadCount : pass.entries_count,
+                      }}
                       features={template.features}
                       icon={template.icon}
                       accent={template.accent}
@@ -285,6 +300,12 @@ export default async function ProgramsPage() {
                 PRIVATE_LESSON_CARD_TEMPLATES[
                   index % PRIVATE_LESSON_CARD_TEMPLATES.length
                 ];
+              const offer = packageOffer(
+                lesson.lessons_count,
+                lesson.price,
+                lesson.price_tiers,
+                "lessons"
+              );
 
               return (
                 <ScrollReveal
@@ -296,8 +317,9 @@ export default async function ProgramsPage() {
                     planKind="private_lesson"
                     planId={lesson.id}
                     planTitle={lesson.title}
-                    price={lesson.price}
+                    price={offer.multi ? offer.fromPrice : lesson.price}
                     lessonsCount={lesson.lessons_count}
+                    quantityPackages={offer.multi ? offer.packages : undefined}
                     durationMinutes={lesson.duration_minutes}
                     viewer={viewer}
                     familyDiscount={familyDiscount}
@@ -307,16 +329,22 @@ export default async function ProgramsPage() {
                       compact
                       name={lesson.title}
                       desc={lesson.description}
-                      price={formatCurrency(lesson.price)}
+                      price={formatCurrency(
+                        offer.multi ? offer.fromPrice : lesson.price
+                      )}
+                      pricePrefix={offer.pricePrefix}
+                      priceRows={offer.priceRows}
                       extraLine={
-                        lesson.lessons_count > 1
+                        lesson.lessons_count > 1 || offer.multi
                           ? `${lesson.duration_minutes} דקות לשיעור`
                           : null
                       }
                       stub={
-                        lesson.lessons_count > 1
-                          ? { kind: "lessons", count: lesson.lessons_count }
-                          : { kind: "minutes", count: lesson.duration_minutes }
+                        offer.multi
+                          ? { kind: "lessons", count: offer.leadCount }
+                          : lesson.lessons_count > 1
+                            ? { kind: "lessons", count: lesson.lessons_count }
+                            : { kind: "minutes", count: lesson.duration_minutes }
                       }
                       features={template.features}
                       icon={template.icon}

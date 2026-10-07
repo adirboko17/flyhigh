@@ -39,6 +39,11 @@ import {
   isPrivateLessonSeries,
   privateLessonCount,
 } from "@/lib/private-lessons/series";
+import {
+  chooseQuantityPackage,
+  packagesFromProduct,
+  type QuantityPackage,
+} from "@/lib/catalog/quantityPackages";
 import type { CheckoutPaymentMethod, CouponPreviewResult } from "./actions";
 
 /** רכישה של מסלול, כרטיסייה או שיעור פרטי. */
@@ -76,6 +81,10 @@ type PlanRecord = {
   entriesCount: number | null;
   /** מספר השיעורים בכרטיסייה. null מחוץ לשיעור פרטי. */
   lessonsCount: number | null;
+  /** חבילות כמות. ריק במנוי ובפעילות. */
+  quantityPackages: QuantityPackage[];
+  /** הלקוח בחר חבילה, והמחיר הוא המחיר הכולל שלה. */
+  fixedPackage: boolean;
   extraHalfHourPrice: number | null;
   requiresSchedule: boolean;
 };
@@ -116,6 +125,7 @@ function purchaseQuantity(
   plan: PlanRecord,
   requested: number | undefined
 ) {
+  if (plan.fixedPackage) return 1;
   if (kind === "private_lesson" && isPrivateLessonSeries(plan.lessonsCount)) {
     return 1;
   }
@@ -165,6 +175,8 @@ async function loadActivePlan(
           priceTiers: parseActivityPriceTiers(data.price_tiers),
           entriesCount: null,
           lessonsCount: null,
+          quantityPackages: [],
+          fixedPackage: false,
           extraHalfHourPrice: data.extra_half_hour_price,
           requiresSchedule: data.requires_schedule,
         }
@@ -174,7 +186,7 @@ async function loadActivePlan(
   if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
-      .select("id, title, price, entries_count, requires_schedule")
+      .select("id, title, price, entries_count, price_tiers, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -189,6 +201,12 @@ async function loadActivePlan(
           priceTiers: [],
           entriesCount: data.entries_count,
           lessonsCount: null,
+          quantityPackages: packagesFromProduct(
+            data.entries_count,
+            data.price,
+            data.price_tiers
+          ),
+          fixedPackage: false,
           extraHalfHourPrice: null,
           requiresSchedule: data.requires_schedule,
         }
@@ -197,7 +215,7 @@ async function loadActivePlan(
 
   const { data } = await supabase
     .from("private_lessons")
-    .select("id, title, price, requires_schedule, lessons_count")
+    .select("id, title, price, price_tiers, requires_schedule, lessons_count")
     .eq("id", planId)
     .eq("status", "active")
     .maybeSingle();
@@ -212,6 +230,12 @@ async function loadActivePlan(
         priceTiers: [],
         entriesCount: null,
         lessonsCount: data.lessons_count,
+        quantityPackages: packagesFromProduct(
+          data.lessons_count,
+          data.price,
+          data.price_tiers
+        ),
+        fixedPackage: false,
         extraHalfHourPrice: null,
         requiresSchedule: data.requires_schedule,
       }
@@ -308,6 +332,25 @@ function planNotFoundError(kind: PlanKind): string {
   return "השיעור הפרטי לא נמצא או אינו זמין לרכישה.";
 }
 
+function applyQuantityPackage(
+  plan: PlanRecord,
+  requested: number | null | undefined
+): { ok: true; plan: PlanRecord } | { ok: false; error: string } {
+  if (plan.quantityPackages.length <= 1) return { ok: true, plan };
+  const chosen = chooseQuantityPackage(plan.quantityPackages, requested);
+  if (!chosen) return { ok: false, error: "נא לבחור חבילה." };
+  return {
+    ok: true,
+    plan: {
+      ...plan,
+      price: chosen.price,
+      lessonsCount: plan.lessonsCount == null ? null : chosen.quantity,
+      entriesCount: plan.entriesCount == null ? null : chosen.quantity,
+      fixedPackage: true,
+    },
+  };
+}
+
 function couponRpcIds(kind: PlanKind, planId: string) {
   return {
     p_program_id: kind === "program" ? planId : undefined,
@@ -327,6 +370,7 @@ export async function previewPlanCoupon(input: {
   childIds: string[];
   includeSelf: boolean;
   quantity?: number;
+  packageQuantity?: number | null;
 }): Promise<CouponPreviewResult> {
   const profile = await requireRole("parent");
   const code = normalizeCouponCode(input.code);
@@ -336,11 +380,14 @@ export async function previewPlanCoupon(input: {
   }
 
   const supabase = await createClient();
-  const plan = await loadActivePlan(supabase, input.kind, input.planId);
+  const loadedPlan = await loadActivePlan(supabase, input.kind, input.planId);
 
-  if (!plan) {
+  if (!loadedPlan) {
     return { success: false, error: planNotFoundError(input.kind) };
   }
+  const priced = applyQuantityPackage(loadedPlan, input.packageQuantity);
+  if (!priced.ok) return { success: false, error: priced.error };
+  const plan = priced.plan;
 
   const quantity = purchaseQuantity(input.kind, plan, input.quantity);
   if (quantity === null) {
@@ -414,6 +461,8 @@ export async function completePlanPurchase(input: {
   couponCode?: string | null;
   /** כמות שיעורים למשתתף, או מספר נפשות בפעילות הפוגה. */
   quantity?: number;
+  /** כמות שנבחרה מתוך חבילות מחיר, כשיש יותר מחבילה אחת. */
+  packageQuantity?: number | null;
   /** תווית לקבלה — אם נבחרה, מחליפה את שם המוצר בתיאור החיוב/הקבלה. */
   receiptLabelId?: string | null;
 }): Promise<CompletePlanPurchaseResult> {
@@ -436,11 +485,16 @@ export async function completePlanPurchase(input: {
   }
 
   const supabase = await createClient();
-  const plan = await loadActivePlan(supabase, kind, planId);
+  const loadedPlan = await loadActivePlan(supabase, kind, planId);
 
-  if (!plan) {
+  if (!loadedPlan) {
     return { success: false, error: planNotFoundError(kind) };
   }
+  const priced = applyQuantityPackage(loadedPlan, input.packageQuantity);
+  if (!priced.ok) {
+    return { success: false, error: priced.error };
+  }
+  const plan = priced.plan;
 
   const isActivity = isActivityProgram(plan.programKind);
   const isSession = sessionActivity(plan);
@@ -635,7 +689,11 @@ export async function completePlanPurchase(input: {
           deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
         starts_on: membershipStart,
         ends_on: membershipEnd,
-        people_count: null as number | null,
+        people_count: plan.fixedPackage
+          ? kind === "private_lesson"
+            ? privateLessonCount(plan.lessonsCount)
+            : Math.max(1, plan.entriesCount ?? 1)
+          : null,
       }));
 
   const { data: createdEnrollments, error: enrollmentError } = await supabase

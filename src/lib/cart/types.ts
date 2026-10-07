@@ -38,13 +38,17 @@ export function cartItemKey(item: Pick<
   | "sessionIds"
   | "quantity"
   | "isTrial"
+  | "lessonsCount"
+  | "entriesCount"
 >) {
   const children = [...item.childIds].filter(Boolean).sort().join(",");
   const slot = item.weeklySlotId ?? "";
   const sessions = [...(item.sessionIds ?? [])].filter(Boolean).sort().join(",");
   const qty = item.quantity ?? 1;
   const trial = item.isTrial ? "trial" : "";
-  return `${item.kind}:${item.productId}:${slot}:${sessions}:${item.includeSelf ? 1 : 0}:${children}:${qty}:${trial}`;
+  const lessons = item.lessonsCount ?? "";
+  const entries = item.entriesCount ?? "";
+  return `${item.kind}:${item.productId}:${slot}:${sessions}:${item.includeSelf ? 1 : 0}:${children}:${qty}:${lessons}:${entries}:${trial}`;
 }
 
 export function newCartItemId() {

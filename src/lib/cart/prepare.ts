@@ -56,6 +56,10 @@ import {
   isPrivateLessonSeries,
   privateLessonCount,
 } from "@/lib/private-lessons/series";
+import {
+  chooseQuantityPackage,
+  packagesFromProduct,
+} from "@/lib/catalog/quantityPackages";
 import type { Database } from "@/types/database.types";
 import {
   loadBookableAppointmentSessions,
@@ -771,6 +775,7 @@ async function preparePlanLine(
   let lessonsCount: number | null = item.lessonsCount ?? null;
   let durationMinutes: number | null = null;
   let requiresSchedule = false;
+  let quantityTiers: unknown = null;
 
   if (kind === "program") {
     const { data } = await supabase
@@ -791,7 +796,7 @@ async function preparePlanLine(
   } else if (kind === "pool_pass") {
     const { data } = await supabase
       .from("pool_passes")
-      .select("id, title, price, entries_count, requires_schedule")
+      .select("id, title, price, entries_count, price_tiers, requires_schedule")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -799,11 +804,12 @@ async function preparePlanLine(
     title = data.title;
     price = Number(data.price);
     entriesCount = data.entries_count;
+    quantityTiers = data.price_tiers;
     requiresSchedule = data.requires_schedule;
   } else {
     const { data } = await supabase
       .from("private_lessons")
-      .select("id, title, price, requires_schedule, lessons_count")
+      .select("id, title, price, price_tiers, requires_schedule, lessons_count")
       .eq("id", planId)
       .eq("status", "active")
       .maybeSingle();
@@ -811,7 +817,30 @@ async function preparePlanLine(
     title = data.title;
     price = Number(data.price);
     lessonsCount = data.lessons_count;
+    quantityTiers = data.price_tiers;
     requiresSchedule = data.requires_schedule;
+  }
+
+  let fixedPackage = false;
+  if (kind === "pool_pass" || kind === "private_lesson") {
+    const packages = packagesFromProduct(
+      kind === "pool_pass" ? entriesCount : lessonsCount,
+      price,
+      quantityTiers
+    );
+    if (packages.length > 1) {
+      const chosen = chooseQuantityPackage(
+        packages,
+        kind === "pool_pass" ? item.entriesCount : item.lessonsCount
+      );
+      if (!chosen) {
+        return { success: false, error: `נא לבחור חבילה ל${title}.` };
+      }
+      price = chosen.price;
+      if (kind === "pool_pass") entriesCount = chosen.quantity;
+      else lessonsCount = chosen.quantity;
+      fixedPackage = true;
+    }
   }
 
   const isActivity = isActivityProgram(programKind);
@@ -821,10 +850,13 @@ async function preparePlanLine(
     hasGroupPricing: priceTiers.length > 0,
   });
   const lessonSeries =
-    kind === "private_lesson" && isPrivateLessonSeries(lessonsCount);
-  const quantity = lessonSeries
-    ? 1
-    : normalizeQuantity(
+    kind === "private_lesson" &&
+    !fixedPackage &&
+    isPrivateLessonSeries(lessonsCount);
+  const quantity =
+    fixedPackage || lessonSeries
+      ? 1
+      : normalizeQuantity(
         kind,
         programKind,
         item.quantity,
@@ -913,7 +945,11 @@ async function preparePlanLine(
         status: "active" as const,
         starts_on: membershipStart,
         ends_on: membershipEnd,
-        people_count: null as number | null,
+        people_count: fixedPackage
+          ? kind === "private_lesson"
+            ? privateLessonCount(lessonsCount)
+            : Math.max(1, entriesCount ?? 1)
+          : null,
       }));
 
   const names = [
@@ -951,7 +987,7 @@ async function preparePlanLine(
       paymentAmounts: amounts,
       privateLessonQuantity:
         kind === "private_lesson" && requiresSchedule
-          ? lessonSeries
+          ? fixedPackage || lessonSeries
             ? privateLessonCount(lessonsCount)
             : quantity
           : null,
