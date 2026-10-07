@@ -213,17 +213,20 @@ async function recordCollectionReceipt(input: {
   note: string | null;
   createdBy: string;
 }): Promise<CollectionActionResult> {
-  let document: Awaited<ReturnType<typeof issueCollectionDocument>>;
-  try {
-    document = await issueCollectionDocument(input);
-  } catch (error) {
-    return {
-      success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "הפקת החשבונית בקארדקום נכשלה. התקבול לא נרשם.",
-    };
+  const receiptless = isReceiptlessCollectionMethod(input.charge.payment_method);
+  let document: Awaited<ReturnType<typeof issueCollectionDocument>> | null = null;
+  if (!receiptless) {
+    try {
+      document = await issueCollectionDocument(input);
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "הפקת החשבונית בקארדקום נכשלה. התקבול לא נרשם.",
+      };
+    }
   }
 
   const admin = createAdminClient();
@@ -244,19 +247,21 @@ async function recordCollectionReceipt(input: {
     }
     return {
       success: false,
-      error: document.documentNumber
+      error: document?.documentNumber
         ? `החשבונית הופקה בקארדקום (מס׳ ${document.documentNumber}) אך רישום התקבול נכשל.`
         : "רישום התקבול נכשל. נסו שוב.",
     };
   }
 
-  await admin.from("receipts").insert({
-    parent_id: input.charge.parent_id,
-    payment_id: input.charge.id,
-    receipt_number: document.documentNumber,
-    receipt_url: document.documentUrl,
-    sent_to_email: document.sentToEmail,
-  });
+  if (document) {
+    await admin.from("receipts").insert({
+      parent_id: input.charge.parent_id,
+      payment_id: input.charge.id,
+      receipt_number: document.documentNumber,
+      receipt_url: document.documentUrl,
+      sent_to_email: document.sentToEmail,
+    });
+  }
 
   try {
     await notifyCollectionPaid({
@@ -299,14 +304,6 @@ export async function addPaymentReceipt(input: {
     return {
       success: false,
       error: "לחיוב באשראי יש לפתוח סליקה בקארדקום, לא לרשום תקבול מזומן.",
-    };
-  }
-
-  if (isReceiptlessCollectionMethod(loaded.charge.payment_method)) {
-    const methodLabel = PAYMENT_METHOD[loaded.charge.payment_method];
-    return {
-      success: false,
-      error: `לחיוב ב${methodLabel} יש לאשר בלי להפיק קבלה.`,
     };
   }
 
@@ -417,7 +414,10 @@ export async function reopenCollectionCharge(input: {
   const charge = loaded.charge;
   const removeIds = [...new Set(input.removeReceiptIds ?? [])];
 
-  if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
+  if (
+    isReceiptlessChargeSettled(charge.payment_method, charge.status) &&
+    (charge.payment_receipts ?? []).length === 0
+  ) {
     if (removeIds.length > 0) {
       return {
         success: false,

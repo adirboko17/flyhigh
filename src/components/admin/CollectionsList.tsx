@@ -12,7 +12,6 @@ import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
 import {
   addPaymentReceipt,
-  approveCollectionPassCharge,
   deleteCollectionCharge,
   deletePaymentReceipt,
   reopenCollectionCharge,
@@ -150,24 +149,24 @@ function receiptPreview(charge: CollectionCharge) {
 function receiptlessCopy(method: ReceiptlessCollectionMethod) {
   if (method === "maccabi") {
     return {
-      openTitle: "אישור תשלום ממכבי/לאומית",
+      openTitle: "רישום תקבול ממכבי/לאומית",
       closedTitle: "תשלום ממכבי/לאומית",
-      hint: "האישור מסמן שהכסף התקבל ממכבי/לאומית ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות ממכבי/לאומית.",
+      hint: "רשמו כמה כסף הגיע בפועל ממכבי/לאומית. אם הגיע רק חלק, היתרה נשארת פתוחה. לא מופקת קבלה — הלקוח מקבל אותה ישירות ממכבי/לאומית.",
       paidNote: "אושר שהכסף התקבל ממכבי/לאומית. לא הופקה קבלה או חשבונית.",
     };
   }
   if (method === "amit") {
     return {
-      openTitle: "אישור תשלום מעמית",
+      openTitle: "רישום תקבול מעמית",
       closedTitle: "תשלום מעמית",
-      hint: "האישור מסמן שהכסף התקבל מעמית ומעביר את החיוב ל״שולם״. לא מופקת קבלה — הלקוח מקבל אותה ישירות מעמית.",
+      hint: "רשמו כמה כסף הגיע בפועל מעמית. אם הגיע רק חלק, היתרה נשארת פתוחה. לא מופקת קבלה — הלקוח מקבל אותה ישירות מעמית.",
       paidNote: "אושר שהכסף התקבל מעמית. לא הופקה קבלה או חשבונית.",
     };
   }
   return {
-    openTitle: "אישור תשלום בכרטיסייה",
+    openTitle: "רישום תקבול בכרטיסייה",
     closedTitle: "תשלום בכרטיסייה",
-    hint: "האישור מסמן שהלקוח שילם בכרטיסייה ומעביר את החיוב ל״שולם״. לא מופקת קבלה, חשבונית או תקבול.",
+    hint: "רשמו כמה מהחיוב כוסה בכרטיסייה. אם כוסה רק חלק, היתרה נשארת פתוחה. לא מופקת קבלה או חשבונית.",
     paidNote: "אושר תשלום בכרטיסייה. לא הופקה קבלה או חשבונית.",
   };
 }
@@ -752,7 +751,7 @@ function ChargeRow({
           disabled={disabled}
           onClick={onOpen}
         >
-          {open ? (isReceiptless ? "אישור" : "רישום תקבול") : "היסטוריה"}
+          {open ? "רישום תקבול" : "היסטוריה"}
         </Button>
       </div>
     </li>
@@ -895,12 +894,12 @@ function ChargeReceiptDialog({
       open
       onClose={onClose}
       title={
-        isReceiptless && receiptless
-          ? open
+        open
+          ? isReceiptless && receiptless
             ? receiptless.openTitle
-            : receiptless.closedTitle
-          : open
-            ? "רישום תקבול"
+            : "רישום תקבול"
+          : isReceiptless && receiptless && charge.receipts.length === 0
+            ? receiptless.closedTitle
             : "היסטוריית תקבולים"
       }
       description={`${charge.subject}${charge.childName ? ` · ${charge.childName}` : ""}`}
@@ -966,7 +965,8 @@ function ChargeReceiptDialog({
               <p className="text-sm leading-relaxed text-ink-600">
                 {receiptless.hint}
               </p>
-            ) : isCard ? (
+            ) : null}
+            {isCard ? (
               <>
                 <ReceiptLabelSelect
                   charge={charge}
@@ -1013,26 +1013,34 @@ function ChargeReceiptDialog({
                   <Input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="למשל: מזומן במשרד"
+                    placeholder={
+                      isReceiptless
+                        ? "למשל: הגיע חלק מהסכום"
+                        : "למשל: מזומן במשרד"
+                    }
                     disabled={busy}
                   />
                 </Field>
-                <ReceiptLabelSelect
-                  charge={charge}
-                  labels={receiptLabels}
-                  disabled={busy}
-                  onChange={(labelId) => onChangeLabel(charge.id, labelId)}
-                />
-                <ReceiptCustomTextField
-                  charge={charge}
-                  disabled={busy}
-                  onSave={(text) => onChangeCustomText(charge.id, text)}
-                />
-                <p className="text-xs leading-relaxed text-ink-500">
-                  עם הרישום תופק חשבונית מס-קבלה בקארדקום כאמצעי תשלום{" "}
-                  {PAYMENT_METHOD[charge.method]}, תישלח למייל הלקוח, ותישלח
-                  התראה גם אליכם.
-                </p>
+                {!isReceiptless && (
+                  <>
+                    <ReceiptLabelSelect
+                      charge={charge}
+                      labels={receiptLabels}
+                      disabled={busy}
+                      onChange={(labelId) => onChangeLabel(charge.id, labelId)}
+                    />
+                    <ReceiptCustomTextField
+                      charge={charge}
+                      disabled={busy}
+                      onSave={(text) => onChangeCustomText(charge.id, text)}
+                    />
+                    <p className="text-xs leading-relaxed text-ink-500">
+                      עם הרישום תופק חשבונית מס-קבלה בקארדקום כאמצעי תשלום{" "}
+                      {PAYMENT_METHOD[charge.method]}, תישלח למייל הלקוח, ותישלח
+                      התראה גם אליכם.
+                    </p>
+                  </>
+                )}
               </>
             )}
 
@@ -1043,23 +1051,7 @@ function ChargeReceiptDialog({
             )}
 
             <div className="flex flex-wrap gap-2">
-              {isReceiptless ? (
-                <Button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    run(`pass:${charge.id}`, async () => {
-                      const result = await approveCollectionPassCharge({
-                        paymentId: charge.id,
-                      });
-                      if (result.success) onClose();
-                      return result;
-                    })
-                  }
-                >
-                  {busyId === `pass:${charge.id}` ? "מאשר..." : "אישור"}
-                </Button>
-              ) : isCard ? (
+              {isCard ? (
                 <Button
                   type="button"
                   disabled={busy}
@@ -1094,7 +1086,7 @@ function ChargeReceiptDialog({
           </div>
         )}
 
-        {!isReceiptless && (
+        {(charge.receipts.length > 0 || !isReceiptless) && (
         <div>
           <h3 className="mb-2 text-sm font-semibold text-ink-800">
             היסטוריית תקבולים
@@ -1133,7 +1125,7 @@ function ChargeReceiptDialog({
         </div>
         )}
 
-        {isReceiptless && receiptless && !open && (
+        {isReceiptless && receiptless && !open && charge.receipts.length === 0 && (
           <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
             {receiptless.paidNote}
           </p>
@@ -1142,8 +1134,9 @@ function ChargeReceiptDialog({
         {open && (
           <div className="border-t border-ink-100 pt-4">
             <p className="mb-2 text-xs text-ink-500">
-              אפשר לפצל את היתרה לכמה אמצעי תשלום — כל חלק ייגבה בנפרד
-              ותופק לו חשבונית עם התקבול.
+              {isReceiptless
+                ? "אפשר לפצל את היתרה לכמה אמצעי תשלום — כל חלק ייגבה בנפרד."
+                : "אפשר לפצל את היתרה לכמה אמצעי תשלום — כל חלק ייגבה בנפרד ותופק לו חשבונית עם התקבול."}
             </p>
             <SplitChargeButton charge={charge} disabled={busy} />
           </div>
@@ -1788,10 +1781,10 @@ function ReopenChargeButton({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const receiptlessPaid =
-    (isReceiptlessCollectionMethod(charge.method) ||
-      charge.receipts.length === 0) &&
-    !isOpen(charge);
+  const settledWithoutReceipts =
+    charge.receipts.length === 0 && !isOpen(charge);
+  const receiptlessSettled =
+    isReceiptlessCollectionMethod(charge.method) && settledWithoutReceipts;
   const needsInvoice = receiptIssuedTaxInvoice(charge.method);
   const removeIds = charge.receipts
     .map((receipt) => receipt.id)
@@ -1802,7 +1795,7 @@ function ReopenChargeButton({
   const keepTotal = charge.receipts
     .filter((receipt) => keepIds.includes(receipt.id))
     .reduce((sum, receipt) => sum + receipt.amount, 0);
-  const nextRemaining = receiptlessPaid
+  const nextRemaining = settledWithoutReceipts
     ? charge.amount
     : round2(Math.max(0, charge.amount - keepTotal));
 
@@ -1821,7 +1814,7 @@ function ReopenChargeButton({
   }
 
   async function handleSave() {
-    if (!receiptlessPaid && removeIds.length === 0) {
+    if (!settledWithoutReceipts && removeIds.length === 0) {
       setError("בטלו סימון של לפחות תקבול אחד כדי לפתוח מחדש יתרה.");
       return;
     }
@@ -1830,7 +1823,7 @@ function ReopenChargeButton({
     setError(null);
     const result = await reopenCollectionCharge({
       paymentId: charge.id,
-      removeReceiptIds: receiptlessPaid ? [] : removeIds,
+      removeReceiptIds: settledWithoutReceipts ? [] : removeIds,
       issueCreditInvoices: needsInvoice && removeIds.length > 0,
     });
     setLoading(false);
@@ -1870,10 +1863,12 @@ function ReopenChargeButton({
         className="max-w-lg"
       >
         <div className="space-y-4">
-          {receiptlessPaid ? (
+          {settledWithoutReceipts ? (
             <p className="text-sm leading-relaxed text-ink-600">
-              החיוב אושר בלי תקבול ובלי חשבונית. ההחזרה תפתח אותו מחדש כחוב
-              פתוח על {formatCurrency(charge.amount)}.
+              {receiptlessSettled
+                ? "החיוב אושר בלי תקבול ובלי חשבונית. ההחזרה תפתח אותו מחדש כחוב פתוח על "
+                : "החיוב סומן כשולם בלי תקבולים רשומים. ההחזרה תפתח אותו מחדש כחוב פתוח על "}
+              {formatCurrency(charge.amount)}.
             </p>
           ) : (
             <>
