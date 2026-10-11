@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 import { CancelInterestEnrollmentButton } from "@/components/parent/CancelInterestEnrollmentButton";
+import { RegistrationOpenPrompt } from "@/components/parent/RegistrationOpenPrompt";
 import { PayOpenChargeButton } from "@/components/payments/PayOpenChargeButton";
 import { PaymentMethodNoteCard } from "@/components/payments/PaymentMethodNoteCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -417,6 +418,7 @@ export default async function ParentDashboard() {
 
   return (
     <div className="space-y-6">
+      <RegistrationOpenPrompt eligible={allEnrollments.length === 0} />
       <section className="relative overflow-hidden rounded-3xl bg-brand-gradient p-5 text-white shadow-glow sm:p-8">
         <div
           aria-hidden

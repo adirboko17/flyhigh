@@ -64,3 +64,26 @@ export function subjectClassCategory(
   const category = enrollment.classes?.category?.trim();
   return category || "ללא קטגוריה";
 }
+
+export const POOL_INCOME_CATEGORY = "בריכה";
+export const PRIVATE_LESSON_INCOME_CATEGORY = "שיעורים פרטיים";
+export const OTHER_INCOME_CATEGORY = "אחר";
+
+/** קטגוריית ההכנסה לסיכום בעמוד הכספים, בלי פירוט הפריט. */
+export function paymentIncomeCategory(enrollment: EnrollmentSubject | null): string {
+  if (!enrollment) return OTHER_INCOME_CATEGORY;
+
+  switch (enrollment.type) {
+    case "class":
+      return subjectClassCategory(enrollment) ?? "ללא קטגוריה";
+    case "program":
+    case "pool_pass":
+      return POOL_INCOME_CATEGORY;
+    case "private_lesson":
+      return PRIVATE_LESSON_INCOME_CATEGORY;
+    default: {
+      const unreachable: never = enrollment.type;
+      return unreachable;
+    }
+  }
+}

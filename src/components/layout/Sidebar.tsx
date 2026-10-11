@@ -18,6 +18,11 @@ import { THEME_COLOR } from "@/lib/theme-color";
 import { cn } from "@/utils/cn";
 import { BrandLogo } from "./BrandLogo";
 import { LogoutButton } from "./LogoutButton";
+import {
+  AlertMenuDot,
+  AlertNavBadge,
+  AlertUnreadProvider,
+} from "@/components/admin/AlertNavBadge";
 
 const COLLAPSE_COOKIE = "admin-sidebar-collapsed";
 
@@ -44,6 +49,14 @@ function persistCollapsed(next: boolean) {
     /* private mode */
   }
   document.cookie = `${COLLAPSE_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
+function navHasAlertBadge(items: NavEntry[]) {
+  return items.some((entry) =>
+    isNavGroup(entry)
+      ? entry.children.some((child) => child.badge === "alerts")
+      : entry.badge === "alerts"
+  );
 }
 
 export function Sidebar({
@@ -121,6 +134,7 @@ export function Sidebar({
   const tipLeft = asideRef.current?.getBoundingClientRect().left ?? 0;
 
   return (
+    <AlertUnreadProvider enabled={navHasAlertBadge(items)}>
     <>
       {navigatingTo && (
         <div
@@ -153,6 +167,7 @@ export function Sidebar({
           aria-expanded={open}
         >
           <Icon name={open ? "x" : "menu"} size={22} />
+          {!open && <AlertMenuDot />}
         </button>
       </div>
 
@@ -296,6 +311,7 @@ export function Sidebar({
         </div>
       )}
     </>
+    </AlertUnreadProvider>
   );
 }
 
@@ -337,7 +353,7 @@ function NavLinkItem({
       aria-current={active ? "page" : undefined}
       aria-label={rail ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:text-sm lg:font-medium",
+        "relative flex items-center gap-3 rounded-2xl px-5 py-4 text-lg font-semibold transition-all lg:rounded-xl lg:text-sm lg:font-medium",
         rail
           ? "lg:justify-center lg:gap-0 lg:px-0 lg:py-2.5"
           : "lg:px-3.5 lg:py-2.5",
@@ -347,8 +363,20 @@ function NavLinkItem({
           : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
       )}
     >
-      <span className="text-base leading-none">{item.icon}</span>
-      <span className={cn(rail && "lg:hidden")}>{item.label}</span>
+      <span className="relative inline-flex text-base leading-none">
+        {item.icon}
+        {item.badge === "alerts" && rail && (
+          <span className="pointer-events-none absolute -top-2 -end-2 hidden lg:flex">
+            <AlertNavBadge />
+          </span>
+        )}
+      </span>
+      <span className={cn("min-w-0 flex-1", rail && "lg:hidden")}>{item.label}</span>
+      {item.badge === "alerts" && (
+        <span className={cn(rail && "lg:hidden")}>
+          <AlertNavBadge />
+        </span>
+      )}
     </Link>
   );
 }

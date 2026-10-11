@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui/Input";
+import { submitContactForm } from "@/lib/contact/actions";
 import { cn } from "@/utils/cn";
 
 const SUBJECTS = [
@@ -18,6 +19,7 @@ export function ContactForm() {
     email: "",
     subject: "general",
     message: "",
+    website: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -55,8 +57,14 @@ export function ContactForm() {
     }
 
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    const result = await submitContactForm(form);
     setLoading(false);
+
+    if (!result.success) {
+      setError(result.error ?? "לא הצלחנו לשלוח את הפנייה.");
+      return;
+    }
+
     setSuccess(true);
     setForm({
       fullName: "",
@@ -64,6 +72,7 @@ export function ContactForm() {
       email: "",
       subject: "general",
       message: "",
+      website: "",
     });
   }
 
@@ -159,6 +168,18 @@ export function ContactForm() {
           required
         />
       </Field>
+
+      <div className="hidden" aria-hidden>
+        <label htmlFor="contactWebsite">אתר</label>
+        <input
+          id="contactWebsite"
+          name="website"
+          tabIndex={-1}
+          autoComplete="off"
+          value={form.website}
+          onChange={setField("website")}
+        />
+      </div>
 
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

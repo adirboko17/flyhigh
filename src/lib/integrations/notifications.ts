@@ -8,6 +8,7 @@ export interface EmailMessage {
   to: string;
   subject: string;
   html: string;
+  replyTo?: string;
 }
 
 export interface EmailProvider {
@@ -40,6 +41,7 @@ class ResendEmailProvider implements EmailProvider {
       to: message.to,
       subject: message.subject,
       html: message.html,
+      replyTo: message.replyTo,
     });
 
     if (error) {
@@ -60,4 +62,12 @@ export function getEmailProvider(): EmailProvider {
 
 export function getAdminNotifyEmail() {
   return process.env.ADMIN_NOTIFY_EMAIL?.trim() || "office@al-ha-gova.co.il";
+}
+
+/** יעד טופס צור קשר באתר. */
+export function getContactInboxEmail() {
+  return (
+    process.env.CONTACT_INBOX_EMAIL?.trim() ||
+    "alhagovamoritshapira@gmail.com"
+  );
 }

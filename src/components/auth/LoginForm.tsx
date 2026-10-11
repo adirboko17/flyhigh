@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { markRegistrationPrompt } from "@/lib/registration-prompt";
 import { Field, Input } from "@/components/ui/Input";
 
 const ROLE_HOME: Record<string, string> = {
@@ -50,7 +51,10 @@ export function LoginForm() {
       target = ROLE_HOME[profile?.role ?? "parent"] ?? "/";
     }
 
-    router.push(target ?? "/");
+    const next = target ?? "/";
+    if (next === "/parent/dashboard") markRegistrationPrompt();
+
+    router.push(next);
     router.refresh();
   }
 

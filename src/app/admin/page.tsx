@@ -300,7 +300,7 @@ export default async function AdminDashboard() {
             ? `${expiredCount} ${expiredCount === 1 ? "מנוי שפג תוקפו" : "מנויים שפג תוקפם"}`
             : `${endingSoonCount} ${endingSoonCount === 1 ? "מנוי מסתיים" : "מנויים מסתיימים"} בקרוב`,
       detail: `התראה עד ${MEMBERSHIP_EXPIRY_WARNING_DAYS} ימים לפני תום המנוי`,
-      href: "#expiring-memberships",
+      href: "/admin/alerts?tab=membership",
     },
   ].filter(Boolean) as TaskItem[];
 

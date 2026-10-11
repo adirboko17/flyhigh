@@ -14,6 +14,32 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_alert_reads: {
+        Row: {
+          admin_id: string
+          alert_key: string
+          seen_at: string
+        }
+        Insert: {
+          admin_id: string
+          alert_key: string
+          seen_at?: string
+        }
+        Update: {
+          admin_id?: string
+          alert_key?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_alert_reads_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activity_bookings: {
         Row: {
           attendance_status: Database["public"]["Enums"]["attendance_status"] | null
@@ -431,39 +457,48 @@ export type Database = {
       class_prospects: {
         Row: {
           child_name: string | null
-          class_id: string
+          class_id: string | null
           created_at: string
           full_name: string
           id: string
           notes: string | null
           phone: string | null
+          pool_pass_id: string | null
+          private_lesson_id: string | null
+          program_id: string | null
           session_id: string | null
           status: Database["public"]["Enums"]["class_prospect_status"]
-          trial_date: string
+          trial_date: string | null
         }
         Insert: {
           child_name?: string | null
-          class_id: string
+          class_id?: string | null
           created_at?: string
           full_name: string
           id?: string
           notes?: string | null
           phone?: string | null
+          pool_pass_id?: string | null
+          private_lesson_id?: string | null
+          program_id?: string | null
           session_id?: string | null
           status?: Database["public"]["Enums"]["class_prospect_status"]
-          trial_date: string
+          trial_date?: string | null
         }
         Update: {
           child_name?: string | null
-          class_id?: string
+          class_id?: string | null
           created_at?: string
           full_name?: string
           id?: string
           notes?: string | null
           phone?: string | null
+          pool_pass_id?: string | null
+          private_lesson_id?: string | null
+          program_id?: string | null
           session_id?: string | null
           status?: Database["public"]["Enums"]["class_prospect_status"]
-          trial_date?: string
+          trial_date?: string | null
         }
         Relationships: [
           {
@@ -471,6 +506,27 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_prospects_pool_pass_id_fkey"
+            columns: ["pool_pass_id"]
+            isOneToOne: false
+            referencedRelation: "pool_passes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_prospects_private_lesson_id_fkey"
+            columns: ["private_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "private_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_prospects_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
             referencedColumns: ["id"]
           },
           {
@@ -1906,6 +1962,47 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manual_income_sources: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          mode: string
+          name: string
+          slug: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          mode: string
+          name: string
+          slug?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          mode?: string
+          name?: string
+          slug?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_income_sources_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

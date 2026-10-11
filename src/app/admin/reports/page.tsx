@@ -137,9 +137,9 @@ export default async function AdminReportsPage({
                   label: shortMonthLabel(month),
                   values: [
                     (dashboard.revenueByMonth.get(month) ?? 0) +
-                      (dashboard.matnasByMonth.get(month) ?? 0),
+                      (dashboard.manualByMonth.get(month) ?? 0),
                     (dashboard.revenueByMonth.get(compareYearMonths[index]) ?? 0) +
-                      (dashboard.matnasByMonth.get(compareYearMonths[index]) ?? 0),
+                      (dashboard.manualByMonth.get(compareYearMonths[index]) ?? 0),
                   ],
                   href: monthHref(month, compareYearMonths[index]),
                   active: snapshot.period.month === month,
@@ -162,9 +162,9 @@ export default async function AdminReportsPage({
                     label: shortMonthLabel(month),
                     values: [
                       (dashboard.revenueByMonth.get(month) ?? 0) +
-                        (dashboard.matnasByMonth.get(month) ?? 0),
+                        (dashboard.manualByMonth.get(month) ?? 0),
                       (dashboard.revenueByMonth.get(lastYear) ?? 0) +
-                        (dashboard.matnasByMonth.get(lastYear) ?? 0),
+                        (dashboard.manualByMonth.get(lastYear) ?? 0),
                     ],
                     href: monthHref(month, lastYear),
                     active: snapshot.period.month === month,

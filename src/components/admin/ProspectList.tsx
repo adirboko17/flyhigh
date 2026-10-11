@@ -31,15 +31,22 @@ import {
   formatTime,
 } from "@/utils/format";
 
+export type ProspectOfferingKind =
+  | "class"
+  | "membership"
+  | "activity"
+  | "pool_pass"
+  | "private_lesson";
+
 export type ProspectRow = {
   id: string;
   created_at: string;
   full_name: string;
   phone: string | null;
   child_name: string | null;
-  class_id: string;
+  class_id: string | null;
   session_id: string | null;
-  trial_date: string;
+  trial_date: string | null;
   next_session_id: string | null;
   next_date: string | null;
   next_start: string | null;
@@ -50,14 +57,48 @@ export type ProspectRow = {
   session_end: string | null;
   status: Enums<"class_prospect_status">;
   notes: string | null;
-  classTitle: string;
+  interestKey: string;
+  interestTitle: string;
+  interestKind: ProspectOfferingKind;
+  interestKindLabel: string;
 };
 
-export type ProspectClassOption = {
+export type ProspectOffering = {
   id: string;
   title: string;
   inactive: boolean;
+  kind: ProspectOfferingKind;
 };
+
+const OFFERING_GROUPS: { kind: ProspectOfferingKind; label: string }[] = [
+  { kind: "class", label: "חוגים" },
+  { kind: "membership", label: "מנויים" },
+  { kind: "activity", label: "פעילויות" },
+  { kind: "pool_pass", label: "כניסות לבריכה" },
+  { kind: "private_lesson", label: "שיעורים פרטיים" },
+];
+
+function offeringSubject(item: ProspectOffering) {
+  const kind =
+    item.kind === "membership" || item.kind === "activity" ? "program" : item.kind;
+  return `${kind}:${item.id}`;
+}
+
+function parseOfferingSubject(value: string) {
+  const separator = value.indexOf(":");
+  const kind = separator === -1 ? "" : value.slice(0, separator);
+  const id = separator === -1 ? "" : value.slice(separator + 1);
+  return {
+    classId: kind === "class" ? id : "",
+    programId: kind === "program" ? id : "",
+    poolPassId: kind === "pool_pass" ? id : "",
+    privateLessonId: kind === "private_lesson" ? id : "",
+  };
+}
+
+function offeringLabel(item: ProspectOffering) {
+  return item.inactive ? `${item.title} (לא פעיל)` : item.title;
+}
 
 type StatusFilter = "all" | Enums<"class_prospect_status">;
 
@@ -77,6 +118,7 @@ function trialWhen(row: Pick<
   ProspectRow,
   "trial_date" | "session_start" | "session_end"
 >) {
+  if (!row.trial_date) return "—";
   if (!row.session_start) return formatDate(row.trial_date);
   return formatClassSessionLabel({
     session_date: row.trial_date,
@@ -86,6 +128,7 @@ function trialWhen(row: Pick<
 }
 
 function nextWhen(row: ProspectRow) {
+  if (!row.class_id) return "—";
   if (row.status === "cancelled" || !row.next_date) {
     if (row.status !== "cancelled" && row.trial_date) return "אין מפגש הבא";
     return trialWhen(row);
@@ -99,13 +142,19 @@ function nextWhen(row: ProspectRow) {
 }
 
 function nextWhenShort(row: ProspectRow) {
+  if (!row.class_id) return "—";
   if (row.status !== "cancelled" && !row.next_date) return "אין מפגש הבא";
   if (row.status === "cancelled" || !row.next_date) {
+    if (!row.trial_date) return "—";
     if (!row.session_start) return formatDateShort(row.trial_date);
     return `${formatDateShort(row.trial_date)} · ${formatTime(row.session_start)}`;
   }
   if (!row.next_start) return formatDateShort(row.next_date);
   return `${formatDateShort(row.next_date)} · ${formatTime(row.next_start)}`;
+}
+
+function isStalled(row: ProspectRow) {
+  return Boolean(row.class_id) && row.status === "scheduled" && !row.next_session_id;
 }
 
 function visitLine(row: ProspectRow) {
@@ -142,17 +191,17 @@ function telHref(phone: string | null) {
 
 export function ProspectList({
   prospects,
-  classes,
+  offerings,
   today,
 }: {
   prospects: ProspectRow[];
-  classes: ProspectClassOption[];
+  offerings: ProspectOffering[];
   today: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("scheduled");
-  const [classId, setClassId] = useState("all");
+  const [offering, setOffering] = useState("all");
   const [editing, setEditing] = useState<ProspectRow | "new" | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -160,26 +209,32 @@ export function ProspectList({
     const q = normalizeSearch(query);
     const rows = prospects.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
-      if (classId !== "all" && row.class_id !== classId) return false;
+      if (offering !== "all" && row.interestKey !== offering) return false;
       if (!q) return true;
       return [
         row.full_name,
         row.phone ?? "",
         row.child_name ?? "",
-        row.classTitle,
+        row.interestTitle,
+        row.interestKindLabel,
         row.notes ?? "",
       ].some((value) => normalizeSearch(value).includes(q));
     });
 
     return rows.sort((a, b) => {
+      const fallback = (row: ProspectRow) => row.created_at.slice(0, 10);
       const aDate =
-        status === "scheduled" ? (a.next_date ?? "9999-99-99") : a.trial_date;
+        status === "scheduled"
+          ? (a.next_date ?? fallback(a))
+          : (a.trial_date ?? fallback(a));
       const bDate =
-        status === "scheduled" ? (b.next_date ?? "9999-99-99") : b.trial_date;
+        status === "scheduled"
+          ? (b.next_date ?? fallback(b))
+          : (b.trial_date ?? fallback(b));
       if (status === "scheduled") return aDate.localeCompare(bDate);
       return bDate.localeCompare(aDate);
     });
-  }, [prospects, query, status, classId]);
+  }, [prospects, query, status, offering]);
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -216,7 +271,7 @@ export function ProspectList({
       <AdminSection
         id="prospects"
         icon="👋"
-        title="שיעורי ניסיון"
+        title="כל המתעניינים"
         count={filtered.length}
         totalCount={prospects.length}
         onNew={() => setEditing("new")}
@@ -229,23 +284,19 @@ export function ProspectList({
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="חיפוש לפי שם, טלפון או חוג..."
+                placeholder="חיפוש לפי שם, טלפון או פריט..."
                 className="h-11 border-ink-100 bg-ink-50/50 focus:bg-white md:h-10"
                 aria-label="חיפוש מתעניינים"
               />
             </div>
             <Select
-              value={classId}
-              onChange={(e) => setClassId(e.target.value)}
+              value={offering}
+              onChange={(e) => setOffering(e.target.value)}
               className="h-11 border-ink-100 bg-ink-50/50 md:h-10 md:w-64"
-              aria-label="סינון לפי חוג"
+              aria-label="סינון לפי פריט"
             >
-              <option value="all">כל החוגים</option>
-              {classes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.inactive ? `${item.title} (לא פעיל)` : item.title}
-                </option>
-              ))}
+              <option value="all">כל הפריטים</option>
+              <OfferingOptions offerings={offerings} />
             </Select>
           </div>
           <div
@@ -277,7 +328,7 @@ export function ProspectList({
           <div className="p-5">
             <EmptyState
               title="עדיין אין מתעניינים"
-              description="הוסיפו מי שמתעניינת בחוג וקבעו לה מועד לשיעור ניסיון."
+              description="הוסיפו מי שמתעניינת בחוג, בשיעור פרטי, במנוי או בכל פריט אחר באתר."
               icon="👋"
             />
           </div>
@@ -309,7 +360,7 @@ export function ProspectList({
                 <THead>
                   <TR>
                     <TH>שם</TH>
-                    <TH>חוג</TH>
+                    <TH>מתעניינת ב</TH>
                     <TH>מועד הבא</TH>
                     <TH>סטטוס</TH>
                     <TH className="w-36"> </TH>
@@ -318,8 +369,7 @@ export function ProspectList({
                 <TBody>
                   {filtered.map((row) => {
                     const meta = CLASS_PROSPECT_STATUS[row.status];
-                    const stalled =
-                      row.status === "scheduled" && !row.next_session_id;
+                    const stalled = isStalled(row);
                     const history = visitLine(row);
                     return (
                       <TR key={row.id}>
@@ -332,8 +382,13 @@ export function ProspectList({
                               "—"}
                           </p>
                         </TD>
-                        <TD className="max-w-[14rem] truncate text-sm text-ink-700">
-                          {row.classTitle}
+                        <TD className="max-w-[14rem]">
+                          <p className="truncate text-sm text-ink-700">
+                            {row.interestTitle}
+                          </p>
+                          <p className="text-xs text-ink-500">
+                            {row.interestKindLabel}
+                          </p>
                         </TD>
                         <TD>
                           <span
@@ -419,12 +474,12 @@ export function ProspectList({
         open={editing !== null}
         onClose={() => setEditing(null)}
         title={editing === "new" ? "מתעניינת חדשה" : "עריכת מתעניינת"}
-        description="בחרו חוג, ואז מועד מתוך לוח המפגשים של אותו חוג."
+        description="בחרו במה היא מתעניינת. לחוג בחרו גם מועד לשיעור ניסיון."
       >
         {editing !== null && (
           <ProspectForm
             existing={editing === "new" ? undefined : editing}
-            classes={classes}
+            offerings={offerings}
             today={today}
             onClose={() => setEditing(null)}
             onSaved={refresh}
@@ -451,7 +506,7 @@ function ProspectCard({
   onDelete: () => Promise<{ error?: string }>;
 }) {
   const meta = CLASS_PROSPECT_STATUS[row.status];
-  const stalled = row.status === "scheduled" && !row.next_session_id;
+  const stalled = isStalled(row);
   const phoneLink = telHref(row.phone);
   const history = visitLine(row);
 
@@ -464,7 +519,10 @@ function ProspectCard({
           className="min-w-0 text-right"
         >
           <p className="truncate font-semibold text-ink-900">{row.full_name}</p>
-          <p className="mt-0.5 text-sm text-ink-600">{row.classTitle}</p>
+          <p className="mt-0.5 text-sm text-ink-600">
+            {row.interestTitle}
+            <span className="text-ink-400"> · {row.interestKindLabel}</span>
+          </p>
           <p
             className={cn(
               "mt-0.5 text-xs",
@@ -537,15 +595,31 @@ function ProspectCard({
   );
 }
 
+function OfferingOptions({ offerings }: { offerings: ProspectOffering[] }) {
+  return OFFERING_GROUPS.map((group) => {
+    const items = offerings.filter((item) => item.kind === group.kind);
+    if (items.length === 0) return null;
+    return (
+      <optgroup key={group.kind} label={group.label}>
+        {items.map((item) => (
+          <option key={offeringSubject(item)} value={offeringSubject(item)}>
+            {offeringLabel(item)}
+          </option>
+        ))}
+      </optgroup>
+    );
+  });
+}
+
 function ProspectForm({
   existing,
-  classes,
+  offerings,
   today,
   onClose,
   onSaved,
 }: {
   existing?: ProspectRow;
-  classes: ProspectClassOption[];
+  offerings: ProspectOffering[];
   today: string;
   onClose: () => void;
   onSaved: () => void;
@@ -553,7 +627,7 @@ function ProspectForm({
   const [fullName, setFullName] = useState(existing?.full_name ?? "");
   const [phone, setPhone] = useState(existing?.phone ?? "");
   const [childName, setChildName] = useState(existing?.child_name ?? "");
-  const [classId, setClassId] = useState(existing?.class_id ?? "");
+  const [subject, setSubject] = useState(existing?.interestKey ?? "");
   const [sessionId, setSessionId] = useState(existing?.session_id ?? "");
   const [sessions, setSessions] = useState<ProspectSessionOption[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -563,6 +637,7 @@ function ProspectForm({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const classId = subject.startsWith("class:") ? subject.slice("class:".length) : "";
 
   useEffect(() => {
     if (!classId) {
@@ -591,13 +666,14 @@ function ProspectForm({
     event.preventDefault();
     setSaving(true);
     setError(null);
+    const interest = parseOfferingSubject(subject);
     const result = await saveProspect({
       id: existing?.id,
       fullName,
       phone,
       childName,
-      classId,
-      sessionId,
+      ...interest,
+      sessionId: interest.classId ? sessionId : "",
       notes,
       status,
     });
@@ -643,74 +719,66 @@ function ProspectForm({
           />
         </Field>
       </div>
-      <Field label="חוג" htmlFor="prospect-class" required>
+      <Field label="מתעניינת ב" htmlFor="prospect-subject" required>
         <Select
-          id="prospect-class"
-          value={classId}
+          id="prospect-subject"
+          value={subject}
           onChange={(e) => {
             const next = e.target.value;
-            setClassId(next);
-            if (next !== existing?.class_id) setSessionId("");
+            setSubject(next);
+            if (next !== existing?.interestKey) setSessionId("");
           }}
           required
         >
-          <option value="">בחירת חוג</option>
-          {classes.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.inactive ? `${item.title} (לא פעיל)` : item.title}
-            </option>
-          ))}
+          <option value="">בחירת פריט</option>
+          <OfferingOptions offerings={offerings} />
         </Select>
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="מועד שיעור ניסיון"
-          htmlFor="prospect-session"
-          hint={
-            !classId
-              ? "בחרו חוג כדי לראות את המועדים שלו"
-              : sessionsLoading
+      <div className={cn("grid gap-4", classId ? "sm:grid-cols-2" : "")}>
+        {classId ? (
+          <Field
+            label="מועד שיעור ניסיון"
+            htmlFor="prospect-session"
+            hint={
+              sessionsLoading
                 ? "טוען מועדים..."
                 : sessions.length === 0
                   ? "אין מפגשים מתוכננים לחוג זה"
                   : undefined
-          }
-          required
-        >
-          <Select
-            id="prospect-session"
-            value={sessionId}
-            onChange={(e) => setSessionId(e.target.value)}
+            }
             required
-            disabled={!classId || sessionsLoading || sessions.length === 0}
           >
-            <option value="">
-              {!classId
-                ? "קודם בחירת חוג"
-                : sessionsLoading
-                  ? "טוען מועדים..."
-                  : "בחירת מועד"}
-            </option>
-            {upcomingSessions.length > 0 && (
-              <optgroup label="מפגשים קרובים">
-                {upcomingSessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {formatClassSessionLabel(session)}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {pastSessions.length > 0 && (
-              <optgroup label="מפגשים שעברו">
-                {pastSessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {formatClassSessionLabel(session)}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </Select>
-        </Field>
+            <Select
+              id="prospect-session"
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              required
+              disabled={sessionsLoading || sessions.length === 0}
+            >
+              <option value="">
+                {sessionsLoading ? "טוען מועדים..." : "בחירת מועד"}
+              </option>
+              {upcomingSessions.length > 0 && (
+                <optgroup label="מפגשים קרובים">
+                  {upcomingSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {formatClassSessionLabel(session)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {pastSessions.length > 0 && (
+                <optgroup label="מפגשים שעברו">
+                  {pastSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {formatClassSessionLabel(session)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </Select>
+          </Field>
+        ) : null}
         <Field label="סטטוס" htmlFor="prospect-status">
           <Select
             id="prospect-status"
@@ -744,7 +812,7 @@ function ProspectForm({
         <Button type="button" variant="outline" onClick={onClose}>
           ביטול
         </Button>
-        <Button type="submit" disabled={saving || !sessionId}>
+        <Button type="submit" disabled={saving || !subject || Boolean(classId && !sessionId)}>
           {saving ? "שומר..." : existing ? "שמירה" : "הוספה"}
         </Button>
       </div>

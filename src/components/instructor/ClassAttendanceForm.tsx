@@ -81,8 +81,14 @@ export function ClassAttendanceForm({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [marks, setMarks] = useState<Record<string, Status>>({});
+  const [persistedMarks, setPersistedMarks] = useState<Record<string, Status>>(
+    {}
+  );
   const [prospects, setProspects] = useState<AttendanceProspect[]>([]);
   const [prospectMarks, setProspectMarks] = useState<
+    Record<string, "arrived" | "no_show">
+  >({});
+  const [persistedProspectMarks, setPersistedProspectMarks] = useState<
     Record<string, "arrived" | "no_show">
   >({});
   const [saving, setSaving] = useState(false);
@@ -116,6 +122,13 @@ export function ClassAttendanceForm({
     (prospect) => prospectMarks[prospect.id] !== undefined
   ).length;
   const unmarkedCount = sessionStudents.length - markedCount;
+  const hasPersistedMarks =
+    sessionStudents.some((child) => persistedMarks[child.id] !== undefined) ||
+    sessionProspects.some(
+      (prospect) => persistedProspectMarks[prospect.id] !== undefined
+    );
+  const clearingSavedAttendance =
+    markedCount === 0 && markedProspectCount === 0 && hasPersistedMarks;
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +195,7 @@ export function ClassAttendanceForm({
       if (visit) existing[prospect.id] = visit.status;
     }
     setProspectMarks(existing);
+    setPersistedProspectMarks(existing);
   }, [date, selectedSession?.id, prospects, sessions]);
 
   useEffect(() => {
@@ -210,6 +224,7 @@ export function ClassAttendanceForm({
         if (key) existing[key] = row.status;
       });
       setMarks(existing);
+      setPersistedMarks(existing);
       setLoading(false);
     }
 
@@ -241,7 +256,10 @@ export function ClassAttendanceForm({
         status: marks[child.id]!,
       }));
 
-    if (rows.length > 0) {
+    const studentMarksChanged = sessionStudents.some(
+      (child) => marks[child.id] !== persistedMarks[child.id]
+    );
+    if (rows.length > 0 || studentMarksChanged) {
       let deleteQuery = supabase
         .from("attendance")
         .delete()
@@ -251,7 +269,9 @@ export function ClassAttendanceForm({
         deleteQuery = deleteQuery.eq("session_id", selectedSession.id);
       }
       await deleteQuery;
-      await supabase.from("attendance").insert(rows);
+      if (rows.length > 0) {
+        await supabase.from("attendance").insert(rows);
+      }
     }
 
     if (sessionProspects.length > 0 && selectedSession) {
@@ -284,6 +304,18 @@ export function ClassAttendanceForm({
       );
     }
 
+    const nextMarks: Record<string, Status> = {};
+    for (const child of sessionStudents) {
+      const status = marks[child.id];
+      if (status) nextMarks[child.id] = status;
+    }
+    const nextProspectMarks: Record<string, "arrived" | "no_show"> = {};
+    for (const prospect of sessionProspects) {
+      const status = prospectMarks[prospect.id];
+      if (status) nextProspectMarks[prospect.id] = status;
+    }
+    setPersistedMarks(nextMarks);
+    setPersistedProspectMarks(nextProspectMarks);
     setSaving(false);
     setSaved(true);
     onSaved?.();
@@ -490,12 +522,23 @@ export function ClassAttendanceForm({
                   loading ||
                   sessionsLoading ||
                   !date ||
-                  (markedCount === 0 && markedProspectCount === 0)
+                  (markedCount === 0 &&
+                    markedProspectCount === 0 &&
+                    !hasPersistedMarks)
                 }
               >
                 {saving ? "שומר..." : "שמירת נוכחות"}
               </Button>
+              {clearingSavedAttendance &&
+                !loading &&
+                !sessionsLoading &&
+                sessions.length > 0 && (
+                <span className="text-sm text-ink-500">
+                  אין סימונים — השמירה תסיר את הנוכחות שנרשמה
+                </span>
+              )}
               {unmarkedCount > 0 &&
+                !clearingSavedAttendance &&
                 !loading &&
                 !sessionsLoading &&
                 sessions.length > 0 && (

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FinancePayrollCard } from "@/components/admin/FinancePayrollCard";
-import { MatnasIncomeCard } from "@/components/admin/MatnasIncomeCard";
+import { IncomeCategoryBoard } from "@/components/admin/IncomeCategoryBoard";
+import { ManualIncomesSection } from "@/components/admin/ManualIncomesSection";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { ColumnChart, SplitBar } from "@/components/ui/Chart";
@@ -16,8 +17,8 @@ import {
   financeQuery,
   parseFinanceState,
 } from "@/lib/finance/period";
+import { getClassCategories } from "@/lib/admin/getClassCategories";
 import { loadFinanceDashboard } from "@/lib/finance/report";
-import { hasOwnRecurringEntry } from "@/lib/finance/recurringIncome";
 import { reconcilePendingCardcomCheckouts } from "@/lib/payments/cardcomCheckout";
 import { shortMonthLabel, shiftMonth } from "@/lib/scheduling/monthGrid";
 import { cn } from "@/utils/cn";
@@ -48,10 +49,13 @@ export default async function AdminFinancePage({
 
   await reconcilePendingCardcomCheckouts();
   const state = parseFinanceState({ month: params.month });
-  const dashboard = await loadFinanceDashboard({
-    period: state.period,
-    compare: null,
-  });
+  const [dashboard, categories] = await Promise.all([
+    loadFinanceDashboard({
+      period: state.period,
+      compare: null,
+    }),
+    getClassCategories(),
+  ]);
   const { snapshot } = dashboard;
   const periodTitle = snapshot.period.label;
   const month = snapshot.period.month ?? state.currentMonth;
@@ -85,8 +89,8 @@ export default async function AdminFinancePage({
           icon="💰"
           tone="aqua"
           hint={
-            snapshot.matnasAmount > 0
-              ? `${formatCurrency(snapshot.paymentsRevenue)} תשלומים · ${formatCurrency(snapshot.matnasAmount)} מתנ״ס`
+            snapshot.manualIncomeAmount > 0
+              ? `${formatCurrency(snapshot.paymentsRevenue)} תשלומים · ${formatCurrency(snapshot.manualIncomeAmount)} נוספות`
               : `${snapshot.paidCount} תשלומים שנגבו`
           }
         />
@@ -102,7 +106,7 @@ export default async function AdminFinancePage({
           value={formatCurrency(snapshot.netProfit)}
           icon="📈"
           tone={snapshot.netProfit >= 0 ? "brand" : "rose"}
-          hint="תשלומים והמתנ״ס בניכוי שכר מדריכות"
+          hint="הכנסות בניכוי שכר מדריכות"
         />
         <StatCard
           label="ממתין לגבייה"
@@ -113,12 +117,14 @@ export default async function AdminFinancePage({
         />
       </div>
 
+      <IncomeCategoryBoard rows={snapshot.categoryTotals} />
+
       {snapshot.period.month && (
-        <MatnasIncomeCard
+        <ManualIncomesSection
           month={snapshot.period.month}
           monthTitle={periodTitle}
-          amount={snapshot.matnasAmount}
-          isOwnEntry={hasOwnRecurringEntry(dashboard.matnasEntries, snapshot.period.month)}
+          items={dashboard.manualIncomes}
+          categories={categories}
         />
       )}
 
@@ -138,7 +144,7 @@ export default async function AdminFinancePage({
               label: shortMonthLabel(key),
               values: [
                 (dashboard.revenueByMonth.get(key) ?? 0) +
-                  (dashboard.matnasByMonth.get(key) ?? 0),
+                  (dashboard.manualByMonth.get(key) ?? 0),
                 dashboard.payrollByMonth.get(key) ?? 0,
               ],
               href: `${FINANCE_PATH}?month=${key}`,

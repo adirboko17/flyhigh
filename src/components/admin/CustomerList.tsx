@@ -43,6 +43,7 @@ export type { CustomerChild, CustomerWithChildren };
 
 interface CustomerListProps {
   customers: CustomerWithChildren[];
+  initialSelectedId?: string | null;
 }
 
 function normalizeSearch(value: string) {
@@ -60,13 +61,20 @@ function matchesCustomer(customer: CustomerWithChildren, query: string) {
   );
 }
 
-export function CustomerList({ customers }: CustomerListProps) {
+export function CustomerList({
+  customers,
+  initialSelectedId = null,
+}: CustomerListProps) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [editing, setEditing] = useState<CustomerWithChildren | "new" | null>(
     null
   );
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (initialSelectedId) setSelectedId(initialSelectedId);
+  }, [initialSelectedId]);
 
   const selected = useMemo(
     () => customers.find((customer) => customer.id === selectedId) ?? null,

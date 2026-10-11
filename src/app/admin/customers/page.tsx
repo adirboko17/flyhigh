@@ -3,7 +3,12 @@ import { declarationSchoolYear } from "@/lib/health-declaration";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 export const metadata = { title: "לקוחות" };
 
-export default async function AdminCustomersPage() {
+export default async function AdminCustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const { id } = await searchParams;
   const supabase = await createAdminDataClient();
 
   const { data: parents } = await supabase
@@ -63,5 +68,7 @@ export default async function AdminCustomersPage() {
       }),
   }));
 
-  return <CustomerList customers={customers} />;
+  return (
+    <CustomerList customers={customers} initialSelectedId={id ?? null} />
+  );
 }

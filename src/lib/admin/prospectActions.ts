@@ -9,8 +9,11 @@ export type ProspectInput = {
   fullName: string;
   phone?: string;
   childName?: string;
-  classId: string;
-  sessionId: string;
+  classId?: string;
+  programId?: string;
+  poolPassId?: string;
+  privateLessonId?: string;
+  sessionId?: string;
   notes?: string;
   status?: string;
 };
@@ -101,17 +104,26 @@ function validateDetails(input: ProspectInput): {
     full_name: string;
     phone: string | null;
     child_name: string | null;
-    class_id: string;
+    class_id: string | null;
+    program_id: string | null;
+    pool_pass_id: string | null;
+    private_lesson_id: string | null;
     notes: string | null;
     status: Enums<"class_prospect_status">;
   };
 } {
   const fullName = trim(input.fullName);
   const classId = trim(input.classId);
+  const programId = trim(input.programId);
+  const poolPassId = trim(input.poolPassId);
+  const privateLessonId = trim(input.privateLessonId);
   const status = input.status ?? "scheduled";
+  const chosen = [classId, programId, poolPassId, privateLessonId].filter(
+    (value) => value.length > 0
+  );
 
   if (fullName.length < 2) return { error: "נא למלא שם." };
-  if (!classId) return { error: "נא לבחור חוג." };
+  if (chosen.length !== 1) return { error: "נא לבחור במה היא מתעניינת." };
   if (!isClassProspectStatus(status)) return { error: "סטטוס לא תקין." };
 
   return {
@@ -119,7 +131,10 @@ function validateDetails(input: ProspectInput): {
       full_name: fullName,
       phone: emptyToNull(input.phone),
       child_name: emptyToNull(input.childName),
-      class_id: classId,
+      class_id: classId || null,
+      program_id: programId || null,
+      pool_pass_id: poolPassId || null,
+      private_lesson_id: privateLessonId || null,
       notes: emptyToNull(input.notes),
       status,
     },
@@ -139,17 +154,23 @@ export async function saveProspect(
   const details = validateDetails(input);
   if (details.error || !details.row) return { error: details.error };
 
-  const session = await resolveSession({
-    classId: details.row.class_id,
-    sessionId: input.sessionId,
-  });
-  if (session.error || !session.row) return { error: session.error };
+  let sessionId: string | null = null;
+  let trialDate: string | null = null;
+  if (details.row.class_id) {
+    const session = await resolveSession({
+      classId: details.row.class_id,
+      sessionId: input.sessionId ?? "",
+    });
+    if (session.error || !session.row) return { error: session.error };
+    sessionId = session.row.session_id;
+    trialDate = session.row.trial_date;
+  }
 
   const supabase = await createAdminDataClient();
   const row = {
     ...details.row,
-    session_id: session.row.session_id,
-    trial_date: session.row.trial_date,
+    session_id: sessionId,
+    trial_date: trialDate,
   };
   const { error } = input.id
     ? await supabase.from("class_prospects").update(row).eq("id", input.id)

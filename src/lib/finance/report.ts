@@ -15,14 +15,18 @@ import {
 } from "@/lib/finance/payroll";
 import type { FinancePeriod } from "@/lib/finance/period";
 import {
-  MATNAS_INCOME_SOURCE,
-  recurringAmountForMonth,
-  type RecurringIncomeEntry,
-} from "@/lib/finance/recurringIncome";
+  asManualIncomeMode,
+  linkIncomeEntries,
+  manualAmountForMonth,
+  manualViewsForMonth,
+  type ManualIncomeEntry,
+  type ManualIncomeSource,
+  type ManualIncomeView,
+} from "@/lib/finance/manualIncome";
 import {
   SUBJECT_KIND_LABEL,
   chargeDisplaySubject,
-  subjectClassCategory,
+  paymentIncomeCategory,
   subjectKind,
   type EnrollmentSubject,
 } from "@/lib/finance/subject";
@@ -64,7 +68,7 @@ export type FinanceTransaction = {
 export type FinanceSnapshot = {
   period: FinancePeriod;
   paymentsRevenue: number;
-  matnasAmount: number;
+  manualIncomeAmount: number;
   revenue: number;
   payroll: number;
   netProfit: number;
@@ -91,8 +95,8 @@ export type FinanceDashboard = {
   trendMonths: string[];
   revenueByMonth: Map<string, number>;
   payrollByMonth: Map<string, number>;
-  matnasByMonth: Map<string, number>;
-  matnasEntries: RecurringIncomeEntry[];
+  manualByMonth: Map<string, number>;
+  manualIncomes: ManualIncomeView[];
 };
 
 type PaymentRow = {
@@ -134,7 +138,6 @@ function paymentActivityDate(payment: Pick<PaymentRow, "paid_at" | "created_at">
 
 function kindLabel(kind: string) {
   if (kind === "other") return "אחר";
-  if (kind === "matnas") return "מתנ״ס";
   return SUBJECT_KIND_LABEL[kind as keyof typeof SUBJECT_KIND_LABEL] ?? kind;
 }
 
@@ -160,9 +163,14 @@ function payrollForPeriod(
   return mergePayrollLines(groups);
 }
 
-function matnasForPeriod(entries: RecurringIncomeEntry[], start: string, end: string) {
+function manualForPeriod(
+  source: ManualIncomeSource,
+  entries: ManualIncomeEntry[],
+  start: string,
+  end: string
+) {
   return monthsInRange(start, end).reduce((sum, month) => {
-    const amount = recurringAmountForMonth(entries, month);
+    const amount = manualAmountForMonth(source, entries, month);
     const { days, total } = monthDayOverlap(month, start, end);
     const fraction = total > 0 ? days / total : 1;
     return sum + amount * fraction;
@@ -183,7 +191,8 @@ function buildSnapshot(input: {
   payments: PaymentRow[];
   sessionsByMonth: Map<string, PayrollSession[]>;
   instructors: PayrollInstructor[];
-  matnasEntries: RecurringIncomeEntry[];
+  manualSources: ManualIncomeSource[];
+  manualEntries: ManualIncomeEntry[];
   newEnrollments: number;
 }): FinanceSnapshot {
   const { period } = input;
@@ -211,8 +220,18 @@ function buildSnapshot(input: {
   );
 
   const paymentsRevenue = paid.reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const matnasAmount = Math.round(matnasForPeriod(input.matnasEntries, period.start, period.end) * 100) / 100;
-  const revenue = paymentsRevenue + matnasAmount;
+  const manualLines = input.manualSources.map((source) => ({
+    id: source.id,
+    name: source.name,
+    category: source.category,
+    amount:
+      Math.round(
+        manualForPeriod(source, input.manualEntries, period.start, period.end) * 100
+      ) / 100,
+  }));
+  const manualIncomeAmount =
+    Math.round(manualLines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
+  const revenue = paymentsRevenue + manualIncomeAmount;
 
   const methodTotals = new Map<string, number>();
   const kindTotals = new Map<string, number>();
@@ -225,8 +244,7 @@ function buildSnapshot(input: {
     addToMap(methodTotals, payment.payment_method ?? "external", amount);
     addToMap(subjectTotals, paymentSubject(payment), amount);
     addToMap(kindTotals, subjectKind(payment.enrollments) ?? "other", amount);
-    const category = subjectClassCategory(payment.enrollments);
-    if (category) addToMap(categoryTotals, category, amount);
+    addToMap(categoryTotals, paymentIncomeCategory(payment.enrollments), amount);
 
     const customer = customerTotals.get(payment.parent_id);
     if (customer) {
@@ -241,11 +259,17 @@ function buildSnapshot(input: {
     }
   }
 
-  const kindRows = toBreakdown(kindTotals, kindLabel);
-  if (matnasAmount > 0) {
-    kindRows.push({ key: "matnas", label: "מתנ״ס", value: matnasAmount });
-    kindRows.sort((a, b) => b.value - a.value);
+  for (const line of manualLines) {
+    if (line.amount <= 0) continue;
+    addToMap(categoryTotals, line.category, line.amount);
   }
+
+  const kindRows = toBreakdown(kindTotals, kindLabel);
+  for (const line of manualLines) {
+    if (line.amount <= 0) continue;
+    kindRows.push({ key: `manual:${line.id}`, label: line.name, value: line.amount });
+  }
+  kindRows.sort((a, b) => b.value - a.value);
 
   const transactions: FinanceTransaction[] = periodPayments
     .filter(
@@ -281,7 +305,7 @@ function buildSnapshot(input: {
   return {
     period,
     paymentsRevenue,
-    matnasAmount,
+    manualIncomeAmount,
     revenue,
     payroll,
     netProfit: revenue - payroll,
@@ -342,7 +366,8 @@ export async function loadFinanceDashboard(input: {
     { data: instructors },
     { count: takenSeatsCount },
     { data: classes },
-    { data: matnasRows },
+    { data: incomeRows },
+    { data: incomeSources },
     { data: weeklySlots },
     newEnrollments,
     compareEnrollments,
@@ -371,11 +396,11 @@ export async function loadFinanceDashboard(input: {
       .select("id", { count: "exact", head: true })
       .eq("status", "active"),
     supabase.from("classes").select("capacity, status"),
+    supabase.from("recurring_incomes").select("source, month, amount").order("month"),
     supabase
-      .from("recurring_incomes")
-      .select("month, amount")
-      .eq("source", MATNAS_INCOME_SOURCE)
-      .order("month"),
+      .from("manual_income_sources")
+      .select("id, name, category, mode, slug")
+      .order("created_at"),
     supabase.from("class_weekly_slots").select("id, instructor_id"),
     countEnrollments(supabase, period.start, period.end),
     compare
@@ -385,10 +410,14 @@ export async function loadFinanceDashboard(input: {
 
   const allPayments = (payments ?? []) as PaymentRow[];
   const allInstructors = (instructors ?? []) as PayrollInstructor[];
-  const matnasEntries = (matnasRows ?? []).map((row) => ({
-    month: row.month,
-    amount: Number(row.amount),
+  const manualSources: ManualIncomeSource[] = (incomeSources ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    mode: asManualIncomeMode(row.mode),
+    slug: row.slug,
   }));
+  const manualEntries = linkIncomeEntries(manualSources, incomeRows ?? []);
 
   const slotInstructorById = new Map(
     (weeklySlots ?? []).map((slot) => [slot.id, slot.instructor_id])
@@ -422,7 +451,7 @@ export async function loadFinanceDashboard(input: {
   }
 
   const payrollByMonth = new Map<string, number>();
-  const matnasByMonth = new Map<string, number>();
+  const manualByMonth = new Map<string, number>();
   for (const month of monthsInRange(monthOf(loadStart), monthOf(loadEnd))) {
     payrollByMonth.set(
       month,
@@ -430,7 +459,13 @@ export async function loadFinanceDashboard(input: {
         buildPayroll(sessionsByMonth.get(month) ?? [], allInstructors, { month })
       )
     );
-    matnasByMonth.set(month, recurringAmountForMonth(matnasEntries, month));
+    manualByMonth.set(
+      month,
+      manualSources.reduce(
+        (sum, source) => sum + manualAmountForMonth(source, manualEntries, month),
+        0
+      )
+    );
   }
 
   const openCharges = allPayments.filter((payment) =>
@@ -462,7 +497,8 @@ export async function loadFinanceDashboard(input: {
     payments: allPayments,
     sessionsByMonth,
     instructors: allInstructors,
-    matnasEntries,
+    manualSources,
+    manualEntries,
     newEnrollments,
   });
 
@@ -472,7 +508,8 @@ export async function loadFinanceDashboard(input: {
         payments: allPayments,
         sessionsByMonth,
         instructors: allInstructors,
-        matnasEntries,
+        manualSources,
+        manualEntries,
         newEnrollments: compareEnrollments,
       })
     : null;
@@ -489,7 +526,9 @@ export async function loadFinanceDashboard(input: {
     trendMonths,
     revenueByMonth,
     payrollByMonth,
-    matnasByMonth,
-    matnasEntries,
+    manualByMonth,
+    manualIncomes: period.month
+      ? manualViewsForMonth(manualSources, manualEntries, period.month)
+      : [],
   };
 }

@@ -231,6 +231,9 @@ export async function recordProspectVisit(input: {
     .eq("id", input.prospectId)
     .maybeSingle();
   if (!prospect) return { error: "המתעניינת לא נמצאה." };
+  if (!prospect.class_id) {
+    return { error: "סימון הגעה זמין רק למתעניינת בחוג." };
+  }
   if (prospect.status === "cancelled") {
     return { error: "המתעניינת כבר הוסרה מהרשימה." };
   }

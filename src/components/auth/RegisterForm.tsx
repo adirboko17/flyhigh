@@ -28,6 +28,7 @@ import {
   resolveReceiptIdNumber,
   type HealthDeclarationDraft,
 } from "@/lib/health-declaration";
+import { markRegistrationPrompt } from "@/lib/registration-prompt";
 import { calcAge, initials, joinPersonName } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
@@ -260,7 +261,9 @@ export function RegisterForm() {
 
     // פתיחת חשבון מדף חוג לא רושמת לחוג ולא לרשימת המתנה.
     // ההרשמה נפתחת רק אחרי בחירת תשלום / הצטרפות בעמוד החוג.
-    router.push(afterRegistrationPath(classId));
+    const next = afterRegistrationPath(classId);
+    if (next === "/parent/dashboard") markRegistrationPrompt();
+    router.push(next);
     router.refresh();
   }
 

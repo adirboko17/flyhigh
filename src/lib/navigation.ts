@@ -4,6 +4,8 @@ export interface NavItem {
   icon: string;
   /** נתיבים נוספים שמסמנים את הפריט כפעיל (למשל מסכי יצירה/עריכה שיושבים תחת נתיב אחר). */
   matchPaths?: string[];
+  /** תג אדום של פריטים שלא נקראו. */
+  badge?: "alerts";
 }
 
 export interface NavGroup {
@@ -27,6 +29,7 @@ export function navHrefs(entries: NavEntry[]): string[] {
 
 export const ADMIN_NAV: NavEntry[] = [
   { href: "/admin", label: "דשבורד", icon: "📊" },
+  { href: "/admin/alerts", label: "התראות", icon: "🔔", badge: "alerts" },
   { href: "/admin/customers", label: "לקוחות", icon: "👨‍👩‍👧" },
   { href: "/admin/instructors", label: "מדריכים", icon: "🧑‍🏫" },
   { href: "/admin/classes", label: "חוגים", icon: "🏊" },

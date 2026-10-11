@@ -12,7 +12,7 @@ function summaryRows(snapshot: FinanceSnapshot, openTotal: number, occupancy: nu
     ["מדד", "סכום"],
     ["הכנסות", snapshot.revenue],
     ["תשלומים שנגבו", snapshot.paymentsRevenue],
-    ["הכנסות מתנ״ס", snapshot.matnasAmount],
+    ["הכנסות נוספות", snapshot.manualIncomeAmount],
     ["שכר מדריכות", snapshot.payroll],
     ["רווח נטו", snapshot.netProfit],
     ["ממתין לגבייה (נוכחי)", openTotal],
@@ -35,7 +35,7 @@ function compareRows(current: FinanceSnapshot, previous: FinanceSnapshot) {
   const metrics: Array<[string, number, number]> = [
     ["הכנסות", current.revenue, previous.revenue],
     ["תשלומים שנגבו", current.paymentsRevenue, previous.paymentsRevenue],
-    ["מתנ״ס", current.matnasAmount, previous.matnasAmount],
+    ["הכנסות נוספות", current.manualIncomeAmount, previous.manualIncomeAmount],
     ["שכר מדריכות", current.payroll, previous.payroll],
     ["רווח נטו", current.netProfit, previous.netProfit],
     ["הרשמות חדשות", current.newEnrollments, previous.newEnrollments],
