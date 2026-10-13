@@ -44,6 +44,11 @@ export default async function CheckoutSuccessPage({
         <h1 className="mt-5 font-display text-2xl font-extrabold text-ink-900">
           {paid ? "התשלום התקבל" : "עדיין ממתינים לאישור"}
         </h1>
+        <p className="mt-2 text-[15px] leading-7 text-ink-600">
+          {paid
+            ? "זהו הסוף. הרכישה הסתיימה, ואין עוד שלב."
+            : "עדיין לא סיימנו. מחכים לאישור התשלום."}
+        </p>
         <p className="mt-2 text-sm text-ink-500">
           {paid
             ? "ההרשמה או הרכישה נרשמו בחשבון, והחשבונית תישלח למייל אם הוגדרה בקארדקום."

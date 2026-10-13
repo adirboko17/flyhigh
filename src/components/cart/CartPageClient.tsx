@@ -11,6 +11,7 @@ import {
 } from "@/components/checkout/CheckoutFields";
 import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
+import { PurchaseSteps } from "@/components/checkout/PurchaseSteps";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/icons/Icon";
@@ -216,6 +217,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
   if (viewer.kind === "guest") {
     return (
       <div className="space-y-5">
+        <PurchaseSteps current="cart" />
         <CartItemsList items={items} onRemove={removeItem} />
         <div className="rounded-3xl border border-brand-100 bg-white p-6 shadow-sm">
           <p className="font-semibold text-ink-900">התחברו כדי לשלם</p>
@@ -243,6 +245,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
 
   return (
     <div className="space-y-5">
+      <PurchaseSteps current={step === "payment" ? "pay" : "cart"} />
       <CartItemsList items={items} onRemove={removeItem} />
 
       {quote && !quote.success ? (

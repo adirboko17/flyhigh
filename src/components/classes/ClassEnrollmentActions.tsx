@@ -39,6 +39,7 @@ import {
   type SiblingDiscountTier,
 } from "@/lib/finance/siblingDiscount";
 import { Modal } from "@/components/ui/Modal";
+import { PurchaseSteps } from "@/components/checkout/PurchaseSteps";
 import type { ProratedClassPrice } from "@/lib/finance/proratedClassPrice";
 import { formatWeeklySlotLabel } from "@/lib/scheduling/classSchedule";
 import { SlotNoteBadge } from "@/components/classes/SlotNoteBadge";
@@ -691,6 +692,7 @@ export function ClassEnrollmentActions({
 
         {!ended && (availableTrainees.length > 0 || ineligibleTrainees.length > 0) ? (
           <div className="space-y-3">
+            {!interestOnly && !slotSoldOut && <PurchaseSteps current="choose" />}
             {trialAvailable && !ended && (
               <div className="grid grid-cols-2 gap-2">
                 <button

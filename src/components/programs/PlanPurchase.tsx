@@ -14,6 +14,7 @@ import {
 } from "@/components/checkout/CheckoutFields";
 import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
+import { PurchaseSteps } from "@/components/checkout/PurchaseSteps";
 import { PAYMENT_METHOD, isDeferredPaymentMethod } from "@/lib/constants";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
@@ -631,14 +632,15 @@ function PlanCheckoutDialog({
             ? `ה${kindLabel} נרשם בחשבון. התשלום ייגבה מול המשרד.`
             : `ה${kindLabel} נרשם בחשבון וקיבלתם אישור תשלום.`
           : step === "added"
-            ? "אפשר להמשיך לחוג או כרטיסייה נוספים, ולשלם פעם אחת בסל."
+            ? "הפריט בסל, ועדיין לא שולם."
             : step === "payment"
-              ? "בחרו כיצד תרצו לשלם."
-              : `בחרו למי מיועדת הרכישה של ${planTitle}.`
+              ? "זה השלב האחרון. בחרו איך לשלם, ואחרי האישור הרכישה הסתיימה."
+              : `בחרו למי מיועדת הרכישה של ${planTitle}. עדיין לא סיימנו.`
       }
     >
       {step === "select" && (
         <div className="space-y-5">
+          <PurchaseSteps current="choose" />
           <div className="rounded-2xl border border-ink-100 bg-ink-50 p-4">
             <div className="flex items-baseline justify-between gap-3">
               <p className="min-w-0 font-display font-bold text-ink-900">
@@ -1047,11 +1049,9 @@ function PlanCheckoutDialog({
       )}
 
       {step === "added" && (
-        <div className="space-y-4 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-aqua-100 text-3xl">
-            ✓
-          </div>
-          <p className="font-semibold text-ink-900">
+        <div className="space-y-4">
+          <PurchaseSteps current="cart" />
+          <p className="text-center font-semibold text-ink-900">
             {planTitle} נוסף לסל
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
@@ -1067,6 +1067,7 @@ function PlanCheckoutDialog({
 
       {step === "payment" && (
         <div className="space-y-5">
+          <PurchaseSteps current="pay" />
           <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm">
             <div className="flex justify-between gap-3 font-semibold text-brand-800">
               <span>לתשלום</span>

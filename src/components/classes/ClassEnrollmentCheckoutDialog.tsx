@@ -13,6 +13,7 @@ import {
 } from "@/components/checkout/CheckoutFields";
 import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
+import { PurchaseSteps } from "@/components/checkout/PurchaseSteps";
 import { PAYMENT_METHOD, isDeferredPaymentMethod } from "@/lib/constants";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import {
@@ -237,14 +238,15 @@ export function ClassEnrollmentCheckoutDialog({
             ? "נרשמתם לחוג. התשלום ייגבה מול המשרד."
             : "נרשמתם לחוג וקיבלתם אישור תשלום."
           : step === "added"
-            ? "אפשר להמשיך לחוג או כרטיסייה נוספים, ולשלם פעם אחת בסל."
+            ? "הפריט בסל, ועדיין לא שולם."
             : step === "payment"
-              ? "בחרו כיצד תרצו לשלם."
-              : `בדקו את פרטי ההרשמה ל${classTitle} לפני ההוספה לסל.`
+              ? "זה השלב האחרון. בחרו איך לשלם, ואחרי האישור הרכישה הסתיימה."
+              : `בדקו את פרטי ההרשמה ל${classTitle}. עדיין לא סיימנו.`
       }
     >
       {step === "summary" && (
         <div className="space-y-5">
+          <PurchaseSteps current="choose" />
           <ClassLateRegistrationBanner proration={proration} />
 
           <div className="rounded-2xl bg-ink-50 p-4">
@@ -418,11 +420,9 @@ export function ClassEnrollmentCheckoutDialog({
       )}
 
       {step === "added" && (
-        <div className="space-y-4 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-aqua-100 text-3xl">
-            ✓
-          </div>
-          <p className="font-semibold text-ink-900">
+        <div className="space-y-4">
+          <PurchaseSteps current="cart" />
+          <p className="text-center font-semibold text-ink-900">
             {classTitle} נוסף לסל עבור {count}{" "}
             {count === 1 ? "מתאמן/ת" : "מתאמנים"}
           </p>
@@ -439,6 +439,7 @@ export function ClassEnrollmentCheckoutDialog({
 
       {step === "payment" && (
         <div className="space-y-5">
+          <PurchaseSteps current="pay" />
           <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm">
             <div className="flex justify-between gap-3 font-semibold text-brand-800">
               <span>לתשלום</span>
