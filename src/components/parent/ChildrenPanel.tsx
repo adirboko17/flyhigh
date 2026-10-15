@@ -12,6 +12,12 @@ import { Field, Input, Select, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { GENDER } from "@/lib/constants";
 import {
+  coupleGenderError,
+  isPartnerRelationship,
+  oppositeAdultGender,
+  partnerRoleLabel,
+} from "@/lib/household";
+import {
   declarationSchoolYear,
   isSignedHealthDraft,
   MISSING_HEALTH_DECLARATION_ERROR,
@@ -37,6 +43,7 @@ export type ParentChild = {
   gender: Enums<"gender_type"> | null;
   school_grade: number | null;
   grade_school_year: number | null;
+  relationship: "child" | "partner";
   notes: string | null;
   /** שמות הפעילויות הפעילות של הילד/ה. */
   activities: string[];
@@ -56,15 +63,18 @@ export function ChildrenPanel({
   kids,
   personalActivities,
   parentName,
+  parentGender,
 }: {
   parentId: string;
   kids: ParentChild[];
   /** פעילויות שנרשמו על שם ההורה עצמו, ללא ילד/ה. */
   personalActivities: string[];
   parentName: string;
+  parentGender?: string | null;
 }) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
+  const [addingPartner, setAddingPartner] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<ParentChild | null>(null);
   const [removingChild, setRemovingChild] = useState<ParentChild | null>(null);
@@ -75,8 +85,21 @@ export function ChildrenPanel({
   const [addHealthOpen, setAddHealthOpen] = useState(false);
   const [healthChild, setHealthChild] = useState<ParentChild | null>(null);
 
+  function openAdd(partnerMode = false) {
+    setAddingPartner(partnerMode);
+    setError(null);
+    setAddHealth(null);
+    setForm(
+      partnerMode
+        ? { ...EMPTY_FORM, gender: oppositeAdultGender(parentGender) ?? "" }
+        : EMPTY_FORM,
+    );
+    setAddOpen(true);
+  }
+
   function closeAdd() {
     setAddOpen(false);
+    setAddingPartner(false);
     setAddHealthOpen(false);
     setAddHealth(null);
     setError(null);
@@ -115,11 +138,19 @@ export function ChildrenPanel({
     setSaving(true);
     setError(null);
 
-    const schoolGrade = parseSchoolGradeInput(form.grade);
-    if (schoolGrade === null) {
+    const schoolGrade = addingPartner ? null : parseSchoolGradeInput(form.grade);
+    if (!addingPartner && schoolGrade === null) {
       setSaving(false);
       setError("נא לבחור כיתה.");
       return;
+    }
+    if (addingPartner) {
+      const genderError = coupleGenderError(parentGender, form.gender);
+      if (genderError) {
+        setSaving(false);
+        setError(genderError);
+        return;
+      }
     }
     if (!isSignedHealthDraft(addHealth)) {
       setSaving(false);
@@ -136,7 +167,8 @@ export function ChildrenPanel({
         birth_date: form.birth || null,
         gender: (form.gender || null) as Enums<"gender_type"> | null,
         school_grade: schoolGrade,
-        grade_school_year: currentSchoolYear(),
+        grade_school_year: addingPartner ? null : currentSchoolYear(),
+        relationship: addingPartner ? "partner" : "child",
         notes: form.notes.trim() || null,
       })
       .select("id")
@@ -176,11 +208,20 @@ export function ChildrenPanel({
     setSaving(true);
     setError(null);
 
-    const schoolGrade = parseSchoolGradeInput(form.grade);
-    if (schoolGrade === null) {
+    const editingPartner = isPartnerRelationship(editingChild.relationship);
+    const schoolGrade = editingPartner ? null : parseSchoolGradeInput(form.grade);
+    if (!editingPartner && schoolGrade === null) {
       setSaving(false);
       setError("נא לבחור כיתה.");
       return;
+    }
+    if (editingPartner) {
+      const genderError = coupleGenderError(parentGender, form.gender);
+      if (genderError) {
+        setSaving(false);
+        setError(genderError);
+        return;
+      }
     }
 
     const { error: updateError } = await createClient()
@@ -190,7 +231,8 @@ export function ChildrenPanel({
         birth_date: form.birth || null,
         gender: (form.gender || null) as Enums<"gender_type"> | null,
         school_grade: schoolGrade,
-        grade_school_year: currentSchoolYear(),
+        grade_school_year: editingPartner ? null : currentSchoolYear(),
+        relationship: editingPartner ? "partner" : "child",
         notes: form.notes.trim() || null,
       })
       .eq("id", editingChild.id)
@@ -264,17 +306,48 @@ export function ChildrenPanel({
     router.refresh();
   }
 
-  const hidden = Math.max(0, kids.length - PREVIEW_LIMIT);
+  const partnerMember =
+    kids.find((child) => isPartnerRelationship(child.relationship)) ?? null;
+  const childMembers = kids.filter(
+    (child) => !isPartnerRelationship(child.relationship),
+  );
+  const hidden = Math.max(0, childMembers.length - PREVIEW_LIMIT);
+  const editingPartner = isPartnerRelationship(editingChild?.relationship);
 
   return (
     <>
       <Card id="children" className="scroll-mt-24">
         <CardHeader>
-          <CardTitle>הילדים שלי</CardTitle>
+          <CardTitle>
+            {partnerMember ? "הזוג והילדים" : "הילדים שלי"}
+          </CardTitle>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-2">
-          {kids.slice(0, PREVIEW_LIMIT).map((child) => (
+          {partnerMember && (
+            <div className="order-2 flex items-center gap-3 rounded-xl border border-ink-100 px-3.5 py-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-gradient font-display text-sm font-bold text-white">
+                {initials(partnerMember.full_name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-ink-900">
+                  {partnerMember.full_name}
+                </p>
+                <p className="text-xs text-ink-500">{childMeta(partnerMember)}</p>
+              </div>
+              <Badge tone="info" className="shrink-0">
+                {partnerRoleLabel(partnerMember.gender)}
+              </Badge>
+              <ChildActions
+                child={partnerMember}
+                onEdit={openEdit}
+                onRemove={setRemovingChild}
+                onHealth={setHealthChild}
+              />
+            </div>
+          )}
+
+          {childMembers.slice(0, PREVIEW_LIMIT).map((child) => (
             <div
               key={child.id}
               className="order-3 flex items-center gap-3 rounded-xl border border-ink-100 px-3.5 py-3"
@@ -319,7 +392,7 @@ export function ChildrenPanel({
             >
               הצג את כל הילדים
               <span className="rounded-full bg-white px-1.5 text-xs font-bold tabular-nums">
-                {kids.length}
+                {childMembers.length}
               </span>
             </button>
           )}
@@ -344,19 +417,36 @@ export function ChildrenPanel({
                 ? `${personalActivities.length} ${
                     personalActivities.length === 1 ? "חוג" : "חוגים"
                   }`
-                : "הורה"}
+                : partnerMember
+                  ? partnerRoleLabel(parentGender)
+                  : "הורה"}
             </Badge>
           </div>
 
-          {kids.length === 0 && (
+          {childMembers.length === 0 && (
             <p className="order-3 text-sm text-ink-500">
-              לא נוספו ילדים עדיין.
+              {partnerMember ? "אין ילדים בחשבון." : "לא נוספו ילדים עדיין."}
             </p>
+          )}
+
+          {!partnerMember && (
+            <button
+              type="button"
+              onClick={() => openAdd(true)}
+              className="group order-2 flex w-full items-center gap-3 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50/40 px-4 py-3 text-start transition-all hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-transform group-hover:rotate-90">
+                <Icon name="plus" size={18} stroke={2.5} />
+              </span>
+              <span className="text-sm font-bold text-ink-900">
+                רישום כזוג — גבר ואישה
+              </span>
+            </button>
           )}
 
           <button
             type="button"
-            onClick={() => setAddOpen(true)}
+            onClick={() => openAdd(false)}
             className="group order-2 flex w-full items-center gap-3 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50/40 px-4 py-3 text-start transition-all hover:-translate-y-0.5 hover:border-brand-400 hover:bg-brand-50"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition-transform group-hover:rotate-90">
@@ -373,11 +463,11 @@ export function ChildrenPanel({
         open={allOpen}
         onClose={() => setAllOpen(false)}
         title="כל הילדים שלי"
-        description={`${kids.length} ילדים משויכים לחשבון`}
+        description={`${childMembers.length} ילדים משויכים לחשבון`}
         className="max-w-2xl"
       >
         <ul className="space-y-3">
-          {kids.map((child) => (
+          {childMembers.map((child) => (
             <li
               key={child.id}
               className="rounded-2xl border border-ink-100 bg-ink-50/50 p-4"
@@ -412,12 +502,14 @@ export function ChildrenPanel({
               <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                 <Detail label="תאריך לידה" value={formatDate(child.birth_date)} />
                 <Detail
-                  label="כיתה"
+                  label={isPartnerRelationship(child.relationship) ? "תפקיד" : "כיתה"}
                   value={
-                    formatSchoolGrade(
-                      child.school_grade,
-                      child.grade_school_year,
-                    ) ?? "לא צוינה"
+                    isPartnerRelationship(child.relationship)
+                      ? partnerRoleLabel(child.gender)
+                      : (formatSchoolGrade(
+                          child.school_grade,
+                          child.grade_school_year,
+                        ) ?? "לא צוינה")
                   }
                 />
                 <Detail
@@ -466,8 +558,12 @@ export function ChildrenPanel({
       <Modal
         open={addOpen}
         onClose={closeAdd}
-        title="הוספת ילד/ה"
-        description="הפרטים יישמרו בחשבון ויאפשרו הרשמה מהירה לחוגים"
+        title={addingPartner ? "רישום בן/בת זוג" : "הוספת ילד/ה"}
+        description={
+          addingPartner
+            ? "גבר ואישה באותו חשבון. בן או בת הזוג נרשמים לחוגים בלי כיתה."
+            : "הפרטים יישמרו בחשבון ויאפשרו הרשמה מהירה לחוגים"
+        }
       >
         <form onSubmit={handleAdd} className="grid gap-4 sm:grid-cols-2">
           <Field label="שם מלא" htmlFor="childName" required className="sm:col-span-2">
@@ -486,21 +582,23 @@ export function ChildrenPanel({
               onChange={(e) => setForm({ ...form, birth: e.target.value })}
             />
           </Field>
-          <Field label="כיתה" htmlFor="childGrade" required>
-            <Select
-              id="childGrade"
-              value={form.grade}
-              onChange={(e) => setForm({ ...form, grade: e.target.value })}
-              required
-            >
-              <option value="">בחרו כיתה...</option>
-              {SCHOOL_GRADES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {!addingPartner && (
+            <Field label="כיתה" htmlFor="childGrade" required>
+              <Select
+                id="childGrade"
+                value={form.grade}
+                onChange={(e) => setForm({ ...form, grade: e.target.value })}
+                required
+              >
+                <option value="">בחרו כיתה...</option>
+                {SCHOOL_GRADES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="מין" htmlFor="childGender" className="sm:col-span-2">
             <Select
               id="childGender"
@@ -510,7 +608,7 @@ export function ChildrenPanel({
               <option value="">בחרו...</option>
               <option value="female">נקבה</option>
               <option value="male">זכר</option>
-              <option value="other">אחר</option>
+              {!addingPartner && <option value="other">אחר</option>}
             </Select>
           </Field>
           <Field
@@ -566,7 +664,9 @@ export function ChildrenPanel({
           <div className="flex gap-2 sm:col-span-2">
             <Button
               type="submit"
-              disabled={saving || !form.name.trim() || !form.grade}
+              disabled={
+                saving || !form.name.trim() || (!addingPartner && !form.grade)
+              }
             >
               {saving ? "שומר..." : "שמירה"}
             </Button>
@@ -581,7 +681,11 @@ export function ChildrenPanel({
         open={Boolean(editingChild)}
         onClose={closeEdit}
         title={`עריכת הפרטים של ${editingChild?.full_name ?? ""}`}
-        description="עדכנו את פרטי הילד/ה כפי שהם צריכים להופיע בחשבון"
+        description={
+          editingPartner
+            ? "עדכנו את פרטי בן או בת הזוג"
+            : "עדכנו את פרטי הילד/ה כפי שהם צריכים להופיע בחשבון"
+        }
       >
         <form onSubmit={handleEdit} className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -604,21 +708,23 @@ export function ChildrenPanel({
               onChange={(e) => setForm({ ...form, birth: e.target.value })}
             />
           </Field>
-          <Field label="כיתה" htmlFor="editChildGrade" required>
-            <Select
-              id="editChildGrade"
-              value={form.grade}
-              onChange={(e) => setForm({ ...form, grade: e.target.value })}
-              required
-            >
-              <option value="">בחרו כיתה...</option>
-              {SCHOOL_GRADES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {!editingPartner && (
+            <Field label="כיתה" htmlFor="editChildGrade" required>
+              <Select
+                id="editChildGrade"
+                value={form.grade}
+                onChange={(e) => setForm({ ...form, grade: e.target.value })}
+                required
+              >
+                <option value="">בחרו כיתה...</option>
+                {SCHOOL_GRADES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="מין" htmlFor="editChildGender" className="sm:col-span-2">
             <Select
               id="editChildGender"
@@ -654,7 +760,9 @@ export function ChildrenPanel({
           <div className="flex gap-2 sm:col-span-2">
             <Button
               type="submit"
-              disabled={saving || !form.name.trim() || !form.grade}
+              disabled={
+                saving || !form.name.trim() || (!editingPartner && !form.grade)
+              }
             >
               {saving ? "שומר..." : "שמירת שינויים"}
             </Button>
@@ -834,9 +942,15 @@ function childMeta(child: {
   gender: Enums<"gender_type"> | null;
   school_grade: number | null;
   grade_school_year: number | null;
+  relationship?: string | null;
 }): string {
   const parts: string[] = [];
-  const grade = formatSchoolGrade(child.school_grade, child.grade_school_year);
+  if (isPartnerRelationship(child.relationship)) {
+    parts.push(partnerRoleLabel(child.gender));
+  }
+  const grade = isPartnerRelationship(child.relationship)
+    ? null
+    : formatSchoolGrade(child.school_grade, child.grade_school_year);
   if (grade) parts.push(grade);
 
   const age = calcAge(child.birth_date);

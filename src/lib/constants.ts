@@ -242,7 +242,8 @@ export const PAYMENT_METHOD: Record<Enums<"payment_method">, string> = {
   maccabi: "מכבי/לאומית",
   amit: "עמית",
   pool_pass: "כרטיסייה",
-  external: "חיצוני",
+  external: "שולם בטלפון",
+  customer_balance: "יתרה באתר",
 };
 
 /**
@@ -362,6 +363,13 @@ export function isPoolPassPaymentMethod(
   method: Enums<"payment_method"> | null | undefined
 ): method is "pool_pass" {
   return method === "pool_pass";
+}
+
+/** יתרה שכבר שולמה בעבר והלקוח משתמש בה באתר — לא הכנסה חדשה. */
+export function isStoreCreditPaymentMethod(
+  method: Enums<"payment_method"> | null | undefined
+): method is "customer_balance" {
+  return method === "customer_balance";
 }
 
 /** אמצעי תשלום משרדיים שמופיעים ברשימת הגבייה — כולל אישור בלי מסמך. */

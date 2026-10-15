@@ -13,6 +13,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
 import { PAYMENT_METHOD, PAYMENT_STATUS } from "@/lib/constants";
 import {
   dismissPendingRefund,
+  grantPaymentAsCustomerBalance,
   issueOfficeCreditInvoice,
   issuePaymentRefund,
   refundCardcomPayment,
@@ -44,6 +45,7 @@ export type PendingRefund = {
   paymentMethod: Enums<"payment_method"> | null;
   paymentAmount: number;
   remaining: number;
+  balanceGranted: number;
   cardcomReference: string | null;
 };
 
@@ -65,6 +67,7 @@ export type RefundTransaction = {
   subject: string;
   childName: string | null;
   refunds: RefundLine[];
+  balanceGranted: number;
   occurredAt: string;
 };
 
@@ -466,6 +469,39 @@ function PendingRefundDialog({
     onDone();
   }
 
+  async function grantBalance() {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setLocalError("נא להזין סכום חיובי.");
+      return;
+    }
+    if (value > pending.remaining) {
+      setLocalError(
+        `לא ניתן להעביר יותר מהיתרה (${formatCurrency(pending.remaining)}).`
+      );
+      return;
+    }
+
+    setLocalError(null);
+    onError(null);
+    onBusy(pending.id);
+    const result = await grantPaymentAsCustomerBalance({
+      paymentId: pending.paymentId,
+      amount: value,
+      note: note.trim() || null,
+      pendingRefundId: pending.id,
+    });
+    onBusy(null);
+
+    if (!result.success) {
+      const message = result.error ?? "העברה ליתרה נכשלה. נסו שוב.";
+      setLocalError(message);
+      onError(message);
+      return;
+    }
+    onDone();
+  }
+
   const methodLabel = pending.paymentMethod
     ? PAYMENT_METHOD[pending.paymentMethod]
     : "תשלום";
@@ -521,8 +557,8 @@ function PendingRefundDialog({
         </Field>
         <p className="text-xs text-ink-500">
           {pending.cardcomReference
-            ? "הזיכוי יוחזר לכרטיס האשראי בקארדקום ותופק חשבונית זיכוי."
-            : `תופק חשבונית זיכוי עבור תשלום ב${methodLabel}. ההחזר הכספי עצמו יטופל מול הלקוח.`}
+            ? "הזיכוי יוחזר לכרטיס האשראי בקארדקום ותופק חשבונית זיכוי. אפשר במקום זה להעביר את הסכום ליתרה באתר, בלי החזר ובלי חשבונית זיכוי."
+            : `תופק חשבונית זיכוי עבור תשלום ב${methodLabel}. ההחזר הכספי עצמו יטופל מול הלקוח. אפשר במקום זה להעביר את הסכום ליתרה באתר.`}
         </p>
         {localError && (
           <p className="text-sm text-red-600" role="alert">
@@ -532,6 +568,14 @@ function PendingRefundDialog({
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
             חזרה
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void grantBalance()}
+          >
+            {busy ? "מעביר..." : "העברה ליתרה באתר"}
           </Button>
           <Button
             type="button"
@@ -607,6 +651,38 @@ function RefundDialog({
     onDone();
   }
 
+  async function grantBalance() {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setLocalError("נא להזין סכום חיובי.");
+      return;
+    }
+    if (value > transaction.remaining) {
+      setLocalError(
+        `לא ניתן להעביר יותר מהיתרה (${formatCurrency(transaction.remaining)}).`
+      );
+      return;
+    }
+
+    setLocalError(null);
+    onError(null);
+    onBusy(transaction.id);
+    const result = await grantPaymentAsCustomerBalance({
+      paymentId: transaction.id,
+      amount: value,
+      note: note.trim() || null,
+    });
+    onBusy(null);
+
+    if (!result.success) {
+      const message = result.error ?? "העברה ליתרה נכשלה. נסו שוב.";
+      setLocalError(message);
+      onError(message);
+      return;
+    }
+    onDone();
+  }
+
   return (
     <Modal
       open
@@ -638,6 +714,14 @@ function RefundDialog({
               {formatCurrency(transaction.refundedAmount)}
             </span>
           </div>
+          {transaction.balanceGranted > 0 && (
+            <div className="mt-1.5 flex items-center justify-between gap-3">
+              <span className="text-ink-500">הועבר ליתרה באתר</span>
+              <span className="font-semibold text-aqua-800">
+                {formatCurrency(transaction.balanceGranted)}
+              </span>
+            </div>
+          )}
           <div className="mt-1.5 flex items-center justify-between gap-3">
             <span className="text-ink-500">יתרה לזיכוי</span>
             <span className="font-display font-bold text-ink-900">
@@ -753,6 +837,14 @@ function RefundDialog({
           </Button>
           {canRefund && (
             <>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void grantBalance()}
+              >
+                העברה ליתרה באתר
+              </Button>
               <Button
                 type="button"
                 variant="outline"

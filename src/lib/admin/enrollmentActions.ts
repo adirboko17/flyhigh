@@ -12,6 +12,10 @@ import {
   issueOfficeCreditInvoice,
   refundCardcomPayment,
 } from "@/lib/payments/refundActions";
+import {
+  grantedAmountsByPayment,
+  restoreCustomerBalancePayments,
+} from "@/lib/payments/checkoutBalance";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/types/database.types";
 
@@ -54,6 +58,7 @@ type LinkedPayment = Omit<
   payment_refunds: { id: string; amount: number }[] | null;
   receipts?: { receipt_number: string | null }[] | null;
   payment_checkouts?: { transaction_id: string | null } | null;
+  balanceGranted?: number;
 };
 
 function round2(value: number) {
@@ -85,7 +90,9 @@ function invoicedRemaining(payment: LinkedPayment) {
           payment.status === "refunded"
         ? Number(payment.amount)
         : 0;
-  return round2(Math.max(0, invoiced - alreadyRefunded));
+  return round2(
+    Math.max(0, invoiced - alreadyRefunded - (payment.balanceGranted ?? 0))
+  );
 }
 
 function hasCardcomRefund(payment: LinkedPayment) {
@@ -109,7 +116,12 @@ async function loadEnrollmentPayments(
     .from("payments")
     .select(PAYMENT_PREVIEW_SELECT)
     .eq("enrollment_id", enrollmentId);
-  return (payments ?? []) as LinkedPayment[];
+  const rows = (payments ?? []) as LinkedPayment[];
+  const granted = await grantedAmountsByPayment(rows.map((payment) => payment.id));
+  return rows.map((payment) => ({
+    ...payment,
+    balanceGranted: granted.get(payment.id) ?? 0,
+  }));
 }
 
 function creditTargetsOf(payments: LinkedPayment[]): EnrollmentCreditTarget[] {
@@ -250,6 +262,15 @@ export async function cancelAdminEnrollment(
   }
 
   const paymentRows = await loadEnrollmentPayments(supabase, enrollment.id);
+  const balancePaymentIds = paymentRows
+    .filter(
+      (payment) =>
+        payment.payment_method === "customer_balance" && payment.status === "paid"
+    )
+    .map((payment) => payment.id);
+  if (balancePaymentIds.length > 0) {
+    await restoreCustomerBalancePayments(balancePaymentIds);
+  }
   const creditTargets = creditTargetsOf(paymentRows);
   let creditWarning: string | undefined;
 

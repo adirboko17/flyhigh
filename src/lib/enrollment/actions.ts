@@ -40,6 +40,14 @@ import {
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import {
+  attachBalanceCheckout,
+  buildCheckoutPaymentRows,
+  enrollmentPaymentStatusForBalance,
+  releaseCheckoutBalance,
+  reserveCheckoutBalance,
+  roundMoney,
+} from "@/lib/payments/checkoutBalance";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
   declarationSchoolYear,
@@ -102,6 +110,9 @@ export type CompleteEnrollmentResult =
       /** הקופון שמומש בהרשמה, אם הוזן. */
       couponCode: string | null;
       couponDiscount: number;
+      /** כמה ירד מהיתרה באתר, וכמה נשאר לתשלום באמצעי שנבחר. */
+      balanceApplied: number;
+      cashDue: number;
     }
   | { success: false; error: string };
 
@@ -275,6 +286,8 @@ export async function completeClassEnrollmentPayment(input: {
   childIds: string[];
   includeSelf?: boolean;
   paymentMethod: CheckoutPaymentMethod;
+  /** ברירת מחדל: משתמשים ביתרה הזמינה. false משאיר אותה לרכישה אחרת. */
+  useBalance?: boolean;
   couponCode?: string | null;
   /** תווית לקבלה — אם נבחרה, מחליפה את שם החוג בתיאור החיוב/הקבלה. */
   receiptLabelId?: string | null;
@@ -315,7 +328,7 @@ export async function completeClassEnrollmentPayment(input: {
         ? reads
             .from("children")
             .select(
-              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+              "id, full_name, gender, birth_date, school_grade, grade_school_year, relationship"
             )
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
@@ -561,11 +574,53 @@ export async function completeClassEnrollmentPayment(input: {
     customLabel: receiptLabel.description,
   });
 
-  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד שאישור קארדקום.
-  // הזמנה שהקופון מאפס אותה לא עוברת סליקה.
-  const awaitingCardcom = !deferred && totalAmount > 0;
-
   const paidAt = new Date().toISOString();
+  const plannedAmounts =
+    bookedSessions && "sessions" in bookedSessions
+      ? bookedSessions.sessions.map(() => unitPrice)
+      : participants.map(
+          (childId) => amountPerParticipant.get(childId) ?? unitPrice
+        );
+  const chargeBase = roundMoney(
+    plannedAmounts.reduce((sum, amount) => sum + amount, 0)
+  );
+  let balanceHold: { applied: number; entryId: string | null } = {
+    applied: 0,
+    entryId: null,
+  };
+  try {
+    balanceHold = await reserveCheckoutBalance({
+      parentId: profile.id,
+      total: chargeBase,
+      useBalance: input.useBalance,
+      note: chargeDescription,
+    });
+  } catch (error) {
+    await releaseCoupon();
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "לא הצלחנו להשתמש ביתרה. נסו שוב.",
+    };
+  }
+
+  const usingBalance = balanceHold.applied > 0;
+  const cashDuePreview = usingBalance
+    ? roundMoney(Math.max(chargeBase - balanceHold.applied, 0))
+    : totalAmount;
+  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד שאישור קארדקום.
+  const awaitingCardcom = !deferred && cashDuePreview > 0;
+  const enrollmentPaymentStatus = usingBalance
+    ? enrollmentPaymentStatusForBalance({
+        cashDue: cashDuePreview,
+        balanceApplied: balanceHold.applied,
+      })
+    : deferred || awaitingCardcom
+      ? ("unpaid" as const)
+      : ("paid" as const);
+
   const enrollmentRows =
     bookedSessions && "sessions" in bookedSessions
       ? bookedSessions.sessions.map((session) => ({
@@ -576,8 +631,7 @@ export async function completeClassEnrollmentPayment(input: {
           session_id: session.id,
           type: "class" as const,
           status: "active" as const,
-          payment_status:
-            deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+          payment_status: enrollmentPaymentStatus,
           discount_percent: 0,
         }))
       : participants.map((childId, index) => {
@@ -590,8 +644,7 @@ export async function completeClassEnrollmentPayment(input: {
             weekly_slot_id: weeklySlotId,
             type: "class" as const,
             status: "active" as const,
-            payment_status:
-              deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+            payment_status: enrollmentPaymentStatus,
             discount_percent: paysFull ? 0 : order.percent,
           };
         });
@@ -602,6 +655,7 @@ export async function completeClassEnrollmentPayment(input: {
     .select("id, child_id");
 
   if (enrollmentError || !createdEnrollments?.length) {
+    await releaseCheckoutBalance(balanceHold.entryId);
     await releaseCoupon();
     return {
       success: false,
@@ -618,25 +672,28 @@ export async function completeClassEnrollmentPayment(input: {
     });
   }
 
+  const checkoutPayments = buildCheckoutPaymentRows({
+    lines: createdEnrollments.map((enrollment) => ({
+      enrollmentId: enrollment.id,
+      amount: isAppointment
+        ? unitPrice
+        : (amountPerParticipant.get(enrollment.child_id) ?? unitPrice),
+    })),
+    balanceApplied: balanceHold.applied,
+    parentId: profile.id,
+    paymentMethod,
+    deferred,
+    awaitingCardcom,
+    paidAt,
+    receiptLabelId: receiptLabel.labelId,
+    receiptDescription: receiptLabel.description ?? chargeDescription,
+  });
+
   // חיוב נפרד לכל ילד/ה, כדי שברשימת הגבייה יהיה ברור על מה בדיוק החוב.
   const { data: createdPayments, error: paymentError } = await supabase
     .from("payments")
-    .insert(
-      createdEnrollments.map((enrollment) => ({
-        parent_id: profile.id,
-        enrollment_id: enrollment.id,
-        amount: isAppointment
-          ? unitPrice
-          : (amountPerParticipant.get(enrollment.child_id) ?? unitPrice),
-        payment_method: paymentMethod,
-        status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
-        paid_at: deferred || awaitingCardcom ? null : paidAt,
-        receipt_label_id: receiptLabel.labelId,
-        receipt_description: receiptLabel.description ?? chargeDescription,
-        office_collection: deferred,
-      }))
-    )
-    .select("id");
+    .insert(checkoutPayments.rows)
+    .select("id, payment_method");
 
   if (paymentError || !createdPayments?.length) {
     await supabase
@@ -646,6 +703,7 @@ export async function completeClassEnrollmentPayment(input: {
         "id",
         createdEnrollments.map((enrollment) => enrollment.id)
       );
+    await releaseCheckoutBalance(balanceHold.entryId);
     await releaseCoupon();
     return {
       success: false,
@@ -656,13 +714,18 @@ export async function completeClassEnrollmentPayment(input: {
   let paymentReference: string | null = null;
   let checkoutUrl: string | null = null;
 
+  const payable = usingBalance ? checkoutPayments.cashDue : totalAmount;
+  const cashPaymentIds = createdPayments
+    .filter((payment) => payment.payment_method !== "customer_balance")
+    .map((payment) => payment.id);
+
   if (awaitingCardcom) {
     const charge = await getPaymentProvider().createCharge({
-      amount: totalAmount,
+      amount: payable,
       description: chargeDescription,
       parentId: profile.id,
       method: paymentMethod,
-      paymentIds: createdPayments.map((payment) => payment.id),
+      paymentIds: cashPaymentIds,
       couponRedemptionId: redemptionId,
       metadata: { classId, childIds: uniqueChildIds, weeklySlotId },
       installments: classInstallmentOptions(
@@ -686,6 +749,7 @@ export async function completeClassEnrollmentPayment(input: {
           "id",
           createdEnrollments.map((enrollment) => enrollment.id)
         );
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       return {
         success: false,
@@ -695,16 +759,17 @@ export async function completeClassEnrollmentPayment(input: {
 
     paymentReference = charge.reference;
     checkoutUrl = charge.redirectUrl;
+    await attachBalanceCheckout(balanceHold.entryId, charge.checkoutId ?? null);
   }
 
-  if (deferred && totalAmount > 0) {
+  if (deferred && payable > 0) {
     await notifyAdminPayment({
       paid: false,
       parentName: profile.full_name,
       phone: profile.phone,
       email: profile.email,
       product: chargeDescription,
-      amount: totalAmount,
+      amount: payable,
       paymentMethod,
       participants: [
         ...selectedChildren.map((child) => child.full_name),
@@ -726,11 +791,13 @@ export async function completeClassEnrollmentPayment(input: {
     enrollmentIds: createdEnrollments.map((e) => e.id),
     paymentReference,
     checkoutUrl,
-    deferred,
+    deferred: deferred && payable > 0,
     total: totalAmount,
     discountPercent: order.percent,
     couponCode,
     couponDiscount,
+    balanceApplied: checkoutPayments.balanceUsed,
+    cashDue: payable,
   };
 }
 
@@ -764,7 +831,7 @@ export async function registerInterestForClass(input: {
         ? reads
             .from("children")
             .select(
-              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+              "id, full_name, gender, birth_date, school_grade, grade_school_year, relationship"
             )
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)
@@ -938,7 +1005,7 @@ export async function joinClassWaitlist(input: {
         ? reads
             .from("children")
             .select(
-              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+              "id, full_name, gender, birth_date, school_grade, grade_school_year, relationship"
             )
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)

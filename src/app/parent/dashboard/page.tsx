@@ -73,6 +73,7 @@ export default async function ParentDashboard() {
     { data: waitlist },
     { data: healthDeclarations },
     { data: methodNotesSetting },
+    { data: balanceRows },
   ] = await Promise.all([
     supabase
       .from("children")
@@ -108,7 +109,15 @@ export default async function ParentDashboard() {
       .select("value")
       .eq("key", PAYMENT_METHOD_NOTES_KEY)
       .maybeSingle(),
+    supabase
+      .from("customer_balance_entries")
+      .select("amount")
+      .eq("parent_id", profile.id),
   ]);
+  const storeBalance = Math.round(
+    ((balanceRows ?? []).reduce((sum, row) => sum + Number(row.amount), 0) || 0) *
+      100
+  ) / 100;
   const methodNotes = parsePaymentMethodNotes(methodNotesSetting?.value);
 
   const allChildren = children ?? [];
@@ -165,7 +174,12 @@ export default async function ParentDashboard() {
     return rows;
   })();
   const openAmount = sumAmount(openPayments);
-  const paidAmount = sumAmount(allPayments.filter((p) => p.status === "paid"));
+  const paidAmount = sumAmount(
+    allPayments.filter(
+      (payment) =>
+        payment.status === "paid" && payment.payment_method !== "customer_balance"
+    )
+  );
 
   const paymentMethodByEnrollment = new Map<
     string,
@@ -225,6 +239,7 @@ export default async function ParentDashboard() {
       gender: child.gender,
       school_grade: child.school_grade,
       grade_school_year: child.grade_school_year,
+      relationship: child.relationship === "partner" ? "partner" : "child",
       notes: child.notes,
       activities: activitiesByChild.get(child.id) ?? [],
       linkedRecords: enrollmentCount + waitlistCount,
@@ -479,6 +494,22 @@ export default async function ParentDashboard() {
         </div>
       </section>
 
+      {storeBalance > 0 && (
+        <Card className="border-aqua-200 bg-aqua-50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div>
+              <p className="text-sm font-semibold text-aqua-900">יתרה באתר</p>
+              <p className="mt-1 text-sm text-aqua-800">
+                ברכישה הבאה היתרה יורדת מהסכום, ואת מה שנשאר משלמים באמצעי שתבחרו.
+              </p>
+            </div>
+            <p className="font-display text-2xl font-bold tabular-nums text-aqua-900">
+              {formatCurrency(storeBalance)}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="הילדים שלי"
@@ -631,6 +662,7 @@ export default async function ParentDashboard() {
           kids={kids}
           personalActivities={personalActivities}
           parentName={profile.full_name}
+          parentGender={profile.gender}
         />
 
         <Card id="enrollments" className="scroll-mt-24">

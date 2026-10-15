@@ -32,6 +32,8 @@ export type ChildEligibilityInput = {
   birth_date: string | null;
   school_grade: number | null;
   grade_school_year: number | null;
+  /** partner = בן או בת זוג מבוגר/ת, בלי כיתה. */
+  relationship?: string | null;
 };
 
 export function formatAgeRange(
@@ -126,6 +128,13 @@ export function childEligibilityError(
   const name = child.full_name.trim() || "הילד/ה";
   const genderError = genderMismatchError(name, child.gender, cls.gender_policy);
   if (genderError) return genderError;
+
+  if (child.relationship === "partner" && cls.audience_type === "grade") {
+    const range = formatGradeRange(cls.grade_min, cls.grade_max);
+    return range
+      ? `${name} רשום/ה כבן או בת זוג. החוג מיועד ל${range}.`
+      : `${name} רשום/ה כבן או בת זוג, והחוג מיועד לפי כיתה.`;
+  }
 
   if (cls.audience_type === "open") {
     return null;

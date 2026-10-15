@@ -26,6 +26,11 @@ import {
   writePendingCartCheckoutId,
 } from "@/lib/cart/pendingCheckout";
 import type { CartItem } from "@/lib/cart/types";
+import {
+  BalanceApplyField,
+  cashDueAfterBalance,
+  useCheckoutBalance,
+} from "@/components/checkout/BalanceApplyField";
 import { isDeferredPaymentMethod } from "@/lib/constants";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
@@ -61,6 +66,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
   const methodNotes = usePaymentMethodNotes();
+  const storeBalance = useCheckoutBalance();
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -136,7 +142,13 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
     quote?.success ? quote.subtotal : items.reduce((sum, item) => sum + item.listTotal, 0);
   const couponDiscount = coupon?.discountAmount ?? 0;
   const total = Math.max(Math.round((subtotal - couponDiscount) * 100) / 100, 0);
-  const deferred = isDeferredPaymentMethod(method);
+  const cashDue = cashDueAfterBalance(
+    total,
+    storeBalance.balance,
+    storeBalance.enabled
+  );
+  const coveredByBalance = total > 0 && cashDue <= 0;
+  const deferred = isDeferredPaymentMethod(method) && !coveredByBalance;
   const installmentsMax = quote?.success ? quote.installmentsMax : null;
 
   async function handleApplyCoupon() {
@@ -163,6 +175,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
     const result = await checkoutCart({
       items,
       paymentMethod: method,
+      useBalance: storeBalance.enabled,
       couponCode: coupon?.code ?? null,
       receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
       abandonCheckoutId: readPendingCartCheckoutId(),
@@ -317,13 +330,27 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
                 onChange={setReceiptLabel}
               />
 
+              <BalanceApplyField
+                balance={storeBalance.balance}
+                total={total}
+                enabled={storeBalance.enabled}
+                onEnabledChange={storeBalance.setEnabled}
+                disabled={loading}
+              />
+
+              {!coveredByBalance && (
               <PaymentMethodPicker
                 value={method}
                 onChange={setMethod}
                 disabled={loading}
               />
+              )}
 
-              {deferred ? (
+              {coveredByBalance ? (
+                <p className="rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-900">
+                  היתרה מכסה את כל הסכום. לא ייגבה תשלום נוסף.
+                </p>
+              ) : deferred ? (
                 <SelectedPaymentInstructions
                   method={method}
                   notes={methodNotes}
@@ -361,12 +388,12 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
                   onClick={handlePay}
                 >
                   {loading
-                    ? deferred
+                    ? deferred || coveredByBalance
                       ? "שומר רכישה..."
                       : "מעביר לקארדקום..."
-                    : deferred
+                    : deferred || coveredByBalance
                       ? "אישור רכישה"
-                      : `שלמו ${formatCurrency(total)}`}
+                      : `שלמו ${formatCurrency(cashDue)}`}
                 </Button>
               </div>
             </>

@@ -11,13 +11,24 @@ export default async function AdminCustomersPage({
   const { id } = await searchParams;
   const supabase = await createAdminDataClient();
 
-  const { data: parents } = await supabase
+  const [{ data: parents }, { data: balanceRows }] = await Promise.all([
+    supabase
     .from("profiles")
     .select(
-      "id, full_name, email, phone, birth_date, gender, city, address, receipt_name, receipt_id_number, created_at, customer_admin_notes(body), children(id, full_name, birth_date, gender, school_grade, grade_school_year, notes, created_at, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
+      "id, full_name, email, phone, birth_date, gender, city, address, receipt_name, receipt_id_number, created_at, customer_admin_notes(body), children(id, full_name, birth_date, gender, school_grade, grade_school_year, relationship, notes, created_at, health_declarations(id_number, signed_at, accepted, child_name, school_year))"
     )
     .eq("role", "parent")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }),
+    supabase.from("customer_balance_entries").select("parent_id, amount"),
+  ]);
+  const balanceByParent = new Map<string, number>();
+  for (const row of balanceRows ?? []) {
+    balanceByParent.set(
+      row.parent_id,
+      Math.round(((balanceByParent.get(row.parent_id) ?? 0) + Number(row.amount)) * 100) /
+        100
+    );
+  }
 
   const schoolYear = declarationSchoolYear();
   const customers = (parents ?? []).map((p) => ({
@@ -31,6 +42,7 @@ export default async function AdminCustomersPage({
     address: p.address,
     receipt_name: p.receipt_name,
     receipt_id_number: p.receipt_id_number,
+    store_balance: balanceByParent.get(p.id) ?? 0,
     admin_note: (() => {
       const note = Array.isArray(p.customer_admin_notes)
         ? p.customer_admin_notes[0]

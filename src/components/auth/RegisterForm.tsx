@@ -29,6 +29,7 @@ import {
   type HealthDeclarationDraft,
 } from "@/lib/health-declaration";
 import { markRegistrationPrompt } from "@/lib/registration-prompt";
+import { oppositeAdultGender, partnerRoleLabel } from "@/lib/household";
 import { calcAge, initials, joinPersonName } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
@@ -45,7 +46,7 @@ function afterRegistrationPath(classId: string | null) {
 
 const STEPS = [
   { label: "פרטים אישיים" },
-  { label: "ילדים" },
+  { label: "מי בחשבון" },
   { label: "פרטי התחברות" },
   { label: "אימות מייל" },
 ] as const;
@@ -99,8 +100,11 @@ export function RegisterForm() {
     receiptIdNumber: "",
   });
   const [wantsDifferentReceipt, setWantsDifferentReceipt] = useState(false);
-  const [wantsChildren, setWantsChildren] = useState<boolean | null>(null);
+  const [accountKind, setAccountKind] = useState<
+    "children" | "couple" | "self" | null
+  >(null);
   const [children, setChildren] = useState<ChildDraft[]>([newChild()]);
+  const [partner, setPartner] = useState<ChildDraft>(newChild);
   const [credentials, setCredentials] = useState({
     email: "",
     password: "",
@@ -158,17 +162,28 @@ export function RegisterForm() {
     );
   }
 
-  function chooseChildren(value: boolean) {
+  function chooseAccount(value: "children" | "couple" | "self") {
     setError(null);
-    setWantsChildren(value);
-    if (value && children.length === 0) setChildren([newChild()]);
+    if (value === "couple") {
+      const partnerGender = oppositeAdultGender(details.gender);
+      if (!partnerGender) {
+        setError(
+          "רישום כזוג מיועד לגבר ואישה. חזרו לשלב הקודם ובחרו מגדר זכר או נקבה.",
+        );
+        return;
+      }
+      setPartner((current) => ({ ...current, gender: partnerGender }));
+    }
+    setAccountKind(value);
+    if (value === "children" && children.length === 0) setChildren([newChild()]);
   }
 
   const parentFullName = joinPersonName(details.firstName, details.lastName);
-  const namedChildren = wantsChildren
-    ? children.filter((c) => childFullName(c))
-    : [];
-  const showChildrenDock = step === 2 && wantsChildren === true;
+  const namedChildren =
+    accountKind === "children" ? children.filter((c) => childFullName(c)) : [];
+  const partnerGender = oppositeAdultGender(details.gender);
+  const showChildrenDock =
+    step === 2 && (accountKind === "children" || accountKind === "couple");
   const childrenDockRef = useRef<HTMLDivElement>(null);
   const [childrenDockHeight, setChildrenDockHeight] = useState(220);
 
@@ -182,7 +197,7 @@ export function RegisterForm() {
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [showChildrenDock, children]);
+  }, [showChildrenDock, children, partner, accountKind]);
 
   function goNext() {
     setError(null);
@@ -214,11 +229,11 @@ export function RegisterForm() {
     }
 
     if (step === 2) {
-      if (wantsChildren === null)
-        return setError("בחרו אם להוסיף ילדים לחשבון.");
-      if (wantsChildren && namedChildren.length === 0)
-        return setError("נא למלא שם פרטי ושם משפחה של ילד/ה אחד לפחות, או לבחור 'לא'.");
-      if (wantsChildren) {
+      if (accountKind === null)
+        return setError("בחרו אם להוסיף ילדים, להירשם כזוג, או להירשם לבד.");
+      if (accountKind === "children" && namedChildren.length === 0)
+        return setError("נא למלא שם פרטי ושם משפחה של ילד/ה אחד לפחות, או לבחור אפשרות אחרת.");
+      if (accountKind === "children") {
         const missingName = children.some(
           (child) => !child.firstName.trim() || !child.lastName.trim(),
         );
@@ -232,6 +247,26 @@ export function RegisterForm() {
           (child) => !isSignedHealthDraft(child.health),
         );
         if (missingHealth) return setError(MISSING_HEALTH_DECLARATION_ERROR);
+      }
+      if (accountKind === "couple") {
+        if (!partner.firstName.trim() || !partner.lastName.trim())
+          return setError("נא למלא שם פרטי ושם משפחה של בן או בת הזוג.");
+        const birthError = partner.birth
+          ? validateBirthDate(partner.birth)
+          : "נא למלא תאריך לידה של בן או בת הזוג.";
+        if (birthError) return setError(birthError);
+        if (!partnerGender) {
+          return setError(
+            "רישום כזוג מיועד לגבר ואישה. חזרו לשלב הקודם ובחרו מגדר זכר או נקבה.",
+          );
+        }
+        setPartner((current) =>
+          current.gender === partnerGender
+            ? current
+            : { ...current, gender: partnerGender },
+        );
+        if (!isSignedHealthDraft(partner.health))
+          return setError(MISSING_HEALTH_DECLARATION_ERROR);
       }
       setStep(3);
       return;
@@ -300,15 +335,30 @@ export function RegisterForm() {
             details.idNumber,
             wantsDifferentReceipt ? details.receiptIdNumber : null,
           ),
-          pending_children: namedChildren.map((c) => ({
-            full_name: childFullName(c),
-            birth_date: c.birth || null,
-            gender: c.gender || null,
-            school_grade: parseSchoolGradeInput(c.grade),
-            grade_school_year: currentSchoolYear(),
-            health_id_number: c.health?.idNumber ?? null,
-            health_accepted: Boolean(c.health?.accepted),
-          })),
+          pending_children:
+            accountKind === "couple"
+              ? [
+                  {
+                    full_name: childFullName(partner),
+                    birth_date: partner.birth || null,
+                    gender: partnerGender,
+                    relationship: "partner",
+                    school_grade: null,
+                    grade_school_year: null,
+                    health_id_number: partner.health?.idNumber ?? null,
+                    health_accepted: Boolean(partner.health?.accepted),
+                  },
+                ]
+              : namedChildren.map((c) => ({
+                  full_name: childFullName(c),
+                  birth_date: c.birth || null,
+                  gender: c.gender || null,
+                  relationship: "child",
+                  school_grade: parseSchoolGradeInput(c.grade),
+                  grade_school_year: currentSchoolYear(),
+                  health_id_number: c.health?.idNumber ?? null,
+                  health_accepted: Boolean(c.health?.accepted),
+                })),
         },
       },
     });
@@ -632,32 +682,146 @@ export function RegisterForm() {
         <div className="animate-fade-in flex flex-col gap-4">
           <div className="text-right">
             <h3 className="font-display text-[17px] font-extrabold text-ink-900">
-              להוסיף ילדים לחשבון?
+              מי נרשם לחשבון?
             </h3>
             <p className="mt-1 text-sm text-ink-500">
-              נרשמים לחוג עבור עצמכם? אין צורך. תמיד אפשר להוסיף ילדים גם אחר כך
-              מהאזור האישי.
+              אפשר להוסיף ילדים, להירשם כזוג גבר ואישה, או לפתוח חשבון למבוגר/ת
+              בלבד. תמיד אפשר להשלים גם אחר כך.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <ChoiceCard
-              selected={wantsChildren === true}
-              onClick={() => chooseChildren(true)}
+              selected={accountKind === "children"}
+              onClick={() => chooseAccount("children")}
               icon="child"
-              title="כן, נוסיף ילדים"
+              title="הורה וילדים"
               subtitle="הרשמה עבור ילד/ה אחד או יותר"
             />
             <ChoiceCard
-              selected={wantsChildren === false}
-              onClick={() => chooseChildren(false)}
+              selected={accountKind === "couple"}
+              onClick={() => chooseAccount("couple")}
+              icon="family"
+              title="זוג מבוגרים"
+              subtitle="גבר ואישה באותו חשבון"
+            />
+            <ChoiceCard
+              selected={accountKind === "self"}
+              onClick={() => chooseAccount("self")}
               icon="user"
-              title="לא, נרשם/ת לעצמי"
+              title="רק אני"
               subtitle="חשבון למבוגר/ת בלבד"
             />
           </div>
 
-          {wantsChildren && (
+          {accountKind === "couple" && (
+            <div className="animate-fade-in flex flex-col gap-4 rounded-2xl border border-ink-100 bg-ink-50/50 p-4">
+              <p className="text-sm font-bold text-ink-700">
+                {partnerRoleLabel(partnerGender)}
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="שם פרטי"
+                  htmlFor="partnerFirstName"
+                  required
+                  variant="ds"
+                >
+                  <Input
+                    id="partnerFirstName"
+                    variant="ds"
+                    autoComplete="off"
+                    placeholder="דנה"
+                    value={partner.firstName}
+                    onChange={(e) =>
+                      setPartner((current) => ({
+                        ...current,
+                        firstName: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </Field>
+                <Field
+                  label="שם משפחה"
+                  htmlFor="partnerLastName"
+                  required
+                  variant="ds"
+                >
+                  <Input
+                    id="partnerLastName"
+                    variant="ds"
+                    autoComplete="off"
+                    placeholder="לוי"
+                    value={partner.lastName}
+                    onChange={(e) =>
+                      setPartner((current) => ({
+                        ...current,
+                        lastName: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </Field>
+              </div>
+              <Field label="תאריך לידה" htmlFor="partnerBirth" required variant="ds">
+                <BirthDateInput
+                  id="partnerBirth"
+                  max={maxBirthDate || undefined}
+                  value={partner.birth}
+                  onChange={(e) =>
+                    setPartner((current) => ({
+                      ...current,
+                      birth: e.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <p className="text-sm text-ink-600">
+                המגדר נקבע אוטומטית:{" "}
+                <span className="font-bold">
+                  {partnerGender === "female"
+                    ? "אישה"
+                    : partnerGender === "male"
+                      ? "גבר"
+                      : "בחרו קודם מגדר בשלב הראשון"}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  if (!partner.firstName.trim() || !partner.lastName.trim()) {
+                    setError(
+                      "נא למלא קודם שם פרטי ושם משפחה לפני הצהרת הבריאות.",
+                    );
+                    return;
+                  }
+                  setHealthChildKey(partner.key);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-right transition-colors",
+                  isSignedHealthDraft(partner.health)
+                    ? "border-aqua-200 bg-aqua-50 text-aqua-800"
+                    : "border-brand-200 bg-brand-50/60 text-brand-800 hover:border-brand-400 hover:bg-brand-50",
+                )}
+              >
+                <span>
+                  <span className="block text-sm font-bold">הצהרת בריאות</span>
+                  <span className="block text-xs font-medium opacity-80">
+                    {isSignedHealthDraft(partner.health)
+                      ? "נחתמה — לחצו לצפייה או עדכון"
+                      : "חובה לפני הרשמה לחוג"}
+                  </span>
+                </span>
+                <Icon
+                  name={isSignedHealthDraft(partner.health) ? "check" : "shield"}
+                  size={18}
+                />
+              </button>
+            </div>
+          )}
+
+          {accountKind === "children" && (
             <div className="animate-fade-in flex flex-col gap-4">
               {children.map((child, index) => (
                 <div
@@ -837,7 +1001,10 @@ export function RegisterForm() {
 
       {showChildrenDock && (
         <div className="hidden lg:block">
-          <ChildrenLiveSummary items={children} />
+          <ChildrenLiveSummary
+            items={accountKind === "couple" ? [partner] : children}
+            partner={accountKind === "couple"}
+          />
         </div>
       )}
 
@@ -894,7 +1061,15 @@ export function RegisterForm() {
           <Summary
             fullName={parentFullName}
             city={details.city}
-            childrenCount={namedChildren.length}
+            householdLine={
+              accountKind === "couple"
+                ? `זוג עם ${childFullName(partner) || "בן/בת זוג"}`
+                : namedChildren.length === 0
+                  ? "חשבון ללא ילדים"
+                  : namedChildren.length === 1
+                    ? "ילד/ה אחד/ת בחשבון"
+                    : `${namedChildren.length} ילדים בחשבון`
+            }
           />
         </div>
       )}
@@ -903,21 +1078,28 @@ export function RegisterForm() {
       <HealthDeclarationModal
         open={healthChildKey !== null}
         onClose={() => setHealthChildKey(null)}
-        childName={
-          childFullName(
-            children.find((child) => child.key === healthChildKey) ?? {
-              firstName: "",
-              lastName: "",
-            }
-          )
-        }
+        childName={childFullName(
+          (partner.key === healthChildKey
+            ? partner
+            : children.find((child) => child.key === healthChildKey)) ?? {
+            firstName: "",
+            lastName: "",
+          },
+        )}
         today={maxBirthDate || todayIso()}
         schoolYear={declarationSchoolYear()}
         initial={
-          children.find((child) => child.key === healthChildKey)?.health ?? null
+          (partner.key === healthChildKey
+            ? partner
+            : children.find((child) => child.key === healthChildKey)
+          )?.health ?? null
         }
         onSave={(health) => {
           if (healthChildKey === null) return;
+          if (partner.key === healthChildKey) {
+            setPartner((current) => ({ ...current, health }));
+            return;
+          }
           setChildren((list) =>
             list.map((child) =>
               child.key === healthChildKey ? { ...child, health } : child
@@ -939,7 +1121,10 @@ export function RegisterForm() {
           >
             <div className="mx-auto flex w-full max-w-[440px] flex-col gap-3 lg:max-w-none">
               <div className="lg:hidden">
-                <ChildrenLiveSummary items={children} />
+                <ChildrenLiveSummary
+                  items={accountKind === "couple" ? [partner] : children}
+                  partner={accountKind === "couple"}
+                />
               </div>
               <FormError error={error} />
               <FormActions
@@ -1035,7 +1220,13 @@ function FormActions({
   );
 }
 
-function ChildrenLiveSummary({ items }: { items: ChildDraft[] }) {
+function ChildrenLiveSummary({
+  items,
+  partner = false,
+}: {
+  items: ChildDraft[];
+  partner?: boolean;
+}) {
   const namedCount = items.filter((child) => childFullName(child)).length;
 
   return (
@@ -1046,20 +1237,27 @@ function ChildrenLiveSummary({ items }: { items: ChildDraft[] }) {
         </span>
         <div className="min-w-0 text-right">
           <p className="text-sm font-semibold leading-tight text-brand-900">
-            ילדים בחשבון
+            {partner ? "בן/בת הזוג" : "ילדים בחשבון"}
           </p>
           <p className="text-xs leading-tight text-brand-700/75">
             {namedCount === 0
               ? "הפרטים יופיעו כאן תוך כדי ההקלדה"
-              : namedCount === 1
-                ? "ילד/ה אחד/ת עם שם"
-                : `${namedCount} ילדים עם שם`}
+              : partner
+                ? "זוג גבר ואישה"
+                : namedCount === 1
+                  ? "ילד/ה אחד/ת עם שם"
+                  : `${namedCount} ילדים עם שם`}
           </p>
         </div>
       </div>
       <ul className="max-h-36 divide-y divide-brand-100 overflow-y-auto border-t border-brand-200/60">
         {items.map((child, index) => (
-          <ChildSummaryRow key={child.key} child={child} index={index} />
+          <ChildSummaryRow
+            key={child.key}
+            child={child}
+            index={index}
+            partner={partner}
+          />
         ))}
       </ul>
     </div>
@@ -1069,9 +1267,11 @@ function ChildrenLiveSummary({ items }: { items: ChildDraft[] }) {
 function ChildSummaryRow({
   child,
   index,
+  partner = false,
 }: {
   child: ChildDraft;
   index: number;
+  partner?: boolean;
 }) {
   const name = childFullName(child);
   const gradeValue = parseSchoolGradeInput(child.grade);
@@ -1097,7 +1297,7 @@ function ChildSummaryRow({
         : child.gender === "male"
           ? `בן ${age}`
           : `גיל ${age}`;
-  const complete = Boolean(name && grade);
+  const complete = partner ? Boolean(name && child.birth) : Boolean(name && grade);
 
   return (
     <li className="flex items-center gap-3 px-3.5 py-2.5">
@@ -1118,10 +1318,10 @@ function ChildSummaryRow({
             name ? "text-ink-900" : "text-ink-400"
           )}
         >
-          {name || `ילד/ה ${index + 1}`}
+          {name || (partner ? "בן/בת הזוג" : `ילד/ה ${index + 1}`)}
         </p>
         <p className="truncate text-xs text-ink-500">
-          {[gradeText, ageLabel, gender]
+          {[partner ? null : gradeText, ageLabel, gender]
             .filter(Boolean)
             .join(" · ") || "ממתינים לפרטים"}
         </p>
@@ -1198,7 +1398,7 @@ function ChoiceCard({
 }: {
   selected: boolean;
   onClick: () => void;
-  icon: "child" | "user";
+  icon: "child" | "user" | "family";
   title: string;
   subtitle: string;
 }) {
@@ -1291,11 +1491,11 @@ function TermsModal({
 function Summary({
   fullName,
   city,
-  childrenCount,
+  householdLine,
 }: {
   fullName: string;
   city: string;
-  childrenCount: number;
+  householdLine: string;
 }) {
   return (
     <ul className="flex list-none flex-col gap-1.5 rounded-2xl bg-ink-50 p-4 text-sm text-ink-600">
@@ -1310,11 +1510,7 @@ function Summary({
         <span className="text-aqua-600">
           <Icon name="check" size={15} stroke={2.5} />
         </span>
-        {childrenCount === 0
-          ? "חשבון ללא ילדים"
-          : childrenCount === 1
-            ? "ילד/ה אחד/ת בחשבון"
-            : `${childrenCount} ילדים בחשבון`}
+        {householdLine}
       </li>
     </ul>
   );

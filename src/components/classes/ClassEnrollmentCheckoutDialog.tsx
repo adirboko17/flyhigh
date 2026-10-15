@@ -14,6 +14,11 @@ import {
 import { usePaymentMethodNotes } from "@/components/payments/usePaymentMethodNotes";
 import { ReceiptLabelField } from "@/components/checkout/ReceiptLabelField";
 import { PurchaseSteps } from "@/components/checkout/PurchaseSteps";
+import {
+  BalanceApplyField,
+  cashDueAfterBalance,
+  useCheckoutBalance,
+} from "@/components/checkout/BalanceApplyField";
 import { PAYMENT_METHOD, isDeferredPaymentMethod } from "@/lib/constants";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import {
@@ -81,6 +86,8 @@ export function ClassEnrollmentCheckoutDialog({
   );
   const [method, setMethod] = useState<CheckoutPaymentMethod>("credit_card");
   const methodNotes = usePaymentMethodNotes();
+  const storeBalance = useCheckoutBalance();
+  const [leftToPay, setLeftToPay] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
@@ -112,7 +119,13 @@ export function ClassEnrollmentCheckoutDialog({
   );
   const couponDiscount = coupon?.discountAmount ?? 0;
   const total = Math.max(Math.round((order.total - couponDiscount) * 100) / 100, 0);
-  const deferred = isDeferredPaymentMethod(method);
+  const cashDue = cashDueAfterBalance(
+    total,
+    storeBalance.balance,
+    storeBalance.enabled
+  );
+  const coveredByBalance = total > 0 && cashDue <= 0;
+  const deferred = isDeferredPaymentMethod(method) && !coveredByBalance;
   const nothingToCharge = total <= 0;
 
   function handleClose() {
@@ -194,6 +207,7 @@ export function ClassEnrollmentCheckoutDialog({
       childIds,
       includeSelf: selfSelected,
       paymentMethod: method,
+      useBalance: storeBalance.enabled,
       couponCode: coupon?.code ?? null,
       receiptLabelId: receiptLabel.enabled ? receiptLabel.labelId : null,
       weeklySlotId,
@@ -212,6 +226,7 @@ export function ClassEnrollmentCheckoutDialog({
     }
 
     setPaymentReference(result.paymentReference);
+    setLeftToPay(result.cashDue);
     setSettledLater(result.deferred);
     setStep("success");
     router.refresh();
@@ -455,13 +470,27 @@ export function ClassEnrollmentCheckoutDialog({
             </p>
           </div>
 
-          <PaymentMethodPicker
-            value={method}
-            onChange={setMethod}
+          <BalanceApplyField
+            balance={storeBalance.balance}
+            total={total}
+            enabled={storeBalance.enabled}
+            onEnabledChange={storeBalance.setEnabled}
             disabled={loading}
           />
 
-          {deferred ? (
+          {!coveredByBalance && !nothingToCharge && (
+            <PaymentMethodPicker
+              value={method}
+              onChange={setMethod}
+              disabled={loading}
+            />
+          )}
+
+          {coveredByBalance ? (
+            <p className="rounded-2xl border border-aqua-200 bg-aqua-50 px-4 py-3 text-sm text-aqua-900">
+              היתרה מכסה את כל הסכום. לא ייגבה תשלום נוסף.
+            </p>
+          ) : deferred ? (
             <SelectedPaymentInstructions
               method={method}
               notes={methodNotes}
@@ -507,12 +536,12 @@ export function ClassEnrollmentCheckoutDialog({
               onClick={handlePay}
             >
               {loading
-                ? deferred || nothingToCharge
+                ? deferred || nothingToCharge || coveredByBalance
                   ? "שומר הרשמה..."
                   : "מעביר לקארדקום..."
-                : deferred || nothingToCharge
+                : deferred || nothingToCharge || coveredByBalance
                   ? "אישור הרשמה"
-                  : `שלם ${formatCurrency(total)}`}
+                  : `שלם ${formatCurrency(cashDue)}`}
             </Button>
           </div>
         </div>
@@ -531,7 +560,7 @@ export function ClassEnrollmentCheckoutDialog({
             </p>
             {settledLater ? (
               <p className="mt-1 text-sm text-ink-500">
-                נותר לשלם {formatCurrency(total)} ב{PAYMENT_METHOD[method]}. החיוב
+                נותר לשלם {formatCurrency(leftToPay ?? cashDue)} ב{PAYMENT_METHOD[method]}. החיוב
                 מופיע באזור התשלומים שלכם עד להסדרתו.
               </p>
             ) : (

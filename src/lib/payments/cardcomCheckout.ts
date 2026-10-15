@@ -2,6 +2,10 @@ import { notifyAdminCardcomPaid } from "@/lib/notifications/adminPayment";
 import { closeProspectsForEnrollments } from "@/lib/admin/closeProspects";
 import { isAbandonedCardcomCharge } from "@/lib/constants";
 import { normalizeIdNumber } from "@/lib/health-declaration";
+import {
+  releaseBalanceForCheckout,
+  restoreCustomerBalancePayments,
+} from "@/lib/payments/checkoutBalance";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database.types";
 import {
@@ -456,6 +460,25 @@ export async function voidUnpaidCardcomCheckout(input: {
         .filter((id): id is string => Boolean(id))
     ),
   ];
+
+  if (enrollmentIds.length) {
+    const { data: balancePayments } = await admin
+      .from("payments")
+      .select("id")
+      .in("enrollment_id", enrollmentIds)
+      .eq("payment_method", "customer_balance")
+      .eq("status", "paid");
+    const balanceIds = (balancePayments ?? []).map((payment) => payment.id);
+    const restored = await releaseBalanceForCheckout(checkout.id);
+    if (restored <= 0 && balanceIds.length > 0) {
+      await restoreCustomerBalancePayments(balanceIds);
+    }
+    if (balanceIds.length > 0) {
+      await admin.from("payments").delete().in("id", balanceIds);
+    }
+  } else {
+    await releaseBalanceForCheckout(checkout.id);
+  }
 
   if (paymentIds.length) {
     await admin.from("payments").delete().in("id", paymentIds);

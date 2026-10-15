@@ -361,15 +361,17 @@ export function AssignToClassDialog({
 
   function handleMethodChange(next: AssignChargeMethod) {
     setMethod(next);
-    if (next === "credit_card") setMarkPaid(false);
-    if (next === "none") setSplitEnabled(false);
+    if (next === "credit_card" || next === "paid") setMarkPaid(false);
+    if (next === "none" || next === "paid") setSplitEnabled(false);
   }
 
   function toggleSplit(enabled: boolean) {
     setSplitEnabled(enabled);
     if (!enabled) return;
     const first: CollectionPaymentMethod =
-      method === "none" || method === "credit_card" ? "cash" : method;
+      method === "none" || method === "credit_card" || method === "paid"
+        ? "cash"
+        : method;
     setSplitParts(emptySplitDrafts(Number(amount || 0), first));
   }
 
@@ -399,9 +401,14 @@ export function AssignToClassDialog({
       setError("לתור לטיפול משבצים מתאמן אחד.");
       return;
     }
+    if (!cls.interest_only && method === "paid" && Number(amount || 0) <= 0) {
+      setError("לסטטוס שולם צריך להזין סכום גדול מאפס.");
+      return;
+    }
     if (
       !cls.interest_only &&
       method !== "none" &&
+      method !== "paid" &&
       receiptLabel.enabled &&
       !receiptLabel.labelId
     ) {
@@ -430,7 +437,10 @@ export function AssignToClassDialog({
     setError(null);
 
     const receiptLabelId =
-      !cls.interest_only && method !== "none" && receiptLabel.enabled
+      !cls.interest_only &&
+      method !== "none" &&
+      method !== "paid" &&
+      receiptLabel.enabled
         ? receiptLabel.labelId
         : null;
 
@@ -441,7 +451,7 @@ export function AssignToClassDialog({
           method: (splitEnabled
             ? splitParts[0]?.method ?? method
             : method) as AssignChargeMethod,
-          markPaid,
+          markPaid: method === "paid" ? true : markPaid,
           receiptLabelId,
           splits: splitEnabled
             ? splitParts.map((part) => ({
@@ -663,13 +673,15 @@ export function AssignToClassDialog({
           hint={
             splitEnabled
               ? "כל חלק ייפתח כחיוב נפרד בגבייה. חשבונית מס-קבלה תופק עם רישום כל תקבול."
-              : method === "credit_card"
-                ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
-                : method === "none"
-                  ? "הלקוח ישובץ לחוג בלי רשומת חיוב — אין חוב ואין הפרש לגבייה."
-                  : markPaid
-                    ? "הלקוח ישובץ לחוג לפי הסכום שהוזן בלבד. אין חיוב נוסף על ההפרש ממחיר החוג."
-                    : "ייפתח חוב בגבייה לפי הסכום שהוזן בלבד — לא על ההפרש ממחיר החוג."
+              : method === "paid"
+                ? "הלקוח כבר שילם, למשל בטלפון. השיבוץ יישמר בסטטוס שולם — בלי חוב פתוח בגבייה."
+                : method === "credit_card"
+                  ? "דף הסליקה של קארדקום ייפתח בכרטיסייה חדשה. אם הדפדפן חוסם אותה — תועברו אליו כאן."
+                  : method === "none"
+                    ? "הלקוח ישובץ לחוג בלי רשומת חיוב — אין חוב ואין הפרש לגבייה."
+                    : markPaid
+                      ? "הלקוח ישובץ לחוג לפי הסכום שהוזן בלבד. אין חיוב נוסף על ההפרש ממחיר החוג."
+                      : "ייפתח חוב בגבייה לפי הסכום שהוזן בלבד — לא על ההפרש ממחיר החוג."
           }
         >
           <Select
@@ -686,11 +698,12 @@ export function AssignToClassDialog({
                 {PAYMENT_METHOD[value]}
               </option>
             ))}
+            <option value="paid">שולם</option>
             <option value="none">ללא חיוב</option>
           </Select>
         </Field>
 
-        {method !== "none" && (
+        {method !== "none" && method !== "paid" && (
           <PaymentMethodNoteCard
             method={method}
             note={paymentMethodNote(methodNotes, method)}
@@ -733,12 +746,14 @@ export function AssignToClassDialog({
             </Field>
             {Number(amount || 0) < listTotal && Number(amount || 0) >= 0 && listTotal > 0 && (
               <p className="rounded-xl bg-aqua-50 px-4 py-3 text-sm text-aqua-800">
-                הנחת מנהל: יחויב {formatCurrency(Number(amount || 0))} במקום{" "}
+                {method === "paid" ? "נרשם כשולם" : "הנחת מנהל: יחויב"}{" "}
+                {formatCurrency(Number(amount || 0))} במקום{" "}
                 {formatCurrency(listTotal)}. הלקוח ישובץ לחוג הרגיל, בלי חוב על
                 ההפרש ({formatCurrency(listTotal - Number(amount || 0))}).
               </p>
             )}
 
+            {method !== "paid" && (
             <label className="flex items-start gap-2.5 text-sm text-ink-700">
               <input
                 type="checkbox"
@@ -754,8 +769,9 @@ export function AssignToClassDialog({
                 </span>
               </span>
             </label>
+            )}
 
-            {splitEnabled && (
+            {splitEnabled && method !== "paid" && (
               <PaymentSplitEditor
                 parts={splitParts}
                 onChange={setSplitParts}
@@ -764,7 +780,7 @@ export function AssignToClassDialog({
               />
             )}
 
-            {!isCreditCard && (
+            {!isCreditCard && method !== "paid" && (
               <label className="flex items-center gap-2.5 text-sm text-ink-700">
                 <input
                   type="checkbox"
@@ -778,12 +794,14 @@ export function AssignToClassDialog({
               </label>
             )}
 
-            <ReceiptLabelField
-              productTitle={cls.title}
-              value={receiptLabel}
-              onChange={setReceiptLabel}
-              disabled={saving}
-            />
+            {method !== "paid" && (
+              <ReceiptLabelField
+                productTitle={cls.title}
+                value={receiptLabel}
+                onChange={setReceiptLabel}
+                disabled={saving}
+              />
+            )}
           </>
         )}
           </>
@@ -804,11 +822,13 @@ export function AssignToClassDialog({
               ? isCreditCard
                 ? "מעבד תשלום..."
                 : "משבץ..."
-              : assignSubmitLabel(
-                  participantCount,
-                  includeSelf,
-                  isCreditCard && Number(amount || 0) > 0
-                )}
+              : method === "paid"
+                ? "שיבוץ כשולם"
+                : assignSubmitLabel(
+                    participantCount,
+                    includeSelf,
+                    isCreditCard && Number(amount || 0) > 0
+                  )}
           </Button>
         </div>
       </form>

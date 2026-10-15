@@ -212,7 +212,7 @@ async function prepareClassLine(
         ? reads
             .from("children")
             .select(
-              "id, full_name, gender, birth_date, school_grade, grade_school_year"
+              "id, full_name, gender, birth_date, school_grade, grade_school_year, relationship"
             )
             .eq("parent_id", profile.id)
             .in("id", uniqueChildIds)

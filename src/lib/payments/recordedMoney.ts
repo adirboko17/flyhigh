@@ -1,6 +1,7 @@
 import {
   isAbandonedCardcomCharge,
   isReceiptlessCollectionMethod,
+  isStoreCreditPaymentMethod,
 } from "@/lib/constants";
 import type { Enums } from "@/types/database.types";
 
@@ -22,6 +23,12 @@ export function paymentHasRecordedMoney(payment: RecordedMoneyPayment): boolean 
   if ((payment.documentIds ?? []).length > 0) return true;
   if (
     isReceiptlessCollectionMethod(payment.payment_method) &&
+    (payment.status === "paid" || payment.status === "refunded")
+  ) {
+    return true;
+  }
+  if (
+    isStoreCreditPaymentMethod(payment.payment_method) &&
     (payment.status === "paid" || payment.status === "refunded")
   ) {
     return true;

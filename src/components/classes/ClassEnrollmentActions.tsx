@@ -60,6 +60,7 @@ type Child = {
   gender?: Enums<"gender_type"> | null;
   school_grade?: number | null;
   grade_school_year?: number | null;
+  relationship?: string | null;
   hasHealthDeclaration: boolean;
 };
 
@@ -69,7 +70,13 @@ type ParentTrainee = {
   gender?: Enums<"gender_type"> | null;
 };
 
-type Trainee = Child & { kind: "parent" | "child" };
+type Trainee = Child & { kind: "parent" | "child" | "partner" };
+
+function traineeRoleLabel(kind: Trainee["kind"]): string | null {
+  if (kind === "parent") return "הורה";
+  if (kind === "partner") return "בן/בת זוג";
+  return null;
+}
 
 type ExistingEnrollment = {
   id: string;
@@ -280,6 +287,7 @@ export function ClassEnrollmentActions({
         birth_date: child.birth_date,
         school_grade: child.school_grade ?? null,
         grade_school_year: child.grade_school_year ?? null,
+        relationship: child.relationship,
       });
       if (audienceError) {
         map.set(child.id, {
@@ -347,14 +355,20 @@ export function ClassEnrollmentActions({
   const availableTrainees = useMemo<Trainee[]>(
     () => [
       ...(parentEligible ? [parentTrainee] : []),
-      ...availableChildren.map((child) => ({ ...child, kind: "child" as const })),
+      ...availableChildren.map((child) => ({
+        ...child,
+        kind: child.relationship === "partner" ? ("partner" as const) : ("child" as const),
+      })),
     ],
     [parentEligible, parentTrainee, availableChildren]
   );
   const ineligibleTrainees = useMemo<Trainee[]>(
     () => [
       ...(!parentAlreadyTaken && !parentEligible ? [parentTrainee] : []),
-      ...ineligibleChildren.map((child) => ({ ...child, kind: "child" as const })),
+      ...ineligibleChildren.map((child) => ({
+        ...child,
+        kind: child.relationship === "partner" ? ("partner" as const) : ("child" as const),
+      })),
     ],
     [parentAlreadyTaken, parentEligible, parentTrainee, ineligibleChildren]
   );
@@ -797,6 +811,7 @@ export function ClassEnrollmentActions({
               selectedTrainees={selectedTrainees}
               availableCount={availableTrainees.length}
               eligibilityByChildId={eligibilityByChildId}
+              hasPartner={kids.some((child) => child.relationship === "partner")}
               onOpen={() => setChildPickerOpen(true)}
             />
 
@@ -1070,13 +1085,13 @@ export function ClassEnrollmentActions({
                         {child.full_name}
                       </span>
                       <span className="mt-0.5 block text-xs text-ink-500">
-                        {child.kind === "parent"
-                          ? eligibility?.ageLabel
-                            ? `הורה · גיל ${eligibility.ageLabel}`
-                            : "הורה"
-                          : eligibility?.ageLabel
-                            ? `גיל ${eligibility.ageLabel}`
-                            : null}
+                        {(() => {
+                          const role = traineeRoleLabel(child.kind);
+                          if (role && eligibility?.ageLabel) {
+                            return `${role} · גיל ${eligibility.ageLabel}`;
+                          }
+                          return role ?? (eligibility?.ageLabel ? `גיל ${eligibility.ageLabel}` : null);
+                        })()}
                       </span>
                     </span>
                     <span
@@ -1101,9 +1116,9 @@ export function ClassEnrollmentActions({
                     <div className="min-w-0 flex-1">
                       <span className="block font-medium text-ink-700">
                         {child.full_name}
-                        {child.kind === "parent" && (
+                        {traineeRoleLabel(child.kind) && (
                           <span className="mr-1.5 text-xs font-normal text-ink-400">
-                            הורה
+                            {traineeRoleLabel(child.kind)}
                           </span>
                         )}
                         {eligibility?.ageLabel && (
@@ -1206,11 +1221,13 @@ function ChildPickerTrigger({
   selectedTrainees,
   availableCount,
   eligibilityByChildId,
+  hasPartner = false,
   onOpen,
 }: {
   selectedTrainees: Trainee[];
   availableCount: number;
   eligibilityByChildId: Map<string, AgeEligibility>;
+  hasPartner?: boolean;
   onOpen: () => void;
 }) {
   const selected = selectedTrainees.length > 0;
@@ -1256,13 +1273,12 @@ function ChildPickerTrigger({
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
               {selectedTrainees.length === 1
-                ? first.kind === "parent"
-                  ? firstAge != null
-                    ? `הורה · גיל ${firstAge}`
-                    : "הורה"
-                  : firstAge != null
-                    ? `גיל ${firstAge}`
-                    : "נרשם לחוג"
+                ? (() => {
+                    const role = traineeRoleLabel(first.kind);
+                    if (role && firstAge != null) return `${role} · גיל ${firstAge}`;
+                    if (role) return role;
+                    return firstAge != null ? `גיל ${firstAge}` : "נרשם לחוג";
+                  })()
                 : `${selectedTrainees.length} מתאמנים נבחרו`}
             </span>
           </>
@@ -1274,7 +1290,9 @@ function ChildPickerTrigger({
             <span className="mt-0.5 block text-xs text-ink-500">
               {availableCount === 0
                 ? "אין מתאמנים מתאימים לחוג זה"
-                : "אפשר לבחור את ההורה או ילד/ה מהחשבון"}
+                : hasPartner
+                  ? "אפשר לבחור את בעל החשבון, בן או בת זוג, או ילד/ה"
+                  : "אפשר לבחור את ההורה או ילד/ה מהחשבון"}
             </span>
           </>
         )}

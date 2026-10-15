@@ -16,6 +16,15 @@ import { installmentOptions } from "@/lib/finance/installments";
 import { getPaymentProvider } from "@/lib/integrations/payments";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { voidUnpaidCardcomCheckout } from "@/lib/payments/cardcomCheckout";
+import {
+  allocateBalance,
+  attachBalanceCheckout,
+  buildCheckoutPaymentRows,
+  enrollmentPaymentStatusForBalance,
+  releaseCheckoutBalance,
+  reserveCheckoutBalance,
+  roundMoney,
+} from "@/lib/payments/checkoutBalance";
 import { closeProspectsForEnrollments } from "@/lib/admin/closeProspects";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,6 +58,8 @@ export type CheckoutCartResult =
       total: number;
       couponCode: string | null;
       couponDiscount: number;
+      balanceApplied: number;
+      cashDue: number;
     }
   | { success: false; error: string; paid?: boolean };
 
@@ -258,6 +269,7 @@ export async function previewCartCoupon(input: {
 export async function checkoutCart(input: {
   items: CartItem[];
   paymentMethod: CheckoutPaymentMethod;
+  useBalance?: boolean;
   couponCode?: string | null;
   receiptLabelId?: string | null;
   abandonCheckoutId?: string | null;
@@ -330,20 +342,51 @@ export async function checkoutCart(input: {
   }
 
   const totalAmount = Math.max(round2(subtotal - couponDiscount), 0);
-  const awaitingCardcom = !deferred && totalAmount > 0;
+  let balanceHold: { applied: number; entryId: string | null } = {
+    applied: 0,
+    entryId: null,
+  };
+  try {
+    balanceHold = await reserveCheckoutBalance({
+      parentId: profile.id,
+      total: totalAmount,
+      useBalance: input.useBalance,
+      note: lines.length === 1 ? lines[0].chargeDescription : "רכישה מרוכזת",
+    });
+  } catch (error) {
+    await releaseCoupon();
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "לא הצלחנו להשתמש ביתרה. נסו שוב.",
+    };
+  }
+  const usingBalance = balanceHold.applied > 0;
+  const cashDuePreview = usingBalance
+    ? roundMoney(Math.max(totalAmount - balanceHold.applied, 0))
+    : totalAmount;
+  const awaitingCardcom = !deferred && cashDuePreview > 0;
   const paidAt = new Date().toISOString();
-  const paymentStatus =
-    deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const);
-  const chargeStatus =
-    deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const);
+  const paymentStatus = usingBalance
+    ? enrollmentPaymentStatusForBalance({
+        cashDue: cashDuePreview,
+        balanceApplied: balanceHold.applied,
+      })
+    : deferred || awaitingCardcom
+      ? ("unpaid" as const)
+      : ("paid" as const);
 
   const allAmounts = allocateDiscount(
     lines.flatMap((line) => line.paymentAmounts),
     couponDiscount
   );
+  const balancePortions = allocateBalance(allAmounts, balanceHold.applied);
 
   const createdEnrollmentIds: string[] = [];
   const createdPaymentIds: string[] = [];
+  const cashPaymentIds: string[] = [];
   let amountIndex = 0;
 
   try {
@@ -430,27 +473,36 @@ export async function checkoutCart(input: {
       const { data: payments, error: paymentError } = await supabase
         .from("payments")
         .insert(
-          enrollments.map((enrollment, index) => {
+          enrollments.flatMap((enrollment, index) => {
             const amount = allAmounts[amountIndex + index] ?? 0;
-            return {
-              parent_id: profile.id,
-              enrollment_id: enrollment.id,
-              amount,
-              payment_method: paymentMethod,
-              status: chargeStatus,
-              paid_at: deferred || awaitingCardcom ? null : paidAt,
-              receipt_label_id: receiptLabel.labelId,
-              receipt_description: description,
-              office_collection: deferred,
+            const portion = balancePortions[amountIndex + index] ?? {
+              balance: 0,
+              cash: amount,
             };
+            return buildCheckoutPaymentRows({
+              lines: [{ enrollmentId: enrollment.id, amount }],
+              balanceApplied: portion.balance,
+              parentId: profile.id,
+              paymentMethod,
+              deferred,
+              awaitingCardcom,
+              paidAt,
+              receiptLabelId: receiptLabel.labelId,
+              receiptDescription: description,
+            }).rows;
           })
         )
-        .select("id");
+        .select("id, payment_method");
 
       if (paymentError || !payments?.length) {
         throw new Error(`הרכישה נשמרה אך רישום התשלום ל${line.title} נכשל.`);
       }
       createdPaymentIds.push(...payments.map((row) => row.id));
+      cashPaymentIds.push(
+        ...payments
+          .filter((row) => row.payment_method !== "customer_balance")
+          .map((row) => row.id)
+      );
       amountIndex += enrollments.length;
     }
 
@@ -479,6 +531,7 @@ export async function checkoutCart(input: {
         .in("enrollment_id", createdEnrollmentIds);
       await supabase.from("enrollments").delete().in("id", createdEnrollmentIds);
     }
+    await releaseCheckoutBalance(balanceHold.entryId);
     await releaseCoupon();
     return {
       success: false,
@@ -498,13 +551,20 @@ export async function checkoutCart(input: {
   let checkoutUrl: string | null = null;
   let chargeCheckoutId: string | null = null;
 
+  const balanceUsed = roundMoney(
+    balancePortions.reduce((sum, portion) => sum + portion.balance, 0)
+  );
+  const payable = usingBalance
+    ? roundMoney(balancePortions.reduce((sum, portion) => sum + portion.cash, 0))
+    : totalAmount;
+
   if (awaitingCardcom) {
     const charge = await getPaymentProvider().createCharge({
-      amount: totalAmount,
+      amount: payable,
       description,
       parentId: profile.id,
       method: paymentMethod,
-      paymentIds: createdPaymentIds,
+      paymentIds: usingBalance ? cashPaymentIds : createdPaymentIds,
       couponRedemptionId: redemptionId,
       metadata: { cart: true, itemIds: lines.map((line) => line.itemId) },
       installments: installmentOptions(installmentsMax),
@@ -525,6 +585,7 @@ export async function checkoutCart(input: {
         .delete()
         .in("enrollment_id", createdEnrollmentIds);
       await supabase.from("enrollments").delete().in("id", createdEnrollmentIds);
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       return {
         success: false,
@@ -533,16 +594,17 @@ export async function checkoutCart(input: {
     }
     checkoutUrl = charge.redirectUrl;
     chargeCheckoutId = charge.checkoutId ?? null;
+    await attachBalanceCheckout(balanceHold.entryId, chargeCheckoutId);
   }
 
-  if (deferred && totalAmount > 0) {
+  if (deferred && payable > 0) {
     await notifyAdminPayment({
       paid: false,
       parentName: profile.full_name,
       phone: profile.phone,
       email: profile.email,
       product: description,
-      amount: totalAmount,
+      amount: payable,
       paymentMethod,
       participants: [...new Set(lines.flatMap((line) => line.participantNames))],
     });
@@ -558,9 +620,11 @@ export async function checkoutCart(input: {
     success: true,
     checkoutUrl,
     checkoutId: chargeCheckoutId,
-    deferred,
+    deferred: deferred && payable > 0,
     total: totalAmount,
     couponCode,
     couponDiscount,
+    balanceApplied: balanceUsed,
+    cashDue: payable,
   };
 }

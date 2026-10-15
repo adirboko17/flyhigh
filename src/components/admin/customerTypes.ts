@@ -5,6 +5,7 @@ export type CustomerChild = {
   gender: "male" | "female" | "other" | null;
   school_grade: number | null;
   grade_school_year: number | null;
+  relationship: string;
   notes: string | null;
   created_at: string;
   healthDeclaration: {
@@ -28,6 +29,7 @@ export type CustomerWithChildren = {
   receipt_name: string | null;
   receipt_id_number: string | null;
   admin_note: string | null;
+  store_balance: number;
   created_at: string;
   children: CustomerChild[];
 };

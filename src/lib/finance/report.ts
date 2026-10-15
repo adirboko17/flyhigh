@@ -3,6 +3,7 @@ import {
   isAbandonedCardcomCharge,
   isCollectibleOpenCharge,
   isPoolPassPaymentMethod,
+  isStoreCreditPaymentMethod,
   PAYMENT_METHOD,
 } from "@/lib/constants";
 import {
@@ -216,6 +217,7 @@ function buildSnapshot(input: {
       payment.status === "paid" &&
       Boolean(payment.paid_at) &&
       !isPoolPassPaymentMethod(payment.payment_method) &&
+      !isStoreCreditPaymentMethod(payment.payment_method) &&
       inRange(israelDateOf(payment.paid_at!), period.start, period.end)
   );
 
@@ -275,6 +277,7 @@ function buildSnapshot(input: {
     .filter(
       (payment) =>
         !isPoolPassPaymentMethod(payment.payment_method) &&
+        !isStoreCreditPaymentMethod(payment.payment_method) &&
         !isAbandonedCardcomCharge(
           payment.status,
           payment.payment_method,
@@ -446,7 +449,12 @@ export async function loadFinanceDashboard(input: {
   const revenueByMonth = new Map<string, number>();
   for (const payment of allPayments) {
     if (payment.status !== "paid" || !payment.paid_at) continue;
-    if (isPoolPassPaymentMethod(payment.payment_method)) continue;
+    if (
+      isPoolPassPaymentMethod(payment.payment_method) ||
+      isStoreCreditPaymentMethod(payment.payment_method)
+    ) {
+      continue;
+    }
     addToMap(revenueByMonth, israelDateOf(payment.paid_at).slice(0, 7), Number(payment.amount));
   }
 

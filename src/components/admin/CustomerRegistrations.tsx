@@ -16,9 +16,11 @@ import {
 export function CustomerRegistrations({
   parentId,
   parentName,
+  refreshKey = 0,
 }: {
   parentId: string;
   parentName: string;
+  refreshKey?: number;
 }) {
   const [rows, setRows] = useState<CustomerRegistration[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export function CustomerRegistrations({
     return () => {
       cancelled = true;
     };
-  }, [parentId, parentName]);
+  }, [parentId, parentName, refreshKey]);
 
   function reload() {
     setError(null);

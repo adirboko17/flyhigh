@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/icons/Icon";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { isPartnerRelationship, partnerRoleLabel } from "@/lib/household";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/Table";
 import { GENDER } from "@/lib/constants";
 import { deleteCustomer, saveAdminHealthDeclaration, saveCustomerAdminNote } from "@/lib/admin/customerActions";
@@ -37,7 +38,7 @@ import {
 } from "@/lib/health-declaration";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { formatSchoolGrade } from "@/lib/school-grade";
-import { calcAge, formatDate } from "@/utils/format";
+import { calcAge, formatCurrency, formatDate } from "@/utils/format";
 
 export type { CustomerChild, CustomerWithChildren };
 
@@ -157,14 +158,19 @@ export function CustomerList({
                 <TH>שם</TH>
                 <TH>טלפון</TH>
                 <TH className="hidden md:table-cell">אימייל</TH>
-                <TH>ילדים</TH>
+                <TH>בחשבון</TH>
                 <TH className="hidden sm:table-cell">הצטרף</TH>
                 <TH className="w-14 sm:w-28">פעולות</TH>
               </TR>
             </THead>
             <TBody>
               {filtered.map((customer) => {
-              const kids = customer.children.length;
+              const partner = customer.children.find((child) =>
+                isPartnerRelationship(child.relationship),
+              );
+              const kids = customer.children.filter(
+                (child) => !isPartnerRelationship(child.relationship),
+              ).length;
               return (
                 <TR
                   key={customer.id}
@@ -194,17 +200,33 @@ export function CustomerList({
                     {customer.email ?? "—"}
                   </TD>
                   <TD>
-                    {kids > 0 ? (
-                      <Badge
-                        tone="brand"
-                        className="cursor-pointer transition-opacity hover:opacity-80"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(customer.id);
-                        }}
-                      >
-                        {kids} {kids === 1 ? "ילד" : "ילדים"}
-                      </Badge>
+                    {partner || kids > 0 ? (
+                      <span className="flex flex-wrap gap-1">
+                        {partner && (
+                          <Badge
+                            tone="info"
+                            className="cursor-pointer transition-opacity hover:opacity-80"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedId(customer.id);
+                            }}
+                          >
+                            זוג
+                          </Badge>
+                        )}
+                        {kids > 0 && (
+                          <Badge
+                            tone="brand"
+                            className="cursor-pointer transition-opacity hover:opacity-80"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedId(customer.id);
+                            }}
+                          >
+                            {kids} {kids === 1 ? "ילד" : "ילדים"}
+                          </Badge>
+                        )}
+                      </span>
                     ) : (
                       <span className="text-ink-400">—</span>
                     )}
@@ -232,7 +254,7 @@ export function CustomerList({
         open={selected !== null}
         onClose={() => setSelectedId(null)}
         title={selected?.full_name ?? "כרטיס לקוח"}
-        description="פרטי קשר, ילדים, הרשמות, נוכחות ומסמכים שהופקו"
+        description="פרטי קשר, זוג או ילדים, הרשמות, נוכחות ומסמכים שהופקו"
         className="max-w-2xl"
       >
         {selected && (
@@ -370,6 +392,8 @@ function CustomerDetail({
   onEdit: () => void;
   onDelete: () => void | Promise<void>;
 }) {
+  const [registrationRevision, setRegistrationRevision] = useState(0);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -436,56 +460,35 @@ function CustomerDetail({
             note={customer.admin_note}
           />
 
-          <CustomerChargeCard customer={customer} />
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-base">יתרה באתר</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 pt-0">
+              <p className="font-display text-2xl font-bold tabular-nums text-ink-900">
+                {formatCurrency(customer.store_balance)}
+              </p>
+              <p className="text-sm text-ink-500">
+                {customer.store_balance > 0
+                  ? "הלקוח יכול להשתמש ביתרה הזו ברכישה באתר. היתרה יורדת מהסכום, וההפרש משולם באמצעי שהוא בוחר."
+                  : "כדי לתת יתרה במקום זיכוי, פתחו את העסקה בעמוד הזיכויים ובחרו «העברה ליתרה באתר»."}
+              </p>
+            </CardContent>
+          </Card>
 
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold text-ink-900">
-                ילדים
-              </h3>
-              <div className="flex items-center gap-2">
-                {customer.children.length > 0 && (
-                  <Badge tone="brand">{customer.children.length}</Badge>
-                )}
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="text-sm font-semibold text-brand-600 hover:underline"
-                >
-                  עריכה
-                </button>
-              </div>
-            </div>
+          <CustomerChargeCard
+            customer={customer}
+            onPurchased={() =>
+              setRegistrationRevision((current) => current + 1)
+            }
+          />
 
-            {customer.children.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                {customer.children.map((child) => (
-                  <ChildCard
-                    key={child.id}
-                    child={child}
-                    parentId={customer.id}
-                  />
-                ))}
-              </div>
-            ) : (
-              <Card className="bg-ink-50/60">
-                <CardContent className="py-8 text-center text-sm text-ink-500">
-                  <p>אין ילדים רשומים ללקוח זה</p>
-                  <button
-                    type="button"
-                    onClick={onEdit}
-                    className="mt-2 font-semibold text-brand-600 hover:underline"
-                  >
-                    הוספת ילד/ה
-                  </button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          <HouseholdSection customer={customer} onEdit={onEdit} />
 
           <CustomerRegistrations
             parentId={customer.id}
             parentName={customer.full_name}
+            refreshKey={registrationRevision}
           />
 
           <CustomerAttendance parentId={customer.id} />
@@ -607,6 +610,89 @@ function DetailRow({
   );
 }
 
+function HouseholdSection({
+  customer,
+  onEdit,
+}: {
+  customer: CustomerWithChildren;
+  onEdit: () => void;
+}) {
+  const partner = customer.children.find((child) =>
+    isPartnerRelationship(child.relationship),
+  );
+  const kids = customer.children.filter(
+    (child) => !isPartnerRelationship(child.relationship),
+  );
+
+  return (
+    <div className="space-y-6">
+      {partner && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-lg font-bold text-ink-900">
+              בן/בת זוג
+            </h3>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              עריכה
+            </button>
+          </div>
+          <ChildCard child={partner} parentId={customer.id} />
+        </div>
+      )}
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold text-ink-900">ילדים</h3>
+          <div className="flex items-center gap-2">
+            {kids.length > 0 && <Badge tone="brand">{kids.length}</Badge>}
+            {!partner && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="text-sm font-semibold text-brand-600 hover:underline"
+              >
+                רישום כזוג
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-sm font-semibold text-brand-600 hover:underline"
+            >
+              עריכה
+            </button>
+          </div>
+        </div>
+
+        {kids.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {kids.map((child) => (
+              <ChildCard key={child.id} child={child} parentId={customer.id} />
+            ))}
+          </div>
+        ) : (
+          <Card className="bg-ink-50/60">
+            <CardContent className="py-8 text-center text-sm text-ink-500">
+              <p>אין ילדים רשומים ללקוח זה</p>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="mt-2 font-semibold text-brand-600 hover:underline"
+              >
+                הוספת ילד/ה
+              </button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChildCard({
   child,
   parentId,
@@ -655,7 +741,11 @@ function ChildCard({
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-ink-900">{child.full_name}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {grade && <Badge tone="brand">{grade}</Badge>}
+            {isPartnerRelationship(child.relationship) ? (
+              <Badge tone="info">{partnerRoleLabel(child.gender)}</Badge>
+            ) : (
+              grade && <Badge tone="brand">{grade}</Badge>
+            )}
             {age !== null && (
               <Badge tone="neutral">גיל {age}</Badge>
             )}

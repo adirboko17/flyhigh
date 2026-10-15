@@ -11,6 +11,11 @@ import {
   refundCardcomTransaction,
 } from "@/lib/integrations/cardcom";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
+import {
+  grantCustomerBalance,
+  grantedAmountsByPayment,
+  roundMoney,
+} from "@/lib/payments/checkoutBalance";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type RefundActionResult =
@@ -75,7 +80,10 @@ export async function refundCardcomPayment(input: {
       0
     )
   );
-  const remaining = round2(Math.max(0, Number(payment.amount) - alreadyRefunded));
+  const granted = (await grantedAmountsByPayment([payment.id])).get(payment.id) ?? 0;
+  const remaining = round2(
+    Math.max(0, Number(payment.amount) - alreadyRefunded - granted)
+  );
   if (remaining <= 0) {
     return { success: false, error: "העסקה כבר זוכתה במלואה." };
   }
@@ -310,7 +318,8 @@ export async function issueOfficeCreditInvoice(input: {
       error: "לחיוב הזה לא הופקה חשבונית מס-קבלה, ולכן אי אפשר להוציא חשבונית זיכוי.",
     };
   }
-  const remaining = round2(Math.max(0, invoiced - alreadyRefunded));
+  const granted = (await grantedAmountsByPayment([payment.id])).get(payment.id) ?? 0;
+  const remaining = round2(Math.max(0, invoiced - alreadyRefunded - granted));
   if (remaining <= 0) {
     return { success: false, error: "העסקה כבר זוכתה במלואה." };
   }
@@ -400,6 +409,95 @@ export async function issueOfficeCreditInvoice(input: {
   revalidatePath("/admin/reports");
   revalidatePath("/admin/classes");
   revalidatePath("/admin/collections");
+  revalidatePath("/parent/dashboard");
+  return { success: true };
+}
+
+/**
+ * מעביר סכום ששולם ליתרה באתר, בלי החזר לכרטיס ובלי חשבונית זיכוי.
+ * הלקוח יכול להשתמש ביתרה ברכישה הבאה.
+ */
+export async function grantPaymentAsCustomerBalance(input: {
+  paymentId: string;
+  amount: number | string;
+  note?: string | null;
+  pendingRefundId?: string | null;
+}): Promise<RefundActionResult> {
+  const profile = await getSessionProfile();
+  if (profile?.role !== "admin") {
+    return { success: false, error: "אין לך הרשאה לבצע פעולה זו." };
+  }
+
+  const amount = parseAmount(input.amount);
+  if (amount === null || amount <= 0) {
+    return { success: false, error: "נא להזין סכום חיובי." };
+  }
+
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payments")
+    .select(
+      "id, amount, status, parent_id, payment_refunds(amount), payment_receipts(amount)"
+    )
+    .eq("id", input.paymentId)
+    .maybeSingle();
+
+  if (!payment) {
+    return { success: false, error: "העסקה לא נמצאה." };
+  }
+
+  const alreadyRefunded = round2(
+    (payment.payment_refunds ?? []).reduce(
+      (sum, refund) => sum + Number(refund.amount),
+      0
+    )
+  );
+  const receiptPaid = round2(
+    (payment.payment_receipts ?? []).reduce(
+      (sum, receipt) => sum + Number(receipt.amount),
+      0
+    )
+  );
+  const collected =
+    receiptPaid > 0
+      ? receiptPaid
+      : payment.status === "paid" ||
+          payment.status === "refunded" ||
+          payment.status === "partial"
+        ? Number(payment.amount)
+        : 0;
+  const granted = (await grantedAmountsByPayment([payment.id])).get(payment.id) ?? 0;
+  const remaining = roundMoney(Math.max(0, collected - alreadyRefunded - granted));
+  if (remaining <= 0) {
+    return { success: false, error: "לא נשאר סכום שאפשר להעביר ליתרה." };
+  }
+  if (amount > remaining) {
+    return {
+      success: false,
+      error: `לא ניתן להעביר יותר מהיתרה (${remaining.toFixed(2)} ₪).`,
+    };
+  }
+
+  try {
+    await grantCustomerBalance({
+      parentId: payment.parent_id,
+      amount,
+      note: input.note?.trim() || "העברה ליתרה באתר",
+      createdBy: profile.id,
+      sourcePaymentId: payment.id,
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "העברה ליתרה נכשלה. נסו שוב.",
+    };
+  }
+
+  await clearPendingRefund(input.pendingRefundId, payment.id);
+  revalidatePath("/admin/refunds");
+  revalidatePath("/admin/finance");
+  revalidatePath("/admin/reports");
+  revalidatePath("/admin/customers");
   revalidatePath("/parent/dashboard");
   return { success: true };
 }

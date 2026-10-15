@@ -12,6 +12,17 @@ import {
   isReceiptlessCollectionMethod,
   type CollectionPaymentMethod,
 } from "@/lib/constants";
+import {
+  PURCHASE_GROUP_LABEL,
+  PURCHASE_GROUP_ORDER,
+  purchaseChargeAmount,
+  purchaseOptionLabel,
+  type PurchaseProductOption,
+} from "@/lib/admin/customerPurchaseCatalog";
+import {
+  listProductsForCustomerPurchase,
+  purchaseProductForCustomer,
+} from "@/lib/admin/customerPurchase";
 import { createCustomerCharge } from "@/lib/collections/actions";
 import { receiptLabelNote, type ReceiptLabelOption } from "@/lib/receipt-labels";
 import { createClient } from "@/lib/supabase/client";
@@ -39,15 +50,22 @@ function goToCheckout(url: string, tab: Window | null) {
   window.location.assign(url);
 }
 
+function amountInputValue(price: number) {
+  return Number.isInteger(price) ? String(price) : price.toFixed(2);
+}
+
 export function CustomerChargeCard({
   customer,
+  onPurchased,
 }: {
   customer: {
     id: string;
     full_name: string;
     email: string | null;
     receipt_name: string | null;
+    children: { id: string; full_name: string }[];
   };
+  onPurchased?: () => void;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState("");
@@ -57,6 +75,14 @@ export function CustomerChargeCard({
   const [customText, setCustomText] = useState("");
   const [labels, setLabels] = useState<ReceiptLabelOption[]>([]);
   const [labelsLoading, setLabelsLoading] = useState(true);
+  const [products, setProducts] = useState<PurchaseProductOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productKey, setProductKey] = useState("");
+  const [participantId, setParticipantId] = useState("");
+  const [peopleCount, setPeopleCount] = useState("1");
+  const [suggestedAmount, setSuggestedAmount] = useState("");
+  const [autoDescription, setAutoDescription] = useState("");
+  const [purchasedTitle, setPurchasedTitle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<"card" | "collection" | null>(null);
@@ -68,6 +94,12 @@ export function CustomerChargeCard({
     setDescription("");
     setLabelId("");
     setCustomText("");
+    setProductKey("");
+    setParticipantId("");
+    setPeopleCount("1");
+    setSuggestedAmount("");
+    setAutoDescription("");
+    setPurchasedTitle(null);
     setError(null);
     setDone(null);
     setSaving(false);
@@ -80,16 +112,22 @@ export function CustomerChargeCard({
 
     async function load() {
       setLabelsLoading(true);
+      setProductsLoading(true);
       const supabase = createClient();
-      const { data } = await supabase
-        .from("receipt_labels")
-        .select("id, label, note")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .order("label", { ascending: true });
+      const [{ data }, productRows] = await Promise.all([
+        supabase
+          .from("receipt_labels")
+          .select("id, label, note")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .order("label", { ascending: true }),
+        listProductsForCustomerPurchase().catch(() => []),
+      ]);
       if (cancelled) return;
       setLabels(data ?? []);
+      setProducts(productRows);
       setLabelsLoading(false);
+      setProductsLoading(false);
     }
 
     void load();
@@ -102,6 +140,45 @@ export function CustomerChargeCard({
   const receiptless = isReceiptlessCollectionMethod(method);
   const invoiceName = customer.receipt_name?.trim() || customer.full_name;
   const fieldId = (name: string) => `customer-charge-${customer.id}-${name}`;
+  const selectedProduct =
+    products.find((option) => option.key === productKey) ?? null;
+
+  function applyProduct(option: PurchaseProductOption | null, people = 1) {
+    if (!option) {
+      setSuggestedAmount("");
+      return;
+    }
+    const price = purchaseChargeAmount(option, people);
+    if (price == null) return;
+    const nextAmount = amountInputValue(price);
+    setAmount((current) =>
+      !current || current === suggestedAmount ? nextAmount : current
+    );
+    setSuggestedAmount(nextAmount);
+    setDescription((current) => {
+      if (current.trim() && current !== autoDescription) return current;
+      return option.title;
+    });
+    setAutoDescription(option.title);
+  }
+
+  function chooseProduct(key: string) {
+    setProductKey(key);
+    setError(null);
+    const option = products.find((item) => item.key === key) ?? null;
+    if (!option) {
+      setAmount((current) => (current === suggestedAmount ? "" : current));
+      setDescription((current) =>
+        current === autoDescription ? "" : current
+      );
+      setSuggestedAmount("");
+      setAutoDescription("");
+      return;
+    }
+    const people = option.pricing === "people" ? option.defaultPeople : 1;
+    setPeopleCount(String(people));
+    applyProduct(option, people);
+  }
 
   function reset() {
     setAmount("");
@@ -109,6 +186,12 @@ export function CustomerChargeCard({
     setDescription("");
     setLabelId("");
     setCustomText("");
+    setProductKey("");
+    setParticipantId("");
+    setPeopleCount("1");
+    setSuggestedAmount("");
+    setAutoDescription("");
+    setPurchasedTitle(null);
     setError(null);
     setDone(null);
   }
@@ -122,22 +205,51 @@ export function CustomerChargeCard({
       setError("נא להזין סכום חיוב חיובי.");
       return;
     }
-    if (!description.trim() && !labelId && !customText.trim()) {
+    if (
+      !selectedProduct &&
+      !description.trim() &&
+      !labelId &&
+      !customText.trim()
+    ) {
       setError("נא להזין תיאור לחיוב, לבחור שם לקבלה, או לכתוב טקסט מותאם.");
       return;
+    }
+    if (selectedProduct?.pricing === "people") {
+      const people = Math.floor(Number(peopleCount));
+      if (purchaseChargeAmount(selectedProduct, people) == null) {
+        setError("נא לבחור מספר משתתפים שמופיע במחירון.");
+        return;
+      }
     }
 
     const tab = isCard ? openCheckoutTab() : null;
     setSaving(true);
     setError(null);
-    const result = await createCustomerCharge({
-      parentId: customer.id,
-      amount: value,
-      method,
-      receiptLabelId: labelId || null,
-      description,
-      customText,
-    });
+    const result = selectedProduct
+      ? await purchaseProductForCustomer({
+          parentId: customer.id,
+          kind: selectedProduct.kind,
+          planId: selectedProduct.planId,
+          childId: participantId || null,
+          packageQuantity: selectedProduct.packageQuantity,
+          peopleCount:
+            selectedProduct.pricing === "people"
+              ? Math.floor(Number(peopleCount))
+              : null,
+          amount: value,
+          method,
+          receiptLabelId: labelId || null,
+          description,
+          customText,
+        })
+      : await createCustomerCharge({
+          parentId: customer.id,
+          amount: value,
+          method,
+          receiptLabelId: labelId || null,
+          description,
+          customText,
+        });
     setSaving(false);
 
     if (!result.success || (isCard && !result.checkoutUrl)) {
@@ -152,6 +264,12 @@ export function CustomerChargeCard({
       return;
     }
 
+    if (selectedProduct) {
+      setPurchasedTitle(selectedProduct.title);
+      onPurchased?.();
+    } else {
+      setPurchasedTitle(null);
+    }
     if (result.checkoutUrl) {
       goToCheckout(result.checkoutUrl, tab);
       setDone("card");
@@ -178,7 +296,7 @@ export function CustomerChargeCard({
             חיוב לקוח
           </span>
           <span className="mt-0.5 block text-xs text-ink-500">
-            אשראי בטלפון, או פתיחת גבייה באמצעי אחר
+            רכישת מנוי, כרטיסייה או כניסה, ואשראי בטלפון
           </span>
         </span>
         <Icon
@@ -195,9 +313,13 @@ export function CustomerChargeCard({
         {done ? (
           <div className="space-y-4">
             <p className="text-sm leading-relaxed text-ink-700">
-              {done === "card"
-                ? "דף הסליקה של קארדקום נפתח. אפשר להזין שם את כרטיס האשראי של הלקוח. אם התשלום לא יושלם, החיוב נשאר פתוח בעמוד הגבייה."
-                : "החיוב נפתח בעמוד הגבייה. שם רושמים את התקבול או מאשרים את התשלום."}
+              {purchasedTitle
+                ? done === "card"
+                  ? `«${purchasedTitle}» נרשם על הלקוח. דף הסליקה נפתח — אפשר להזין שם את כרטיס האשראי. אם התשלום לא יושלם, ההרשמה נשארת אצלו כחיוב פתוח.`
+                  : `«${purchasedTitle}» נרשם על הלקוח, והחיוב נפתח בעמוד הגבייה.`
+                : done === "card"
+                  ? "דף הסליקה של קארדקום נפתח. אפשר להזין שם את כרטיס האשראי של הלקוח. אם התשלום לא יושלם, החיוב נשאר פתוח בעמוד הגבייה."
+                  : "החיוב נפתח בעמוד הגבייה. שם רושמים את התקבול או מאשרים את התשלום."}
             </p>
             <div className="flex flex-wrap gap-2">
               <ButtonLink href="/admin/collections" size="sm">
@@ -211,9 +333,99 @@ export function CustomerChargeCard({
         ) : (
           <form onSubmit={(event) => void submit(event)} className="space-y-4">
             <p className="text-xs text-ink-500">
-              לסגירה בטלפון: אשראי ממשיך לסליקה, ושאר האמצעים נפתחים בגבייה.
+              בחרו מה קונים ללקוח, או השאירו חיוב כללי. אשראי ממשיך לסליקה,
+              ושאר האמצעים נפתחים בגבייה.
             </p>
-            <Field label="סכום לחיוב (₪)" htmlFor={fieldId("amount")} required>
+
+            <Field
+              label="מה קונים"
+              htmlFor={fieldId("product")}
+              hint={
+                selectedProduct
+                  ? "הרכישה נרשמת על הלקוח. הסכום מתמלא ממחיר המוצר, ואפשר לשנות אותו."
+                  : "בלי מוצר זה חיוב כללי, בלי הרשמה."
+              }
+            >
+              <Select
+                id={fieldId("product")}
+                value={productKey}
+                disabled={saving || productsLoading}
+                onChange={(e) => chooseProduct(e.target.value)}
+              >
+                <option value="">
+                  {productsLoading ? "טוען מוצרים..." : "חיוב כללי"}
+                </option>
+                {PURCHASE_GROUP_ORDER.map((group) => {
+                  const groupOptions = products.filter(
+                    (option) => option.group === group
+                  );
+                  if (groupOptions.length === 0) return null;
+                  return (
+                    <optgroup key={group} label={PURCHASE_GROUP_LABEL[group]}>
+                      {groupOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {purchaseOptionLabel(option)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </Select>
+            </Field>
+
+            {selectedProduct && (
+              <Field label="למי הרכישה" htmlFor={fieldId("participant")}>
+                <Select
+                  id={fieldId("participant")}
+                  value={participantId}
+                  disabled={saving}
+                  onChange={(e) => setParticipantId(e.target.value)}
+                >
+                  <option value="">{customer.full_name} (הלקוח)</option>
+                  {customer.children.map((child) => (
+                    <option key={child.id} value={child.id}>
+                      {child.full_name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {selectedProduct?.pricing === "people" && (
+              <Field
+                label="מספר משתתפים"
+                htmlFor={fieldId("people")}
+                hint="הסכום מתעדכן לפי המחירון. אפשר עדיין לשנות אותו ידנית."
+                required
+              >
+                <Input
+                  id={fieldId("people")}
+                  type="number"
+                  min={1}
+                  max={selectedProduct.maxPeople}
+                  step={1}
+                  value={peopleCount}
+                  disabled={saving}
+                  required
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setPeopleCount(next);
+                    applyProduct(selectedProduct, Math.floor(Number(next)));
+                  }}
+                />
+              </Field>
+            )}
+
+            <Field
+              label="סכום לחיוב (₪)"
+              htmlFor={fieldId("amount")}
+              hint={
+                selectedProduct && suggestedAmount
+                  ? `מחיר המוצר: ${suggestedAmount} ₪`
+                  : undefined
+              }
+              required
+            >
               <Input
                 id={fieldId("amount")}
                 type="number"
@@ -232,7 +444,9 @@ export function CustomerChargeCard({
               hint={
                 isCard
                   ? "דף הסליקה ייפתח עכשיו, כדי להזין את כרטיס הלקוח בטלפון."
-                  : "החיוב ייפתח בעמוד הגבייה, ושם משלימים את הרישום."
+                  : selectedProduct
+                    ? "הרכישה נרשמת על הלקוח עכשיו. התשלום מושלם בעמוד הגבייה."
+                    : "החיוב ייפתח בעמוד הגבייה, ושם משלימים את הרישום."
               }
               required
             >

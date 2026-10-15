@@ -17,6 +17,14 @@ import {
   splitSiblingAmounts,
 } from "@/lib/finance/siblingDiscount";
 import { getPaymentProvider } from "@/lib/integrations/payments";
+import {
+  attachBalanceCheckout,
+  buildCheckoutPaymentRows,
+  enrollmentPaymentStatusForBalance,
+  releaseCheckoutBalance,
+  reserveCheckoutBalance,
+  roundMoney,
+} from "@/lib/payments/checkoutBalance";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import {
   chargeDescriptionForCheckout,
@@ -67,6 +75,8 @@ export type CompletePlanPurchaseResult =
       total: number;
       couponCode: string | null;
       couponDiscount: number;
+      balanceApplied: number;
+      cashDue: number;
     }
   | { success: false; error: string };
 
@@ -458,6 +468,7 @@ export async function completePlanPurchase(input: {
   childIds: string[];
   includeSelf: boolean;
   paymentMethod: CheckoutPaymentMethod;
+  useBalance?: boolean;
   couponCode?: string | null;
   /** כמות שיעורים למשתתף, או מספר נפשות בפעילות הפוגה. */
   quantity?: number;
@@ -647,10 +658,49 @@ export async function completePlanPurchase(input: {
     customLabel: receiptLabel.description,
   });
 
-  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד לאישור קארדקום.
-  const awaitingCardcom = !deferred && totalAmount > 0;
-
   const paidAt = new Date().toISOString();
+  const chargeBase = roundMoney(
+    (isActivity ? [amounts[0] ?? totalAmount] : amounts).reduce(
+      (sum, amount) => sum + amount,
+      0
+    )
+  );
+  let balanceHold: { applied: number; entryId: string | null } = {
+    applied: 0,
+    entryId: null,
+  };
+  try {
+    balanceHold = await reserveCheckoutBalance({
+      parentId: profile.id,
+      total: chargeBase,
+      useBalance: input.useBalance,
+      note: chargeDescription,
+    });
+  } catch (error) {
+    await releaseCoupon();
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "לא הצלחנו להשתמש ביתרה. נסו שוב.",
+    };
+  }
+  const usingBalance = balanceHold.applied > 0;
+  const cashDuePreview = usingBalance
+    ? roundMoney(Math.max(chargeBase - balanceHold.applied, 0))
+    : totalAmount;
+  // תשלום נדחה נגבה מול המשרד. כרטיס אשראי נפתח כחוב עד לאישור קארדקום.
+  const awaitingCardcom = !deferred && cashDuePreview > 0;
+  const enrollmentPaymentStatus = usingBalance
+    ? enrollmentPaymentStatusForBalance({
+        cashDue: cashDuePreview,
+        balanceApplied: balanceHold.applied,
+      })
+    : deferred || awaitingCardcom
+      ? ("unpaid" as const)
+      : ("paid" as const);
+
   const membershipStart =
     kind === "program" && !isActivity ? todayInIsrael() : null;
   const membershipEnd =
@@ -669,8 +719,7 @@ export async function completePlanPurchase(input: {
           private_lesson_id: null,
           type: kind,
           status: "active" as const,
-          payment_status:
-            deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+          payment_status: enrollmentPaymentStatus,
           starts_on: null,
           ends_on: null,
           people_count: activityPeople,
@@ -685,8 +734,7 @@ export async function completePlanPurchase(input: {
         private_lesson_id: kind === "private_lesson" ? planId : null,
         type: kind,
         status: "active" as const,
-        payment_status:
-          deferred || awaitingCardcom ? ("unpaid" as const) : ("paid" as const),
+        payment_status: enrollmentPaymentStatus,
         starts_on: membershipStart,
         ends_on: membershipEnd,
         people_count: plan.fixedPackage
@@ -702,6 +750,7 @@ export async function completePlanPurchase(input: {
     .select("id, child_id");
 
   if (enrollmentError || !createdEnrollments?.length) {
+    await releaseCheckoutBalance(balanceHold.entryId);
     await releaseCoupon();
     return { success: false, error: "לא הצלחנו לשמור את הרכישה. נסו שוב." };
   }
@@ -727,6 +776,7 @@ export async function completePlanPurchase(input: {
       .insert(slotRows);
 
     if (slotsError) {
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       await rollbackPlanPurchase(supabase, createdIds);
       return {
@@ -751,6 +801,7 @@ export async function completePlanPurchase(input: {
       .insert(bookingRows);
 
     if (bookingError) {
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       await rollbackPlanPurchase(supabase, createdIds);
       return {
@@ -777,6 +828,7 @@ export async function completePlanPurchase(input: {
       .insert(bookingRows);
 
     if (passError) {
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       await rollbackPlanPurchase(supabase, createdIds);
       return {
@@ -793,30 +845,34 @@ export async function completePlanPurchase(input: {
     });
   }
 
+  const checkoutPayments = buildCheckoutPaymentRows({
+    lines: createdEnrollments.map((enrollment) => ({
+      enrollmentId: enrollment.id,
+      amount:
+        amountByParticipant.get(enrollment.child_id) ?? unitPrice * quantity,
+    })),
+    balanceApplied: balanceHold.applied,
+    parentId: profile.id,
+    paymentMethod,
+    deferred,
+    awaitingCardcom,
+    paidAt,
+    receiptLabelId: receiptLabel.labelId,
+    receiptDescription: receiptLabel.description ?? chargeDescription,
+  });
+
   // חיוב נפרד לכל משתתף, כדי שברשימת הגבייה יהיה ברור על מה בדיוק החוב.
   const { data: createdPayments, error: paymentError } = await supabase
     .from("payments")
-    .insert(
-      createdEnrollments.map((enrollment) => ({
-        parent_id: profile.id,
-        enrollment_id: enrollment.id,
-        amount:
-          amountByParticipant.get(enrollment.child_id) ?? unitPrice * quantity,
-        payment_method: paymentMethod,
-        status: deferred || awaitingCardcom ? ("pending" as const) : ("paid" as const),
-        paid_at: deferred || awaitingCardcom ? null : paidAt,
-        receipt_label_id: receiptLabel.labelId,
-        receipt_description: receiptLabel.description ?? chargeDescription,
-        office_collection: deferred,
-      }))
-    )
-    .select("id");
+    .insert(checkoutPayments.rows)
+    .select("id, payment_method");
 
   if (paymentError || !createdPayments?.length) {
     await rollbackPlanPurchase(
       supabase,
       createdEnrollments.map((e) => e.id)
     );
+    await releaseCheckoutBalance(balanceHold.entryId);
     await releaseCoupon();
     return {
       success: false,
@@ -827,13 +883,18 @@ export async function completePlanPurchase(input: {
   let paymentReference: string | null = null;
   let checkoutUrl: string | null = null;
 
+  const payable = usingBalance ? checkoutPayments.cashDue : totalAmount;
+  const cashPaymentIds = createdPayments
+    .filter((payment) => payment.payment_method !== "customer_balance")
+    .map((payment) => payment.id);
+
   if (awaitingCardcom) {
     const charge = await getPaymentProvider().createCharge({
-      amount: totalAmount,
+      amount: payable,
       description: chargeDescription,
       parentId: profile.id,
       method: paymentMethod,
-      paymentIds: createdPayments.map((payment) => payment.id),
+      paymentIds: cashPaymentIds,
       couponRedemptionId: redemptionId,
       metadata: {
         kind,
@@ -857,6 +918,7 @@ export async function completePlanPurchase(input: {
         createdEnrollments.map((e) => e.id),
         createdPayments.map((payment) => payment.id)
       );
+      await releaseCheckoutBalance(balanceHold.entryId);
       await releaseCoupon();
       return {
         success: false,
@@ -866,9 +928,10 @@ export async function completePlanPurchase(input: {
 
     paymentReference = charge.reference;
     checkoutUrl = charge.redirectUrl;
+    await attachBalanceCheckout(balanceHold.entryId, charge.checkoutId ?? null);
   }
 
-  if (deferred && totalAmount > 0) {
+  if (deferred && payable > 0) {
     const participantNames = [
       ...(includeSelf ? [profile.full_name] : []),
       ...selectedChildren.map((child) => child.full_name),
@@ -879,7 +942,7 @@ export async function completePlanPurchase(input: {
       phone: profile.phone,
       email: profile.email,
       product: chargeDescription,
-      amount: totalAmount,
+      amount: payable,
       paymentMethod,
       participants: participantNames,
     });
@@ -890,9 +953,11 @@ export async function completePlanPurchase(input: {
     enrollmentIds: createdEnrollments.map((e) => e.id),
     paymentReference,
     checkoutUrl,
-    deferred,
+    deferred: deferred && payable > 0,
     total: totalAmount,
     couponCode,
     couponDiscount,
+    balanceApplied: checkoutPayments.balanceUsed,
+    cashDue: payable,
   };
 }

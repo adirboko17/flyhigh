@@ -299,6 +299,7 @@ export type Database = {
           id: string
           notes: string | null
           parent_id: string
+          relationship: string
           school_grade: number | null
         }
         Insert: {
@@ -310,6 +311,7 @@ export type Database = {
           id?: string
           notes?: string | null
           parent_id: string
+          relationship?: string
           school_grade?: number | null
         }
         Update: {
@@ -321,6 +323,7 @@ export type Database = {
           id?: string
           notes?: string | null
           parent_id?: string
+          relationship?: string
           school_grade?: number | null
         }
         Relationships: [
@@ -960,6 +963,63 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_balance_entries: {
+        Row: {
+          amount: number
+          checkout_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          note: string | null
+          parent_id: string
+          payment_id: string | null
+          reverses_entry_id: string | null
+          source_payment_id: string | null
+        }
+        Insert: {
+          amount: number
+          checkout_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          parent_id: string
+          payment_id?: string | null
+          reverses_entry_id?: string | null
+          source_payment_id?: string | null
+        }
+        Update: {
+          amount?: number
+          checkout_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          parent_id?: string
+          payment_id?: string | null
+          reverses_entry_id?: string | null
+          source_payment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_balance_entries_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_balance_entries_source_payment_id_fkey"
+            columns: ["source_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
             referencedColumns: ["id"]
           },
         ]
@@ -2373,6 +2433,32 @@ export type Database = {
             }[]
           }
       release_coupon: { Args: { p_redemption_id: string }; Returns: undefined }
+      spend_customer_balance: {
+        Args: { p_amount: number; p_note: string; p_parent_id: string }
+        Returns: { applied: number; entry_id: string }[]
+      }
+      restore_customer_balance_entry: {
+        Args: { p_entry_id: string }
+        Returns: number
+      }
+      restore_customer_balance_checkout: {
+        Args: { p_checkout_id: string }
+        Returns: number
+      }
+      restore_customer_balance_payment: {
+        Args: { p_payment_id: string }
+        Returns: number
+      }
+      grant_customer_balance: {
+        Args: {
+          p_amount: number
+          p_created_by: string
+          p_note: string
+          p_parent_id: string
+          p_source_payment_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       attendance_status: "present" | "absent" | "late" | "advance_notice"
@@ -2403,6 +2489,7 @@ export type Database = {
         | "maccabi"
         | "amit"
         | "pool_pass"
+        | "customer_balance"
       payment_status: "pending" | "paid" | "failed" | "refunded" | "partial"
       private_lesson_slot_status:
         | "awaiting_schedule"
@@ -2573,6 +2660,7 @@ export const Constants = {
         "maccabi",
         "amit",
         "pool_pass",
+        "customer_balance",
       ],
       payment_status: ["pending", "paid", "failed", "refunded", "partial"],
       private_lesson_slot_status: [

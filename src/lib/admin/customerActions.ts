@@ -10,6 +10,7 @@ import {
   receiptIdNumberError,
 } from "@/lib/health-declaration";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
+import { coupleGenderError, isPartnerRelationship } from "@/lib/household";
 import { currentSchoolYear, parseSchoolGradeInput } from "@/lib/school-grade";
 import {
   createAdminClient,
@@ -28,6 +29,7 @@ export type CustomerChildInput = {
   gender: string;
   grade: string;
   notes: string;
+  relationship?: string;
 };
 
 export type CustomerProfileInput = {
@@ -126,24 +128,55 @@ function normalizeChildren(children: CustomerChildInput[]) {
       gender: child.gender,
       grade: child.grade,
       notes: child.notes.trim(),
+      relationship: isPartnerRelationship(child.relationship)
+        ? ("partner" as const)
+        : ("child" as const),
     }))
-    .filter((child) => child.fullName || child.birthDate || child.gender || child.grade || child.notes);
+    .filter(
+      (child) =>
+        child.fullName ||
+        child.birthDate ||
+        child.gender ||
+        child.grade ||
+        child.notes,
+    );
 }
 
 function validateChildren(children: CustomerChildInput[]): string | null {
-  for (const [index, child] of normalizeChildren(children).entries()) {
-    const label = child.fullName || `ילד/ה ${index + 1}`;
+  const normalized = normalizeChildren(children);
+  const partners = normalized.filter((child) => child.relationship === "partner");
+  if (partners.length > 1) {
+    return "אפשר לרשום בן או בת זוג אחד/ת בלבד.";
+  }
+
+  for (const [index, child] of normalized.entries()) {
+    const partner = child.relationship === "partner";
+    const label = child.fullName || (partner ? "בן/בת הזוג" : `ילד/ה ${index + 1}`);
     if (!child.fullName || !child.fullName.includes(" ")) {
       return `נא למלא שם פרטי ושם משפחה עבור ${label}.`;
     }
     if (!isGenderType(child.gender)) return `נא לבחור מגדר עבור ${label}.`;
-    if (parseSchoolGradeInput(child.grade) === null) {
+    if (partner && child.gender === "other") {
+      return "בן או בת הזוג צריכים להיות גבר או אישה.";
+    }
+    if (!partner && parseSchoolGradeInput(child.grade) === null) {
       return `נא לבחור כיתה עבור ${label}.`;
     }
     const birthError = validateBirthDate(child.birthDate, false);
     if (birthError) return `${label}: ${birthError}`;
   }
   return null;
+}
+
+function validateCouple(
+  profile: CustomerProfileInput,
+  children: CustomerChildInput[],
+): string | null {
+  const partner = normalizeChildren(children).find(
+    (child) => child.relationship === "partner",
+  );
+  if (!partner) return null;
+  return coupleGenderError(profile.gender, partner.gender);
 }
 
 function profileRow(input: CustomerProfileInput, email: string) {
@@ -162,13 +195,15 @@ function profileRow(input: CustomerProfileInput, email: string) {
 }
 
 function childRow(child: ReturnType<typeof normalizeChildren>[number]) {
+  const partner = child.relationship === "partner";
   return {
     full_name: child.fullName,
     birth_date: child.birthDate || null,
     gender: child.gender as Enums<"gender_type">,
-    school_grade: parseSchoolGradeInput(child.grade),
-    grade_school_year: currentSchoolYear(),
+    school_grade: partner ? null : parseSchoolGradeInput(child.grade),
+    grade_school_year: partner ? null : currentSchoolYear(),
     notes: child.notes || null,
+    relationship: child.relationship,
   };
 }
 
@@ -336,6 +371,8 @@ export async function createCustomer(input: {
   if (passwordError) return { success: false, error: passwordError };
   const childrenError = validateChildren(input.children);
   if (childrenError) return { success: false, error: childrenError };
+  const coupleError = validateCouple(input.profile, input.children);
+  if (coupleError) return { success: false, error: coupleError };
 
   const profile = normalizeProfile(input.profile);
   const children = normalizeChildren(input.children);
@@ -435,6 +472,8 @@ export async function updateCustomer(input: {
   if (passwordError) return { success: false, error: passwordError };
   const childrenError = validateChildren(input.children);
   if (childrenError) return { success: false, error: childrenError };
+  const coupleError = validateCouple(input.profile, input.children);
+  if (coupleError) return { success: false, error: coupleError };
 
   const admin = client.admin;
   const { data: target } = await admin

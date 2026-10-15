@@ -40,8 +40,12 @@ import {
 import { resolveClassParticipants } from "@/lib/enrollment/trainees";
 import { createClient } from "@/lib/supabase/server";
 
-/** "none" — שיבוץ בלי ליצור חיוב. "credit_card" — דף סליקה של קארדקום. */
-export type AssignChargeMethod = DeferredPaymentMethod | "credit_card" | "none";
+/** "none" — שיבוץ בלי ליצור חיוב. "paid" — כבר שולם (למשל בטלפון). "credit_card" — דף סליקה של קארדקום. */
+export type AssignChargeMethod =
+  | DeferredPaymentMethod
+  | "credit_card"
+  | "none"
+  | "paid";
 
 export type AssignResult =
   | {
@@ -72,6 +76,7 @@ type AssignCore = {
 function isAllowedMethod(value: string): value is AssignChargeMethod {
   return (
     value === "none" ||
+    value === "paid" ||
     value === "credit_card" ||
     (DEFERRED_PAYMENT_METHODS as readonly string[]).includes(value)
   );
@@ -151,6 +156,14 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
   }
 
   const total = round2(Math.max(0, Number(input.amount) || 0));
+  const phonePaid = input.method === "paid";
+  if (phonePaid && splitParts) {
+    return { success: false, error: "אי אפשר לפצל תשלום שכבר סומן כשולם." };
+  }
+  if (phonePaid && total <= 0) {
+    return { success: false, error: "לסטטוס שולם צריך סכום גדול מאפס." };
+  }
+
   const supabase = await createClient();
 
   const [{ data: cls }, { data: children }, { data: existing }, { data: parent }] =
@@ -312,11 +325,13 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   const isCreditCard =
     !cls.interest_only &&
+    !phonePaid &&
     (splitParts
       ? splitParts.some((part) => part.method === "credit_card")
       : input.method === "credit_card");
   const awaitingCardcom = isCreditCard && total > 0;
-  const settledNow = !cls.interest_only && input.markPaid && !awaitingCardcom;
+  const settledNow =
+    !cls.interest_only && (phonePaid || (input.markPaid && !awaitingCardcom));
   const listTotal =
     classSlotPeriodPrice(Number(cls.price), cls.billing_months, slotPrice) *
     participants.length;
@@ -338,11 +353,13 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
         status: "active" as const,
         payment_status: cls.interest_only
           ? ("not_required" as const)
-          : input.method === "none" || (!settledNow && total <= 0)
-            ? ("no_charge" as const)
-            : settledNow
-              ? ("paid" as const)
-              : ("unpaid" as const),
+          : phonePaid
+            ? ("paid" as const)
+            : input.method === "none" || (!settledNow && total <= 0)
+              ? ("no_charge" as const)
+              : settledNow
+                ? ("paid" as const)
+                : ("unpaid" as const),
         admin_assigned: true,
         discount_percent: discountPercent,
       }))
@@ -381,7 +398,9 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       ? allocateSplitParts(splitParts, shares)
       : shares.map((amount) => [
           {
-            method: input.method as CollectionPaymentMethod,
+            method: (phonePaid
+              ? "external"
+              : input.method) as CollectionPaymentMethod,
             amount,
           },
         ]);
@@ -392,21 +411,23 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
       .insert(
         created.flatMap((enrollment, index) =>
           allocated[index].map((part) => {
-            const card = part.method === "credit_card";
+            const method = phonePaid ? ("external" as const) : part.method;
+            const card = method === "credit_card";
             const partPaid =
-              !card &&
-              input.markPaid &&
-              isReceiptlessCollectionMethod(part.method);
+              phonePaid ||
+              (!card &&
+                input.markPaid &&
+                isReceiptlessCollectionMethod(method));
             return {
               parent_id: input.parentId,
               enrollment_id: enrollment.id,
               amount: part.amount,
-              payment_method: part.method,
+              payment_method: method,
               status: partPaid ? ("paid" as const) : ("pending" as const),
               paid_at: partPaid ? paidAt : null,
               receipt_label_id: receiptLabel.labelId,
               receipt_description: receiptLabel.description ?? chargeDescription,
-              office_collection: !card,
+              office_collection: phonePaid ? true : !card,
             };
           })
         )
@@ -520,6 +541,7 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
 
   if (
     input.method !== "none" &&
+    input.method !== "paid" &&
     !awaitingCardcom &&
     !settledNow &&
     total > 0

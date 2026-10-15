@@ -109,7 +109,7 @@ export async function ClassEnrollmentPanel({
           reads
             .from("children")
             .select(
-              "id, full_name, birth_date, gender, school_grade, grade_school_year"
+              "id, full_name, birth_date, gender, school_grade, grade_school_year, relationship"
             )
             .eq("parent_id", profile.id)
             .order("created_at"),

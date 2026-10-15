@@ -22,6 +22,11 @@ import {
   receiptIdNumberError,
   resolveReceiptIdNumber,
 } from "@/lib/health-declaration";
+import {
+  coupleGenderError,
+  oppositeAdultGender,
+  partnerRoleLabel,
+} from "@/lib/household";
 import { joinPersonName, splitPersonName } from "@/utils/format";
 
 type ChildDraft = {
@@ -33,6 +38,7 @@ type ChildDraft = {
   gender: string;
   grade: string;
   notes: string;
+  relationship: "child" | "partner";
 };
 
 type ProfileForm = {
@@ -61,6 +67,15 @@ function emptyChild(): ChildDraft {
     gender: "",
     grade: "",
     notes: "",
+    relationship: "child",
+  };
+}
+
+function emptyPartner(accountGender: string): ChildDraft {
+  return {
+    ...emptyChild(),
+    relationship: "partner",
+    gender: oppositeAdultGender(accountGender) ?? "",
   };
 }
 
@@ -101,6 +116,7 @@ function toChildDrafts(existing?: CustomerWithChildren): ChildDraft[] {
       gender: child.gender ?? "",
       grade: currentGrade == null ? "" : String(currentGrade),
       notes: child.notes ?? "",
+      relationship: child.relationship === "partner" ? "partner" : "child",
     };
   });
 }
@@ -121,7 +137,15 @@ export function CustomerForm({
   const router = useRouter();
   const isEdit = Boolean(existing);
   const [profile, setProfile] = useState(() => toProfileForm(existing));
-  const [children, setChildren] = useState(() => toChildDrafts(existing));
+  const [children, setChildren] = useState(() =>
+    toChildDrafts(existing).filter((child) => child.relationship !== "partner"),
+  );
+  const [partner, setPartner] = useState<ChildDraft | null>(() => {
+    return (
+      toChildDrafts(existing).find((child) => child.relationship === "partner") ??
+      null
+    );
+  });
   const [email, setEmail] = useState(existing?.email ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -144,15 +168,17 @@ export function CustomerForm({
   }
 
   function payloadChildren() {
-    return children
+    const members = partner ? [...children, partner] : children;
+    return members
       .filter((child) => childFullName(child))
       .map((child) => ({
         id: child.id,
         fullName: childFullName(child),
         birthDate: child.birth,
         gender: child.gender,
-        grade: child.grade,
+        grade: child.relationship === "partner" ? "" : child.grade,
         notes: child.notes,
+        relationship: child.relationship,
       }));
   }
 
@@ -207,6 +233,19 @@ export function CustomerForm({
       setError("נא למלא שם פרטי ושם משפחה לכל ילד/ה.");
       return;
     }
+    if (
+      partner &&
+      (partner.id ||
+        partner.firstName.trim() ||
+        partner.lastName.trim() ||
+        partner.birth ||
+        partner.gender ||
+        partner.notes) &&
+      (!partner.firstName.trim() || !partner.lastName.trim())
+    ) {
+      setError("נא למלא שם פרטי ושם משפחה לבן או בת הזוג.");
+      return;
+    }
 
     const namedWithoutGrade = children.filter(
       (child) =>
@@ -215,6 +254,13 @@ export function CustomerForm({
     if (namedWithoutGrade.length > 0) {
       setError("נא לבחור כיתה לכל ילד/ה.");
       return;
+    }
+    if (partner && childFullName(partner)) {
+      const genderError = coupleGenderError(profile.gender, partner.gender);
+      if (genderError) {
+        setError(genderError);
+        return;
+      }
     }
 
     setLoading(true);
@@ -419,6 +465,106 @@ export function CustomerForm({
             rows={3}
           />
         </Field>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h3 className="font-display text-base font-bold text-ink-900">זוג מבוגרים</h3>
+          <p className="mt-1 text-sm text-ink-500">
+            לרישום בעל ואישה. בן או בת הזוג נשמרים באותו חשבון, בלי כיתה.
+          </p>
+        </div>
+
+        {partner ? (
+          <div className="space-y-4 rounded-2xl border border-ink-100 bg-ink-50/50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-ink-700">
+                {partnerRoleLabel(partner.gender)}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPartner(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                aria-label="הסרת בן או בת הזוג"
+              >
+                <Icon name="x" size={15} />
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="שם פרטי" htmlFor="partnerFirstName" required>
+                <Input
+                  id="partnerFirstName"
+                  value={partner.firstName}
+                  onChange={(e) =>
+                    setPartner({ ...partner, firstName: e.target.value })
+                  }
+                  placeholder="דנה"
+                  required
+                />
+              </Field>
+              <Field label="שם משפחה" htmlFor="partnerLastName" required>
+                <Input
+                  id="partnerLastName"
+                  value={partner.lastName}
+                  onChange={(e) =>
+                    setPartner({ ...partner, lastName: e.target.value })
+                  }
+                  placeholder="לוי"
+                  required
+                />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="תאריך לידה" htmlFor="partnerBirth">
+                <BirthDateInput
+                  id="partnerBirth"
+                  value={partner.birth}
+                  onChange={(e) => setPartner({ ...partner, birth: e.target.value })}
+                  max={todayIso()}
+                />
+              </Field>
+              <Field label="מגדר" htmlFor="partnerGender" required>
+                <Select
+                  id="partnerGender"
+                  value={partner.gender}
+                  onChange={(e) =>
+                    setPartner({ ...partner, gender: e.target.value })
+                  }
+                >
+                  <option value="">בחרו...</option>
+                  <option value="male">זכר</option>
+                  <option value="female">נקבה</option>
+                </Select>
+              </Field>
+              <Field label="הערות" htmlFor="partnerNotes" className="sm:col-span-2">
+                <Textarea
+                  id="partnerNotes"
+                  value={partner.notes}
+                  onChange={(e) => setPartner({ ...partner, notes: e.target.value })}
+                  rows={2}
+                />
+              </Field>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPartner(emptyPartner(profile.gender))}
+            className="group flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-brand-200 bg-brand-50/40 p-4 text-right transition-all hover:border-brand-400 hover:bg-brand-50"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white">
+              <Icon name="plus" size={18} stroke={2.5} />
+            </span>
+            <span className="flex-1">
+              <span className="block font-display text-[15px] font-extrabold text-ink-900">
+                רישום כזוג — גבר ואישה
+              </span>
+              <span className="block text-xs text-ink-500">
+                הוספת בן או בת הזוג לחשבון
+              </span>
+            </span>
+          </button>
+        )}
       </section>
 
       <section className="space-y-4">

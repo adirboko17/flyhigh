@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { INVOICE_REFUND_METHODS } from "@/lib/constants";
 import { subjectLabel } from "@/lib/finance/subject";
+import { grantedAmountsByPayment } from "@/lib/payments/checkoutBalance";
 import { cn } from "@/utils/cn";
 import {
   addDays,
@@ -57,6 +58,11 @@ export default async function AdminRefundsPage({
       .order("created_at", { ascending: false }),
   ]);
 
+  const grantedByPayment = await grantedAmountsByPayment([
+    ...(payments ?? []).map((payment) => payment.id),
+    ...(pendingRows ?? []).map((row) => row.payment_id),
+  ]);
+
   const transactions: RefundTransaction[] = (payments ?? [])
     .map((payment) => {
       const cardcomReference =
@@ -77,6 +83,7 @@ export default async function AdminRefundsPage({
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
+      const balanceGranted = grantedByPayment.get(payment.id) ?? 0;
       const refundedAmount = round2(
         refunds.reduce((sum, refund) => sum + refund.amount, 0)
       );
@@ -115,7 +122,9 @@ export default async function AdminRefundsPage({
         amount,
         invoicedAmount,
         refundedAmount,
-        remaining: round2(Math.max(0, invoicedAmount - refundedAmount)),
+        remaining: round2(
+          Math.max(0, invoicedAmount - refundedAmount - balanceGranted)
+        ),
         status: payment.status,
         paidAt: payment.paid_at,
         createdAt: payment.created_at,
@@ -130,6 +139,7 @@ export default async function AdminRefundsPage({
           subjectLabel(payment.enrollments),
         childName: payment.enrollments?.children?.full_name ?? null,
         refunds,
+        balanceGranted,
         occurredAt,
       };
     })
@@ -143,7 +153,7 @@ export default async function AdminRefundsPage({
       (payment.payment_refunds ?? []).reduce(
         (sum, refund) => sum + Number(refund.amount),
         0
-      )
+      ) + (grantedByPayment.get(row.payment_id) ?? 0)
     );
     const paymentAmount = Number(payment.amount);
     return [
@@ -163,6 +173,7 @@ export default async function AdminRefundsPage({
         paymentMethod: payment.payment_method,
         paymentAmount,
         remaining: round2(Math.max(0, paymentAmount - alreadyRefunded)),
+        balanceGranted: grantedByPayment.get(row.payment_id) ?? 0,
         cardcomReference:
           payment.external_reference?.trim() ||
           payment.payment_checkouts?.transaction_id?.trim() ||

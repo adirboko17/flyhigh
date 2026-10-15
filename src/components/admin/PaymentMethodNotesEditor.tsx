@@ -37,6 +37,7 @@ const METHOD_META: Record<
   amit: { icon: "shield", accent: "bg-amber-50 text-amber-800" },
   pool_pass: { icon: "ticket", accent: "bg-aqua-50 text-aqua-700" },
   external: { icon: "settings", accent: "bg-ink-50 text-ink-600" },
+  customer_balance: { icon: "wallet", accent: "bg-aqua-50 text-aqua-800" },
 };
 
 export function PaymentMethodNotesEditor({
