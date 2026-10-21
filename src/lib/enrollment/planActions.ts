@@ -30,6 +30,7 @@ import {
   chargeDescriptionForCheckout,
   resolveReceiptLabelForCheckout,
 } from "@/lib/enrollment/receiptLabel";
+import { SIBLING_DISCOUNT_PAYMENT_STATUSES } from "@/lib/enrollment/categorySiblings";
 import {
   activityPeopleCap,
   parseActivityPriceTiers,
@@ -267,10 +268,11 @@ async function countFamilyPlanParticipants(
 ) {
   const { data } = await supabase
     .from("enrollments")
-    .select("child_id")
+    .select("child_id, payment_status")
     .eq("parent_id", parentId)
     .eq("type", kind)
-    .neq("status", "cancelled");
+    .neq("status", "cancelled")
+    .in("payment_status", [...SIBLING_DISCOUNT_PAYMENT_STATUSES]);
 
   const children = new Set<string>();
   let hasSelf = false;

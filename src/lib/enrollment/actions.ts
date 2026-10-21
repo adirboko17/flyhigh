@@ -458,8 +458,8 @@ export async function completeClassEnrollmentPayment(input: {
     }
   }
 
-  // הנחת אחים נקבעת לפי אחים רשומים לאותה קטגוריה — גם בחוג אחר —
-  // וחלה רק על הילד השני ומעלה (לא על הילד הראשון במשפחה).
+  // הנחת אחים נקבעת לפי אחים שכבר שילמו ונרשמו לאותה קטגוריה — גם בחוג אחר.
+  // ניסיון תשלום שלא הושלם לא נספר. ההנחה חלה רק על הילד השני ומעלה.
   const [{ data: tiersJson }, categorySiblingIds, familyDiscount] = await Promise.all([
     supabase.rpc("class_sibling_discount_tiers", { p_class_id: classId }),
     listFamilyChildrenInCategory(

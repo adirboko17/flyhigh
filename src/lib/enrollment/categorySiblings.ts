@@ -1,5 +1,29 @@
-import type { Database } from "@/types/database.types";
+import type { Database, Enums } from "@/types/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * רישום שנחשב לילד שכבר בחוג לצורך הנחת אחים.
+ * תשלום שלא הושלם (כולל עגלה נטושה) לא נספר — הלקוח נרשם רק אחרי שהתשלום עבר,
+ * או כשההרשמה הוגדרה מראש בלי חיוב.
+ */
+export const SIBLING_DISCOUNT_PAYMENT_STATUSES = [
+  "paid",
+  "partial",
+  "not_required",
+  "no_charge",
+] as const satisfies readonly Enums<"enrollment_payment_status">[];
+
+const COUNTED_PAYMENT_STATUSES = new Set<Enums<"enrollment_payment_status">>(
+  SIBLING_DISCOUNT_PAYMENT_STATUSES
+);
+
+export function enrollmentCountsForSiblingDiscount(
+  paymentStatus: Enums<"enrollment_payment_status"> | null | undefined
+): boolean {
+  return (
+    paymentStatus != null && COUNTED_PAYMENT_STATUSES.has(paymentStatus)
+  );
+}
 
 export function normalizeClassCategory(
   category: string | null | undefined
@@ -22,6 +46,7 @@ type CategoryEnrollmentRow = {
   child_id: string | null;
   class_id: string | null;
   is_trial?: boolean | null;
+  payment_status?: Enums<"enrollment_payment_status"> | null;
   classes:
     | { category: string | null }
     | { category: string | null }[]
@@ -48,6 +73,7 @@ export function familyChildIdsInCategory(
 
   for (const row of rows) {
     if (!row.child_id || row.is_trial) continue;
+    if (!enrollmentCountsForSiblingDiscount(row.payment_status)) continue;
     const sameClass = row.class_id === classId;
     const sameCategory = normalized
       ? categoriesMatch(rowCategory(row.classes), normalized) || sameClass
@@ -74,7 +100,7 @@ export async function listFamilyChildrenInCategory(
 ): Promise<string[]> {
   const { data } = await supabase
     .from("enrollments")
-    .select("child_id, class_id, is_trial, classes(category)")
+    .select("child_id, class_id, is_trial, payment_status, classes(category)")
     .eq("parent_id", parentId)
     .eq("type", "class")
     .neq("status", "cancelled");
