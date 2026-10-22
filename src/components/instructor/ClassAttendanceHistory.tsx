@@ -15,6 +15,7 @@ export interface AttendanceRecord {
   childId: string;
   childName: string;
   status: Enums<"attendance_status">;
+  weeklySlotId?: string | null;
 }
 
 interface ClassAttendanceHistoryProps {

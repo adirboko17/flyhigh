@@ -124,7 +124,7 @@ export default async function InstructorDashboard() {
       dataClient
         .from("attendance")
         .select(
-          "class_id, child_id, parent_id, date, status, children(full_name), profiles(full_name)"
+          "class_id, child_id, parent_id, date, status, children(full_name), profiles(full_name), class_sessions(weekly_slot_id)"
         )
         .in("class_id", classIds)
         .order("date", { ascending: false })
@@ -165,12 +165,16 @@ export default async function InstructorDashboard() {
         row.profiles?.full_name
       );
       if (!row.class_id || !participantId || name === "—") return;
+      const session = Array.isArray(row.class_sessions)
+        ? row.class_sessions[0]
+        : row.class_sessions;
       const list = historyByClass.get(row.class_id) ?? [];
       list.push({
         date: row.date,
         childId: participantId,
         childName: name,
         status: row.status,
+        weeklySlotId: session?.weekly_slot_id ?? null,
       });
       historyByClass.set(row.class_id, list);
     });
@@ -199,8 +203,17 @@ export default async function InstructorDashboard() {
         students: studentsByClass.get(c.id) ?? [],
         attendanceHistory: historyByClass.get(c.id) ?? [],
         genderPolicy: c.gender_policy,
-        assignedSlotIds: mySlots.map((slot) => slot.id),
-        isToday: dayOfWeek === todayWeekday && c.status === "active",
+        slots: mySlots.map((slot) => ({
+          id: slot.id,
+          dayOfWeek: slot.day_of_week,
+          startTime: slot.start_time,
+          endTime: slot.end_time,
+        })),
+        isToday:
+          c.status === "active" &&
+          (mySlots.length > 0
+            ? mySlots.some((slot) => slot.day_of_week === todayWeekday)
+            : dayOfWeek === todayWeekday),
       };
     })
     // החוגים של היום עולים לראש הרשימה, ואחריהם השאר לפי סדר השבוע והשעה.
@@ -326,6 +339,7 @@ export default async function InstructorDashboard() {
                   key={classData.id}
                   classData={classData}
                   instructorId={instructor.id}
+                  todayWeekday={todayWeekday}
                 />
               ))}
             </div>

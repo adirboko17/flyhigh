@@ -269,7 +269,14 @@ export function SessionNotesPanel({
   );
 }
 
-export function SessionNotesWorkspace({ classId }: { classId: string }) {
+export function SessionNotesWorkspace({
+  classId,
+  weeklySlotId = null,
+}: {
+  classId: string;
+  /** כשמוגדר — רק מפגשים של המועד הזה. */
+  weeklySlotId?: string | null;
+}) {
   const [sessions, setSessions] = useState<ClassSessionOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -280,13 +287,15 @@ export function SessionNotesWorkspace({ classId }: { classId: string }) {
     async function loadSessions() {
       setLoading(true);
       const supabase = createClient();
-      const { data } = await supabase
+      let query = supabase
         .from("class_sessions")
         .select("id, session_date, start_time, end_time, status")
         .eq("class_id", classId)
         .neq("status", "cancelled")
         .order("session_date")
         .order("start_time");
+      if (weeklySlotId) query = query.eq("weekly_slot_id", weeklySlotId);
+      const { data } = await query;
 
       if (cancelled) return;
 
@@ -300,7 +309,7 @@ export function SessionNotesWorkspace({ classId }: { classId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [classId]);
+  }, [classId, weeklySlotId]);
 
   const selectedSession = sessions[selectedIndex];
 

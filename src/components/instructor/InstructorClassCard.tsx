@@ -19,6 +19,13 @@ import { cn } from "@/utils/cn";
 import { formatDateShort, formatTime } from "@/utils/format";
 import type { Enums } from "@/types";
 
+export interface InstructorClassSlot {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface InstructorClassData {
   id: string;
   title: string;
@@ -32,35 +39,54 @@ export interface InstructorClassData {
   attendanceHistory: AttendanceRecord[];
   genderPolicy: ClassGenderPolicy;
   /** מועדים שמשובצים למדריכה בחוג הזה. */
-  assignedSlotIds?: string[];
-  /** האם החוג מתקיים היום — הכרטיס מודגש והפעולה הופכת לראשית. */
+  slots?: InstructorClassSlot[];
+  /** האם אחד המועדים של המדריכה מתקיים היום. */
   isToday: boolean;
 }
 
 interface InstructorClassCardProps {
   classData: InstructorClassData;
   instructorId: string;
+  todayWeekday: number;
 }
 
 export function InstructorClassCard({
   classData,
   instructorId,
+  todayWeekday,
 }: InstructorClassCardProps) {
+  const slots = classData.slots ?? [];
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(() =>
+    initialSlotId(slots, classData)
+  );
   const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const activeSlot =
+    slots.find((slot) => slot.id === selectedSlotId) ?? slots[0] ?? null;
+  const dayOfWeek = activeSlot?.dayOfWeek ?? classData.dayOfWeek;
+  const startTime = activeSlot?.startTime ?? classData.startTime;
+  const endTime = activeSlot?.endTime ?? classData.endTime;
+  const isToday =
+    classData.status === "active" &&
+    (activeSlot ? activeSlot.dayOfWeek === todayWeekday : classData.isToday);
+  const students = activeSlot
+    ? classData.students.filter(
+        (student) => student.weekly_slot_id === activeSlot.id
+      )
+    : classData.students;
+  const attendanceHistory = activeSlot
+    ? classData.attendanceHistory.filter(
+        (record) => record.weeklySlotId === activeSlot.id
+      )
+    : classData.attendanceHistory;
+  const studentCount = students.length;
+
   const {
     title,
     status,
-    dayOfWeek,
-    startTime,
-    endTime,
     capacity,
-    studentCount,
-    students,
-    attendanceHistory,
-    isToday,
   } = classData;
 
   const latestDate = attendanceHistory[0]?.date;
@@ -136,6 +162,38 @@ export function InstructorClassCard({
               </Badge>
             </div>
           </div>
+
+          {slots.length > 1 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold text-ink-500">
+                בחירת מועד
+              </p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="בחירת מועד">
+                {slots.map((slot) => {
+                  const selected = slot.id === activeSlot?.id;
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setSelectedSlotId(slot.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                        selected
+                          ? "border-brand-500 bg-brand-50 text-brand-800"
+                          : "border-ink-200 bg-white text-ink-600 hover:border-ink-300"
+                      )}
+                    >
+                      יום {dayLabel(slot.dayOfWeek)}{" "}
+                      <span dir="ltr" className="tabular-nums">
+                        {formatTime(slot.startTime)}–{formatTime(slot.endTime)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
@@ -228,7 +286,11 @@ export function InstructorClassCard({
       <Modal
         open={attendanceOpen}
         onClose={() => setAttendanceOpen(false)}
-        title={`סימון נוכחות — ${title}`}
+        title={`סימון נוכחות — ${title}${
+          activeSlot
+            ? ` · ${formatTime(activeSlot.startTime)}–${formatTime(activeSlot.endTime)}`
+            : ""
+        }`}
         description="נווטו בין המפגשים וסמנו נוכחות. אפשר לשמור גם בלי לסמן את כולם, ולחזור להשלים או לשנות."
         className="max-w-xl"
       >
@@ -236,7 +298,7 @@ export function InstructorClassCard({
           classId={classData.id}
           instructorId={instructorId}
           students={students}
-          weeklySlotIds={classData.assignedSlotIds}
+          weeklySlotId={activeSlot?.id ?? null}
           genderPolicy={classData.genderPolicy}
         />
       </Modal>
@@ -248,7 +310,10 @@ export function InstructorClassCard({
         description="בחרו מפגש והוסיפו הערה — למשל דיווח פציעה. גלוי למדריכה ולמנהל בלבד."
         className="max-w-xl"
       >
-        <SessionNotesWorkspace classId={classData.id} />
+        <SessionNotesWorkspace
+          classId={classData.id}
+          weeklySlotId={activeSlot?.id ?? null}
+        />
       </Modal>
 
       <Modal
@@ -265,4 +330,16 @@ export function InstructorClassCard({
       </Modal>
     </>
   );
+}
+
+function initialSlotId(
+  slots: InstructorClassSlot[],
+  classData: InstructorClassData
+): string | null {
+  const match = slots.find(
+    (slot) =>
+      slot.dayOfWeek === classData.dayOfWeek &&
+      slot.startTime === classData.startTime
+  );
+  return match?.id ?? slots[0]?.id ?? null;
 }
