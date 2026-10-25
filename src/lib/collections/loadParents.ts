@@ -26,7 +26,7 @@ export async function loadCollectionParents(): Promise<CollectionParent[]> {
   const { data: charges } = await supabase
     .from("payments")
     .select(
-      "id, amount, payment_method, office_collection, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, receipt_labels(id, label), profiles(full_name, phone, email, receipt_id_number, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
+      "id, amount, payment_method, office_collection, status, paid_at, created_at, parent_id, receipt_label_id, receipt_description, receipt_custom_text, income_class_id, income_class:classes!payments_income_class_id_fkey(title), receipt_labels(id, label), profiles(full_name, phone, email, receipt_id_number, customer_admin_notes(body)), enrollments(id, type, status, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount, received_at, note)"
     )
     .or(
       `payment_method.in.(${COLLECTION_OFFICE_METHODS.join(",")}),and(payment_method.eq.credit_card,office_collection.eq.true)`
@@ -98,6 +98,8 @@ export async function loadCollectionParents(): Promise<CollectionParent[]> {
         receiptCustomText: charge.receipt_custom_text,
       }),
       subjectType: subjectKind(enrollment),
+      incomeClassId: charge.income_class_id,
+      incomeClassTitle: charge.income_class?.title ?? null,
       enrollmentCancelled: enrollment?.status === "cancelled",
       receiptLabelId: charge.receipt_label_id,
       receiptLabel,

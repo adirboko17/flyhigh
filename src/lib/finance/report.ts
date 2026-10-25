@@ -25,6 +25,14 @@ import {
   type ManualIncomeView,
 } from "@/lib/finance/manualIncome";
 import {
+  asManualExpenseMode,
+  expenseAmountForMonth,
+  expenseViewsForMonth,
+  type ManualExpenseEntry,
+  type ManualExpenseSource,
+  type ManualExpenseView,
+} from "@/lib/finance/manualExpense";
+import {
   SUBJECT_KIND_LABEL,
   chargeDisplaySubject,
   paymentIncomeCategory,
@@ -70,6 +78,7 @@ export type FinanceSnapshot = {
   period: FinancePeriod;
   paymentsRevenue: number;
   manualIncomeAmount: number;
+  manualExpenseAmount: number;
   revenue: number;
   payroll: number;
   netProfit: number;
@@ -97,7 +106,9 @@ export type FinanceDashboard = {
   revenueByMonth: Map<string, number>;
   payrollByMonth: Map<string, number>;
   manualByMonth: Map<string, number>;
+  expenseByMonth: Map<string, number>;
   manualIncomes: ManualIncomeView[];
+  manualExpenses: ManualExpenseView[];
 };
 
 type PaymentRow = {
@@ -114,6 +125,7 @@ type PaymentRow = {
   receipt_custom_text: string | null;
   profiles: { full_name: string | null } | null;
   enrollments: EnrollmentSubject | null;
+  income_class: { title: string; category: string | null } | null;
   payment_receipts: { amount: number }[] | null;
 };
 
@@ -126,11 +138,17 @@ function inRange(date: string, start: string, end: string) {
 }
 
 function paymentSubject(payment: PaymentRow) {
-  return chargeDisplaySubject({
+  const subject = chargeDisplaySubject({
     enrollment: payment.enrollments,
     receiptDescription: payment.receipt_description,
     receiptCustomText: payment.receipt_custom_text,
   });
+  const classTitle = payment.income_class?.title?.trim();
+  if (!classTitle || !payment.enrollments) return subject;
+  if (payment.enrollments.type !== "pool_pass" && payment.enrollments.type !== "program") {
+    return subject;
+  }
+  return `${subject} · ${classTitle}`;
 }
 
 function paymentActivityDate(payment: Pick<PaymentRow, "paid_at" | "created_at">) {
@@ -194,6 +212,8 @@ function buildSnapshot(input: {
   instructors: PayrollInstructor[];
   manualSources: ManualIncomeSource[];
   manualEntries: ManualIncomeEntry[];
+  expenseSources: ManualExpenseSource[];
+  expenseEntries: ManualExpenseEntry[];
   newEnrollments: number;
 }): FinanceSnapshot {
   const { period } = input;
@@ -233,6 +253,26 @@ function buildSnapshot(input: {
   }));
   const manualIncomeAmount =
     Math.round(manualLines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
+  const manualExpenseAmount =
+    Math.round(
+      input.expenseSources.reduce(
+        (sum, source) =>
+          sum +
+          manualForPeriod(
+            {
+              id: source.id,
+              name: source.name,
+              category: "",
+              mode: source.mode,
+              slug: null,
+            },
+            input.expenseEntries,
+            period.start,
+            period.end
+          ),
+        0
+      ) * 100
+    ) / 100;
   const revenue = paymentsRevenue + manualIncomeAmount;
 
   const methodTotals = new Map<string, number>();
@@ -246,7 +286,11 @@ function buildSnapshot(input: {
     addToMap(methodTotals, payment.payment_method ?? "external", amount);
     addToMap(subjectTotals, paymentSubject(payment), amount);
     addToMap(kindTotals, subjectKind(payment.enrollments) ?? "other", amount);
-    addToMap(categoryTotals, paymentIncomeCategory(payment.enrollments), amount);
+    addToMap(
+      categoryTotals,
+      paymentIncomeCategory(payment.enrollments, payment.income_class),
+      amount
+    );
 
     const customer = customerTotals.get(payment.parent_id);
     if (customer) {
@@ -309,9 +353,10 @@ function buildSnapshot(input: {
     period,
     paymentsRevenue,
     manualIncomeAmount,
+    manualExpenseAmount,
     revenue,
     payroll,
-    netProfit: revenue - payroll,
+    netProfit: revenue - payroll - manualExpenseAmount,
     paidCount: paid.length,
     newEnrollments: input.newEnrollments,
     payrollLines: workingPayrollLines,
@@ -371,6 +416,8 @@ export async function loadFinanceDashboard(input: {
     { data: classes },
     { data: incomeRows },
     { data: incomeSources },
+    { data: expenseRows },
+    { data: expenseSources },
     { data: weeklySlots },
     newEnrollments,
     compareEnrollments,
@@ -378,7 +425,7 @@ export async function loadFinanceDashboard(input: {
     supabase
       .from("payments")
       .select(
-        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, office_collection, receipt_description, receipt_custom_text, profiles(full_name), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
+        "id, amount, payment_method, status, paid_at, created_at, parent_id, external_reference, office_collection, receipt_description, receipt_custom_text, profiles(full_name), income_class:classes!payments_income_class_id_fkey(title, category), enrollments(type, classes(title, category), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(amount)"
       )
       .or(
         `created_at.gte.${loadStart},paid_at.gte.${loadStart},status.eq.pending,status.eq.partial`
@@ -404,6 +451,8 @@ export async function loadFinanceDashboard(input: {
       .from("manual_income_sources")
       .select("id, name, category, mode, slug")
       .order("created_at"),
+    supabase.from("manual_expense_entries").select("source_id, month, amount").order("month"),
+    supabase.from("manual_expense_sources").select("id, name, mode").order("created_at"),
     supabase.from("class_weekly_slots").select("id, instructor_id"),
     countEnrollments(supabase, period.start, period.end),
     compare
@@ -421,6 +470,16 @@ export async function loadFinanceDashboard(input: {
     slug: row.slug,
   }));
   const manualEntries = linkIncomeEntries(manualSources, incomeRows ?? []);
+  const loadedExpenseSources: ManualExpenseSource[] = (expenseSources ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    mode: asManualExpenseMode(row.mode),
+  }));
+  const loadedExpenseEntries: ManualExpenseEntry[] = (expenseRows ?? []).map((row) => ({
+    sourceId: row.source_id,
+    month: row.month,
+    amount: Number(row.amount),
+  }));
 
   const slotInstructorById = new Map(
     (weeklySlots ?? []).map((slot) => [slot.id, slot.instructor_id])
@@ -460,6 +519,7 @@ export async function loadFinanceDashboard(input: {
 
   const payrollByMonth = new Map<string, number>();
   const manualByMonth = new Map<string, number>();
+  const expenseByMonth = new Map<string, number>();
   for (const month of monthsInRange(monthOf(loadStart), monthOf(loadEnd))) {
     payrollByMonth.set(
       month,
@@ -471,6 +531,13 @@ export async function loadFinanceDashboard(input: {
       month,
       manualSources.reduce(
         (sum, source) => sum + manualAmountForMonth(source, manualEntries, month),
+        0
+      )
+    );
+    expenseByMonth.set(
+      month,
+      loadedExpenseSources.reduce(
+        (sum, source) => sum + expenseAmountForMonth(source, loadedExpenseEntries, month),
         0
       )
     );
@@ -507,6 +574,8 @@ export async function loadFinanceDashboard(input: {
     instructors: allInstructors,
     manualSources,
     manualEntries,
+    expenseSources: loadedExpenseSources,
+    expenseEntries: loadedExpenseEntries,
     newEnrollments,
   });
 
@@ -518,6 +587,8 @@ export async function loadFinanceDashboard(input: {
         instructors: allInstructors,
         manualSources,
         manualEntries,
+        expenseSources: loadedExpenseSources,
+        expenseEntries: loadedExpenseEntries,
         newEnrollments: compareEnrollments,
       })
     : null;
@@ -535,8 +606,12 @@ export async function loadFinanceDashboard(input: {
     revenueByMonth,
     payrollByMonth,
     manualByMonth,
+    expenseByMonth,
     manualIncomes: period.month
       ? manualViewsForMonth(manualSources, manualEntries, period.month)
+      : [],
+    manualExpenses: period.month
+      ? expenseViewsForMonth(loadedExpenseSources, loadedExpenseEntries, period.month)
       : [],
   };
 }

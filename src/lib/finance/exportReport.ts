@@ -14,6 +14,7 @@ function summaryRows(snapshot: FinanceSnapshot, openTotal: number, occupancy: nu
     ["תשלומים שנגבו", snapshot.paymentsRevenue],
     ["הכנסות נוספות", snapshot.manualIncomeAmount],
     ["שכר מדריכות", snapshot.payroll],
+    ["הוצאות נוספות", snapshot.manualExpenseAmount],
     ["רווח נטו", snapshot.netProfit],
     ["ממתין לגבייה (נוכחי)", openTotal],
     ["מספר תשלומים שנגבו", snapshot.paidCount],
@@ -37,6 +38,7 @@ function compareRows(current: FinanceSnapshot, previous: FinanceSnapshot) {
     ["תשלומים שנגבו", current.paymentsRevenue, previous.paymentsRevenue],
     ["הכנסות נוספות", current.manualIncomeAmount, previous.manualIncomeAmount],
     ["שכר מדריכות", current.payroll, previous.payroll],
+    ["הוצאות נוספות", current.manualExpenseAmount, previous.manualExpenseAmount],
     ["רווח נטו", current.netProfit, previous.netProfit],
     ["הרשמות חדשות", current.newEnrollments, previous.newEnrollments],
   ];

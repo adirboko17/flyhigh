@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FinancePayrollCard } from "@/components/admin/FinancePayrollCard";
 import { IncomeCategoryBoard } from "@/components/admin/IncomeCategoryBoard";
+import { ManualExpensesSection } from "@/components/admin/ManualExpensesSection";
 import { ManualIncomesSection } from "@/components/admin/ManualIncomesSection";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
@@ -106,7 +107,7 @@ export default async function AdminFinancePage({
           value={formatCurrency(snapshot.netProfit)}
           icon="📈"
           tone={snapshot.netProfit >= 0 ? "brand" : "rose"}
-          hint="הכנסות בניכוי שכר מדריכות"
+          hint="הכנסות בניכוי שכר מדריכות והוצאות נוספות"
         />
         <StatCard
           label="ממתין לגבייה"
@@ -128,9 +129,17 @@ export default async function AdminFinancePage({
         />
       )}
 
+      {snapshot.period.month && (
+        <ManualExpensesSection
+          month={snapshot.period.month}
+          monthTitle={periodTitle}
+          items={dashboard.manualExpenses}
+        />
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>הכנסות מול שכר · 12 חודשים</CardTitle>
+          <CardTitle>הכנסות מול הוצאות · 12 חודשים</CardTitle>
           <span className="text-xs text-ink-400">לחצו על חודש למעבר אליו</span>
         </CardHeader>
         <CardContent>
@@ -138,6 +147,7 @@ export default async function AdminFinancePage({
             series={[
               { name: "הכנסות", className: "bg-aqua-500" },
               { name: "שכר מדריכות", className: "bg-violet-400" },
+              { name: "הוצאות נוספות", className: "bg-rose-400" },
             ]}
             data={dashboard.trendMonths.map((key) => ({
               key,
@@ -146,6 +156,7 @@ export default async function AdminFinancePage({
                 (dashboard.revenueByMonth.get(key) ?? 0) +
                   (dashboard.manualByMonth.get(key) ?? 0),
                 dashboard.payrollByMonth.get(key) ?? 0,
+                dashboard.expenseByMonth.get(key) ?? 0,
               ],
               href: `${FINANCE_PATH}?month=${key}`,
               active: month === key,

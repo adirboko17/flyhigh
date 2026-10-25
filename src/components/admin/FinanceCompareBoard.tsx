@@ -55,6 +55,7 @@ export function FinanceCompareBoard({
     { key: "revenue", label: "הכנסות", current: current.revenue, previous: previous.revenue, money: true },
     { key: "paid", label: "תשלומים שנגבו", current: current.paymentsRevenue, previous: previous.paymentsRevenue, money: true },
     { key: "payroll", label: "שכר מדריכות", current: current.payroll, previous: previous.payroll, money: true, invert: true },
+    { key: "expenses", label: "הוצאות נוספות", current: current.manualExpenseAmount, previous: previous.manualExpenseAmount, money: true, invert: true },
     { key: "profit", label: "רווח נטו", current: current.netProfit, previous: previous.netProfit, money: true },
     { key: "enroll", label: "הרשמות חדשות", current: current.newEnrollments, previous: previous.newEnrollments, money: false },
   ];
@@ -99,7 +100,7 @@ export function FinanceCompareBoard({
         </span>
       </div>
 
-      <div className="grid gap-3 px-4 pb-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-5">
+      <div className="grid gap-3 px-4 pb-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
         {metrics.map((metric) => (
           <MetricTile key={metric.key} metric={metric} />
         ))}

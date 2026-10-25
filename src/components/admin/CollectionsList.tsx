@@ -10,6 +10,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
+import { IncomeClassSelect } from "@/components/admin/IncomeClassSelect";
+import type { IncomeClassOption } from "@/lib/admin/incomeClasses";
+import { assignPaymentIncomeClass } from "@/lib/admin/incomeClassActions";
+import { canAssignIncomeClass } from "@/lib/finance/subject";
 import {
   addPaymentReceipt,
   deleteCollectionCharge,
@@ -68,6 +72,8 @@ export type CollectionCharge = {
   /** על מה החיוב — שם החוג, המסלול או הכרטיסייה. */
   subject: string;
   subjectType: "class" | "program" | "pool_pass" | "private_lesson" | null;
+  incomeClassId: string | null;
+  incomeClassTitle: string | null;
   enrollmentCancelled: boolean;
   /** תווית קבלה שנבחרה — null אם נשאר שם המוצר כרגיל. */
   receiptLabelId: string | null;
@@ -181,11 +187,13 @@ function todayDateInput() {
 interface CollectionsListProps {
   parents: CollectionParent[];
   receiptLabels: ReceiptLabelOption[];
+  classes: IncomeClassOption[];
 }
 
 export function CollectionsList({
   parents,
   receiptLabels,
+  classes,
 }: CollectionsListProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -231,6 +239,7 @@ export function CollectionsList({
             parentMatches ||
             normalize(charge.childName).includes(q) ||
             normalize(charge.subject).includes(q) ||
+            normalize(charge.incomeClassTitle).includes(q) ||
             normalize(charge.receiptLabel).includes(q) ||
             normalize(charge.receiptCustomText).includes(q)
           );
@@ -402,6 +411,7 @@ export function CollectionsList({
               key={parent.id}
               parent={parent}
               receiptLabels={receiptLabels}
+              classes={classes}
               busyId={busyId}
               disabled={isPending}
               onOpenCharge={setActiveCharge}
@@ -419,6 +429,11 @@ export function CollectionsList({
               onChangeMethod={(paymentId, method) =>
                 runAction(`method:${paymentId}`, () =>
                   updateCollectionPaymentMethod({ paymentId, method })
+                )
+              }
+              onChangeIncomeClass={(paymentId, classId) =>
+                runAction(`class:${paymentId}`, () =>
+                  assignPaymentIncomeClass({ paymentId, classId })
                 )
               }
               onSettleAll={() =>
@@ -488,6 +503,7 @@ export function CollectionsList({
 function ParentCard({
   parent,
   receiptLabels,
+  classes,
   busyId,
   disabled,
   onOpenCharge,
@@ -495,10 +511,12 @@ function ParentCard({
   onChangeLabel,
   onChangeCustomText,
   onChangeMethod,
+  onChangeIncomeClass,
   onSettleAll,
 }: {
   parent: CollectionParent;
   receiptLabels: ReceiptLabelOption[];
+  classes: IncomeClassOption[];
   busyId: string | null;
   disabled: boolean;
   onOpenCharge: (charge: CollectionCharge) => void;
@@ -506,6 +524,7 @@ function ParentCard({
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onChangeCustomText: (paymentId: string, customText: string) => void;
   onChangeMethod: (paymentId: string, method: CollectionPaymentMethod) => void;
+  onChangeIncomeClass: (paymentId: string, classId: string | null) => void;
   onSettleAll: () => void;
 }) {
   const openCharges = parent.charges.filter(isOpen);
@@ -595,11 +614,13 @@ function ParentCard({
             key={charge.id}
             charge={charge}
             receiptLabels={receiptLabels}
-            disabled={disabled}
+            classes={classes}
+            disabled={disabled || busyId === `class:${charge.id}`}
             onOpen={() => onOpenCharge(charge)}
             onChangeLabel={onChangeLabel}
             onChangeCustomText={onChangeCustomText}
             onChangeMethod={onChangeMethod}
+            onChangeIncomeClass={onChangeIncomeClass}
           />
         ))}
       </ul>
@@ -610,19 +631,23 @@ function ParentCard({
 function ChargeRow({
   charge,
   receiptLabels,
+  classes,
   disabled,
   onOpen,
   onChangeLabel,
   onChangeCustomText,
   onChangeMethod,
+  onChangeIncomeClass,
 }: {
   charge: CollectionCharge;
   receiptLabels: ReceiptLabelOption[];
+  classes: IncomeClassOption[];
   disabled: boolean;
   onOpen: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onChangeCustomText: (paymentId: string, customText: string) => void;
   onChangeMethod: (paymentId: string, method: CollectionPaymentMethod) => void;
+  onChangeIncomeClass: (paymentId: string, classId: string | null) => void;
 }) {
   const open = isOpen(charge);
   const status = chargeStatusBadge(charge);
@@ -702,6 +727,14 @@ function ChargeRow({
           {charge.receipts.length > 0 &&
             ` · ${charge.receipts.length} תקבולים`}
         </p>
+        {canAssignIncomeClass(charge.subjectType) && (
+          <IncomeClassSelect
+            value={charge.incomeClassId}
+            classes={classes}
+            disabled={disabled}
+            onChange={(classId) => onChangeIncomeClass(charge.id, classId)}
+          />
+        )}
         {open && !isReceiptless && (
           <>
             <ReceiptLabelSelect

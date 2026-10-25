@@ -73,6 +73,7 @@ type ChargeRow = {
   receipt_description: string | null;
   receipt_custom_text: string | null;
   receipt_label_id: string | null;
+  income_class_id: string | null;
   enrollments: {
     type: Enums<"enrollment_type">;
     children: { full_name: string } | null;
@@ -85,7 +86,7 @@ type ChargeRow = {
 };
 
 const CHARGE_SELECT =
-  "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, receipt_label_id, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount)";
+  "id, amount, status, parent_id, enrollment_id, payment_method, office_collection, checkout_id, receipt_description, receipt_custom_text, receipt_label_id, income_class_id, enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)), payment_receipts(id, amount)";
 
 function remainingOf(charge: ChargeRow) {
   if (isReceiptlessChargeSettled(charge.payment_method, charge.status)) {
@@ -991,6 +992,7 @@ export async function splitCollectionCharge(input: {
     receipt_label_id: charge.receipt_label_id,
     receipt_description: charge.receipt_description,
     receipt_custom_text: charge.receipt_custom_text,
+    income_class_id: charge.income_class_id,
     office_collection: true,
     status: "pending" as const,
     paid_at: null,

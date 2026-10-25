@@ -39,6 +39,7 @@ export const ADMIN_NAV: NavEntry[] = [
     icon: "🎫",
     matchPaths: ["/admin/programs", "/admin/pool-passes"],
   },
+  { href: "/admin/buyers", label: "רוכשות", icon: "🛍️" },
   {
     id: "operations",
     label: "תפעול",

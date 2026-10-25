@@ -69,8 +69,36 @@ export const POOL_INCOME_CATEGORY = "בריכה";
 export const PRIVATE_LESSON_INCOME_CATEGORY = "שיעורים פרטיים";
 export const OTHER_INCOME_CATEGORY = "אחר";
 
+export type AssignedIncomeClass = {
+  title: string;
+  category?: string | null;
+};
+
+/** כרטיסייה או מנוי שאפשר לשייך לחוג, כדי שהכסף ייספר על הקטגוריה של החוג. */
+export function canAssignIncomeClass(type: SubjectKind): boolean {
+  return type === "pool_pass" || type === "program";
+}
+
+/** קטגוריית חוג שנבחרה ידנית. בלי קטגוריה נשאר שם החוג, כדי שהסכום לא ייבלע ב«בריכה». */
+export function assignedClassIncomeCategory(assigned: AssignedIncomeClass): string {
+  const category = assigned.category?.trim();
+  if (category) return category;
+  const title = assigned.title.trim();
+  return title || "ללא קטגוריה";
+}
+
 /** קטגוריית ההכנסה לסיכום בעמוד הכספים, בלי פירוט הפריט. */
-export function paymentIncomeCategory(enrollment: EnrollmentSubject | null): string {
+export function paymentIncomeCategory(
+  enrollment: EnrollmentSubject | null,
+  assignedClass?: AssignedIncomeClass | null
+): string {
+  if (
+    assignedClass &&
+    enrollment &&
+    canAssignIncomeClass(enrollment.type)
+  ) {
+    return assignedClassIncomeCategory(assignedClass);
+  }
   if (!enrollment) return OTHER_INCOME_CATEGORY;
 
   switch (enrollment.type) {

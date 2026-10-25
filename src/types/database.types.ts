@@ -1472,6 +1472,8 @@ export type Database = {
           paid_at: string | null
           parent_id: string
           payment_method: Database["public"]["Enums"]["payment_method"] | null
+          /** חוג שאליו משייכים תשלום של כרטיסייה או מנוי, לסיכום ההכנסות. */
+          income_class_id: string | null
           receipt_custom_text: string | null
           receipt_description: string | null
           receipt_label_id: string | null
@@ -1484,6 +1486,7 @@ export type Database = {
           enrollment_id?: string | null
           external_reference?: string | null
           id?: string
+          income_class_id?: string | null
           office_collection?: boolean
           paid_at?: string | null
           parent_id: string
@@ -1500,6 +1503,7 @@ export type Database = {
           enrollment_id?: string | null
           external_reference?: string | null
           id?: string
+          income_class_id?: string | null
           office_collection?: boolean
           paid_at?: string | null
           parent_id?: string
@@ -1529,6 +1533,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_income_class_id_fkey"
+            columns: ["income_class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
             referencedColumns: ["id"]
           },
           {
@@ -2022,6 +2033,86 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manual_expense_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: string
+          source_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: string
+          source_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: string
+          source_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_expense_entries_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "manual_expense_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_expense_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manual_expense_sources: {
+        Row: {
+          created_at: string
+          id: string
+          mode: string
+          name: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mode: string
+          name: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mode?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_expense_sources_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
