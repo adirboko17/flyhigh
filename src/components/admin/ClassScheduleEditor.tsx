@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/icons/Icon";
 import { Field, Input, Select } from "@/components/ui/Input";
-import { DAYS_OF_WEEK } from "@/lib/constants";
+import { DAY_ABBR, DAYS_OF_WEEK } from "@/lib/constants";
 import { CLASS_GENDER_POLICY, type ClassGenderPolicy } from "@/lib/class-audience";
 import {
   duplicateWeeklySlotIndexes,
@@ -16,8 +16,10 @@ import {
   parseSessionCount,
   formatScheduleSummary,
   refreshWeeklySessions,
+  resizeWeeklySessions,
   scheduleWithSessionEdits,
   sessionSlotKey,
+  sessionWeekday,
   weeklySlotKey,
   type ClassScheduleState,
   type ClassSessionDraft,
@@ -54,6 +56,16 @@ export function ClassScheduleEditor({
   const weekly = value.scheduleType === "weekly";
   const showNotes = moreOpen || value.weeklySlots.some((slot) => Boolean(slot.note?.trim()));
   const duplicateSlotIndexes = duplicateWeeklySlotIndexes(value.weeklySlots);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const typedCount = useRef(value.sessionCount);
+  const sessionCountTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (sessionCountTimer.current) window.clearTimeout(sessionCountTimer.current);
+    };
+  }, []);
 
   function commit(next: ClassScheduleState) {
     onChange(next.scheduleType === "weekly" ? refreshWeeklySessions(next) : next);
@@ -117,6 +129,52 @@ export function ClassScheduleEditor({
 
   function applySessions(sessions: ClassSessionDraft[]) {
     onChange(scheduleWithSessionEdits(value, sessions));
+  }
+
+  function commitSessionCount(current: ClassScheduleState, sessionCount: string) {
+    if (current.scheduleType !== "weekly") return;
+    if (!parseSessionCount(sessionCount)) {
+      if (current.sessions.length === 0 && current.sessionCount === sessionCount) return;
+      onChange({
+        ...current,
+        sessionCount,
+        sessions: [],
+        rangeEnd: "",
+      });
+      return;
+    }
+    const next = resizeWeeklySessions(current, sessionCount);
+    if (next === current) return;
+    onChange(next);
+  }
+
+  function changeSessionCount(sessionCount: string) {
+    typedCount.current = sessionCount;
+    if (sessionCountTimer.current) {
+      window.clearTimeout(sessionCountTimer.current);
+      sessionCountTimer.current = null;
+    }
+    const previous = parseSessionCount(value.sessionCount);
+    const next = parseSessionCount(sessionCount);
+    const stepped =
+      previous != null && next != null && Math.abs(next - previous) === 1;
+    if (stepped) {
+      onChange(resizeWeeklySessions(value, sessionCount));
+      return;
+    }
+    onChange({ ...value, sessionCount });
+    sessionCountTimer.current = window.setTimeout(() => {
+      sessionCountTimer.current = null;
+      commitSessionCount(valueRef.current, sessionCount);
+    }, 400);
+  }
+
+  function blurSessionCount() {
+    if (sessionCountTimer.current) {
+      window.clearTimeout(sessionCountTimer.current);
+      sessionCountTimer.current = null;
+    }
+    commitSessionCount(valueRef.current, typedCount.current);
   }
 
   function updateSession(index: number, patch: Partial<ClassSessionDraft>) {
@@ -391,7 +449,10 @@ export function ClassScheduleEditor({
                 disabled={disabled}
               />
             </Field>
-            <Field label="מספר מפגשים">
+            <Field
+              label="מספר מפגשים"
+              hint="פחות מפגשים מוחק מהסוף, יותר מוסיף בסוף."
+            >
               <Input
                 type="number"
                 min={0}
@@ -399,19 +460,8 @@ export function ClassScheduleEditor({
                 inputMode="numeric"
                 placeholder="למשל 22"
                 value={value.sessionCount}
-                onChange={(e) => {
-                  const sessionCount = e.target.value;
-                  if (!parseSessionCount(sessionCount)) {
-                    onChange({
-                      ...value,
-                      sessionCount,
-                      sessions: [],
-                      rangeEnd: "",
-                    });
-                    return;
-                  }
-                  commit({ ...value, sessionCount });
-                }}
+                onChange={(e) => changeSessionCount(e.target.value)}
+                onBlur={blurSessionCount}
                 disabled={disabled}
               />
             </Field>
@@ -571,10 +621,12 @@ function ScheduleInput({
   type,
   value,
   disabled,
+  dense = false,
   onChange,
   ...props
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
   type: "date" | "time";
+  dense?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const empty = value === "" || value == null;
@@ -585,7 +637,7 @@ function ScheduleInput({
       <Select
         value={timeValue}
         disabled={disabled}
-        className={className}
+        className={cn(dense && "!h-9 !px-2", className)}
         aria-label={placeholder}
         onChange={(event) =>
           onChange?.({
@@ -620,7 +672,8 @@ function ScheduleInput({
   return (
     <div
       className={cn(
-        "schedule-input-shell group relative h-11 w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-ink-200 bg-white transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200",
+        "schedule-input-shell group relative w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-ink-200 bg-white transition-colors focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-200",
+        dense ? "h-9" : "h-11",
         disabled && "cursor-not-allowed bg-ink-50 opacity-60",
         !disabled && "cursor-pointer",
         className,
@@ -644,7 +697,8 @@ function ScheduleInput({
       <span
         aria-hidden
         className={cn(
-          "pointer-events-none absolute inset-0 z-0 flex items-center justify-between gap-3 px-4",
+          "pointer-events-none absolute inset-0 z-0 flex items-center justify-between gap-2",
+          dense ? "px-2.5" : "px-4",
           empty
             ? "text-ink-400 group-focus-within:hidden"
             : "font-medium text-ink-800",
@@ -716,7 +770,7 @@ function SessionList({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink-800">מפגשים</p>
-          <p className="text-xs text-ink-500">לחצו כדי לערוך מפגש בודד</p>
+          <p className="text-xs text-ink-500">פתחו מועד ועדכנו תאריך או שעה בכל שורה</p>
         </div>
         <Button
           type="button"
@@ -739,26 +793,13 @@ function SessionList({
           disabled={disabled}
         />
       ) : (
-        <div className="space-y-3">
-          {sessions.map((session, index) => (
-            <SessionCard
-              key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
-              session={session}
-              onUpdate={(patch) => onUpdate(index, patch)}
-              onRemove={() => onRemove(index)}
-              disabled={disabled}
-            />
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onAdd}
-            disabled={disabled}
-          >
-            הוספת מפגש
-          </Button>
-        </div>
+        <SessionTable
+          items={sessions.map((session, index) => ({ session, index }))}
+          onUpdate={onUpdate}
+          onRemove={onRemove}
+          onAdd={onAdd}
+          disabled={disabled}
+        />
       )}
     </div>
   );
@@ -868,27 +909,15 @@ function GroupedSessionList({
             </div>
 
             {open && (
-              <div className="space-y-3 border-t border-ink-100 bg-ink-50/50 p-3">
-                {group.items.map(({ session, index }) => (
-                  <SessionCard
-                    key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
-                    session={session}
-                    onUpdate={(patch) => onUpdate(index, patch)}
-                    onRemove={() => onRemove(index)}
-                    disabled={disabled}
-                  />
-                ))}
-                {group.slot && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAddToSlot(group.slot!)}
-                    disabled={disabled}
-                  >
-                    הוספת מפגש למועד
-                  </Button>
-                )}
+              <div className="border-t border-ink-100 bg-ink-50/40">
+                <SessionTable
+                  items={group.items}
+                  onUpdate={onUpdate}
+                  onRemove={onRemove}
+                  onAdd={group.slot ? () => onAddToSlot(group.slot!) : undefined}
+                  addLabel="הוספת מפגש למועד"
+                  disabled={disabled}
+                />
               </div>
             )}
           </div>
@@ -898,101 +927,203 @@ function GroupedSessionList({
   );
 }
 
-function SessionCard({
+const sessionColumns =
+  "sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem_5.5rem_9.5rem]";
+
+function SessionTable({
+  items,
+  onUpdate,
+  onRemove,
+  onAdd,
+  addLabel = "הוספת מפגש",
+  disabled,
+}: {
+  items: { session: ClassSessionDraft; index: number }[];
+  onUpdate: (index: number, patch: Partial<ClassSessionDraft>) => void;
+  onRemove: (index: number) => void;
+  onAdd?: () => void;
+  addLabel?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <div className="max-h-[28rem] overflow-y-auto">
+        <div
+          className={cn(
+            "sticky top-0 z-[1] hidden gap-2 border-b border-ink-100 bg-ink-50 px-3 py-2 text-[11px] font-semibold text-ink-500 sm:grid",
+            sessionColumns
+          )}
+        >
+          <span />
+          <span>תאריך</span>
+          <span>התחלה</span>
+          <span>סיום</span>
+          <span>פעולות</span>
+        </div>
+        <ul className="divide-y divide-ink-100">
+          {items.map(({ session, index }, position) => (
+            <SessionRow
+              key={session.id ?? `${session.sessionDate}-${session.startTime}-${index}`}
+              position={position + 1}
+              session={session}
+              onUpdate={(patch) => onUpdate(index, patch)}
+              onRemove={() => onRemove(index)}
+              disabled={disabled}
+            />
+          ))}
+        </ul>
+      </div>
+      {onAdd && (
+        <div className="border-t border-ink-100 px-3 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAdd}
+            disabled={disabled}
+          >
+            {addLabel}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionRow({
+  position,
   session,
   onUpdate,
   onRemove,
   disabled,
 }: {
+  position: number;
   session: ClassSessionDraft;
   onUpdate: (patch: Partial<ClassSessionDraft>) => void;
   onRemove: () => void;
   disabled?: boolean;
 }) {
+  const cancelled = session.status === "cancelled";
+  const [noteOpen, setNoteOpen] = useState(() => Boolean(session.notes?.trim()));
+  const locked = disabled || cancelled;
+  const dayAbbr =
+    session.sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(session.sessionDate)
+      ? DAY_ABBR[sessionWeekday(session.sessionDate)] ?? ""
+      : "";
+
   return (
-    <div
-      className={`rounded-xl border p-3 ${
-        session.status === "cancelled"
-          ? "border-red-200 bg-red-50/50 opacity-75"
-          : "border-ink-100 bg-white"
-      }`}
-    >
-      <div className="grid gap-2 sm:grid-cols-[1.2fr_0.9fr_0.9fr]">
-        <Field label="תאריך">
+    <li className={cn("px-3 py-2", cancelled ? "bg-red-50/80" : "bg-white")}>
+      <div
+        className={cn(
+          "grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2",
+          sessionColumns
+        )}
+      >
+        <span className="order-1 row-span-2 self-center text-center leading-none sm:row-span-1">
+          <span
+            className={cn(
+              "block text-xs font-bold tabular-nums",
+              cancelled ? "text-red-400 line-through" : "text-ink-400"
+            )}
+          >
+            {position}
+          </span>
+          {dayAbbr && (
+            <span className="mt-0.5 block text-[10px] font-semibold text-ink-500">
+              {dayAbbr}
+            </span>
+          )}
+        </span>
+        <div className="order-2 col-span-2 min-w-0 sm:col-span-1">
           <ScheduleInput
+            dense
             type="date"
-            placeholder="תאריך המפגש"
+            placeholder="תאריך"
             value={session.sessionDate}
             onChange={(e) => onUpdate({ sessionDate: e.target.value })}
-            disabled={disabled || session.status === "cancelled"}
+            disabled={locked}
           />
-        </Field>
-        <Field label="שעת התחלה">
+        </div>
+        <div className="order-4 min-w-0 sm:order-3">
           <ScheduleInput
+            dense
             type="time"
             placeholder="התחלה"
             value={session.startTime}
             onChange={(e) => onUpdate({ startTime: e.target.value })}
-            disabled={disabled || session.status === "cancelled"}
+            disabled={locked}
           />
-        </Field>
-        <Field label="שעת סיום">
+        </div>
+        <div className="order-5 min-w-0 sm:order-4">
           <ScheduleInput
+            dense
             type="time"
             placeholder="סיום"
             value={session.endTime}
             onChange={(e) => onUpdate({ endTime: e.target.value })}
-            disabled={disabled || session.status === "cancelled"}
+            disabled={locked}
           />
-        </Field>
+        </div>
+        <div className="order-3 flex items-center justify-end gap-0.5 max-sm:col-start-4 max-sm:row-start-1 sm:order-5">
+          {!cancelled && (
+            <button
+              type="button"
+              className={cn(
+                "rounded-full px-2 py-1 text-xs font-semibold",
+                session.notes?.trim()
+                  ? "text-brand-700 hover:bg-brand-50"
+                  : "text-ink-500 hover:bg-ink-100"
+              )}
+              disabled={disabled}
+              onClick={() => setNoteOpen((open) => !open)}
+            >
+              הערה
+            </button>
+          )}
+          <button
+            type="button"
+            className={cn(
+              "rounded-full px-2 py-1 text-xs font-semibold",
+              cancelled
+                ? "text-brand-700 hover:bg-brand-50"
+                : "text-ink-500 hover:bg-ink-100"
+            )}
+            disabled={disabled}
+            onClick={() =>
+              onUpdate({
+                status: cancelled ? "scheduled" : "cancelled",
+                notes: cancelled ? undefined : session.notes ?? "בוטל",
+              })
+            }
+          >
+            {cancelled ? "שחזור" : "ביטול"}
+          </button>
+          <button
+            type="button"
+            aria-label="מחיקה"
+            title="מחיקה"
+            className="grid h-8 w-8 place-items-center rounded-full text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            disabled={disabled}
+            onClick={onRemove}
+          >
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
       </div>
-
-      <div className="mt-2 flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none"
-          disabled={disabled}
-          onClick={() =>
-            onUpdate({
-              status: session.status === "cancelled" ? "scheduled" : "cancelled",
-              notes:
-                session.status === "cancelled"
-                  ? undefined
-                  : session.notes ?? "בוטל",
-            })
-          }
-        >
-          {session.status === "cancelled" ? "שחזור" : "ביטול"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none"
-          disabled={disabled}
-          onClick={onRemove}
-        >
-          מחיקה
-        </Button>
-      </div>
-
-      {session.status === "cancelled" && (
-        <p className="mt-2 text-xs font-medium text-red-600">
-          מפגש מבוטל · {formatDate(session.sessionDate)}{" "}
-          {formatTime(session.startTime)}
+      {cancelled && (
+        <p className="mt-1.5 text-xs font-medium text-red-600">
+          מפגש מבוטל · {formatDate(session.sessionDate)} {formatTime(session.startTime)}
         </p>
       )}
-      {session.status !== "cancelled" && (
+      {!cancelled && noteOpen && (
         <Input
-          className="mt-2"
+          className="mt-2 !h-9"
           placeholder="הערה (למשל: דחייה בגלל חג)"
           value={session.notes ?? ""}
           onChange={(e) => onUpdate({ notes: e.target.value })}
           disabled={disabled}
         />
       )}
-    </div>
+    </li>
   );
 }

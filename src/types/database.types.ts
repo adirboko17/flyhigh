@@ -2546,7 +2546,7 @@ export type Database = {
           p_created_by: string
           p_note: string
           p_parent_id: string
-          p_source_payment_id: string
+          p_source_payment_id: string | null
         }
         Returns: string
       }

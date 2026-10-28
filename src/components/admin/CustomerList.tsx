@@ -9,6 +9,7 @@ import { CustomerDocuments } from "@/components/admin/CustomerDocuments";
 import { CustomerPaymentInstructions } from "@/components/admin/CustomerPaymentInstructions";
 import { CustomerRegistrations } from "@/components/admin/CustomerRegistrations";
 import { CustomerChargeCard } from "@/components/admin/CustomerChargeDialog";
+import { CustomerStoreBalanceCard } from "@/components/admin/CustomerStoreBalanceCard";
 import { CustomerForm } from "@/components/admin/CustomerForm";
 import type {
   CustomerChild,
@@ -38,7 +39,7 @@ import {
 } from "@/lib/health-declaration";
 import { todayInIsrael } from "@/lib/scheduling/monthGrid";
 import { formatSchoolGrade } from "@/lib/school-grade";
-import { calcAge, formatCurrency, formatDate } from "@/utils/format";
+import { calcAge, formatDate } from "@/utils/format";
 
 export type { CustomerChild, CustomerWithChildren };
 
@@ -460,21 +461,12 @@ function CustomerDetail({
             note={customer.admin_note}
           />
 
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-base">יתרה באתר</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 pt-0">
-              <p className="font-display text-2xl font-bold tabular-nums text-ink-900">
-                {formatCurrency(customer.store_balance)}
-              </p>
-              <p className="text-sm text-ink-500">
-                {customer.store_balance > 0
-                  ? "הלקוח יכול להשתמש ביתרה הזו ברכישה באתר. היתרה יורדת מהסכום, וההפרש משולם באמצעי שהוא בוחר."
-                  : "כדי לתת יתרה במקום זיכוי, פתחו את העסקה בעמוד הזיכויים ובחרו «העברה ליתרה באתר»."}
-              </p>
-            </CardContent>
-          </Card>
+          <CustomerStoreBalanceCard
+            key={customer.id}
+            parentId={customer.id}
+            parentName={customer.full_name}
+            balance={customer.store_balance}
+          />
 
           <CustomerChargeCard
             customer={customer}

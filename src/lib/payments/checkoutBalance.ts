@@ -241,7 +241,7 @@ export async function grantCustomerBalance(input: {
   amount: number;
   note: string | null;
   createdBy: string;
-  sourcePaymentId: string;
+  sourcePaymentId: string | null;
 }) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("grant_customer_balance", {

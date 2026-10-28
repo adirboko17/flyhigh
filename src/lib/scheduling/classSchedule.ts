@@ -301,6 +301,119 @@ export function ensureWeeklySessions(
   return refreshWeeklySessions(schedule);
 }
 
+function firstDateOnWeekday(start: string, dayOfWeek: number): string {
+  if (!start) return "";
+  return formatLocalDate(firstOnOrAfter(parseLocalDate(start), dayOfWeek));
+}
+
+/** היום הבא של המועד, אחרי התאריך הנתון — לא כולל אותו. */
+function nextDateOnWeekday(afterDate: string, dayOfWeek: number): string {
+  const cursor = parseLocalDate(afterDate);
+  cursor.setDate(cursor.getDate() + 1);
+  return formatLocalDate(firstOnOrAfter(cursor, dayOfWeek));
+}
+
+/**
+ * משנה את אורך הסדרה בלי לבנות אותה מחדש מההתחלה.
+ * הפחתה מוחקת מפגשים פעילים מהסוף, הוספה ממשיכה שבוע אחרי המפגש האחרון.
+ */
+export function resizeWeeklySessions(
+  schedule: ClassScheduleState,
+  sessionCount: string
+): ClassScheduleState {
+  const count = parseSessionCount(sessionCount);
+  if (!count || schedule.scheduleType !== "weekly") {
+    return schedule.sessionCount === sessionCount
+      ? schedule
+      : { ...schedule, sessionCount };
+  }
+
+  const uniqueSlots: WeeklySlot[] = [];
+  const seenSlotKeys = new Set<string>();
+  for (const slot of schedule.weeklySlots) {
+    if (!slot.startTime.trim() || !slot.endTime.trim()) continue;
+    const key = weeklySlotKey(slot);
+    if (seenSlotKeys.has(key)) continue;
+    seenSlotKeys.add(key);
+    uniqueSlots.push(slot);
+  }
+
+  const removeIndexes = new Set<number>();
+  const additions: ClassSessionDraft[] = [];
+
+  for (const slot of uniqueSlots) {
+    const key = weeklySlotKey(slot);
+    const owned = schedule.sessions
+      .map((session, index) => ({ session, index }))
+      .filter(
+        ({ session }) =>
+          Boolean(session.sessionDate) && sessionSlotKey(session) === key
+      )
+      .sort(
+        (a, b) =>
+          a.session.sessionDate.localeCompare(b.session.sessionDate) ||
+          a.session.startTime.localeCompare(b.session.startTime)
+      );
+    const active = owned.filter(({ session }) => session.status !== "cancelled");
+
+    if (active.length > count) {
+      for (const item of active.slice(count)) removeIndexes.add(item.index);
+      continue;
+    }
+
+    let need = count - active.length;
+    if (need === 0) continue;
+
+    const lastDate = owned.reduce(
+      (latest, item) =>
+        item.session.sessionDate > latest ? item.session.sessionDate : latest,
+      ""
+    );
+    let cursor = lastDate
+      ? nextDateOnWeekday(lastDate, slot.dayOfWeek)
+      : firstDateOnWeekday(slot.startsOn?.trim() || schedule.rangeStart, slot.dayOfWeek);
+    const usedDates = new Set(owned.map((item) => item.session.sessionDate));
+    let guard = 0;
+    while (need > 0 && cursor && guard < 120) {
+      guard += 1;
+      if (!usedDates.has(cursor)) {
+        additions.push({
+          sessionDate: cursor,
+          startTime: slot.startTime.slice(0, 5),
+          endTime: slot.endTime.slice(0, 5),
+          status: "scheduled",
+        });
+        usedDates.add(cursor);
+        need -= 1;
+      }
+      cursor = nextDateOnWeekday(cursor, slot.dayOfWeek);
+    }
+  }
+
+  if (removeIndexes.size === 0 && additions.length === 0) {
+    return schedule.sessionCount === sessionCount
+      ? schedule
+      : { ...schedule, sessionCount };
+  }
+
+  const sessions = [
+    ...schedule.sessions.filter((_, index) => !removeIndexes.has(index)),
+    ...additions,
+  ].sort(
+    (a, b) =>
+      a.sessionDate.localeCompare(b.sessionDate) ||
+      a.startTime.localeCompare(b.startTime)
+  );
+  const activeLeft = sessions.filter((session) => session.status !== "cancelled");
+
+  return {
+    ...schedule,
+    sessionCount,
+    sessions,
+    rangeEnd: lastSessionDate(activeLeft) || schedule.rangeEnd,
+  };
+}
+
 export function mergeGeneratedSessions(
   existing: ClassSessionDraft[],
   generated: ClassSessionDraft[]

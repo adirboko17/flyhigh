@@ -65,7 +65,7 @@ export function ClassPreviewPanel({
   const hasContent = Boolean(form.title.trim() || imageUrl);
 
   return (
-    <Card className="lg:sticky lg:top-6">
+    <Card className="xl:sticky xl:top-6">
       <CardHeader>
         <CardTitle className="text-lg">תצוגה מקדימה</CardTitle>
         <p className="text-sm text-ink-500">כך הכרטיס יופיע בקטלוג החוגים</p>

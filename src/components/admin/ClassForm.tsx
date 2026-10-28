@@ -1178,14 +1178,16 @@ export function ClassForm({
         </div>
       </form>
 
-      <ClassPreviewPanel
-        form={form}
-        schedule={schedule}
-        imageUrl={previewImageUrl}
-        instructorName={instructorName}
-        instructorGender={selectedInstructor?.gender ?? null}
-        previewStatus={existing?.status ?? "active"}
-      />
+      <div className={step === lastStep ? "min-w-0" : "hidden min-w-0 xl:block"}>
+        <ClassPreviewPanel
+          form={form}
+          schedule={schedule}
+          imageUrl={previewImageUrl}
+          instructorName={instructorName}
+          instructorGender={selectedInstructor?.gender ?? null}
+          previewStatus={existing?.status ?? "active"}
+        />
+      </div>
     </div>
   );
 }
