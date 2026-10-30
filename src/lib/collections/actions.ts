@@ -1145,6 +1145,8 @@ export async function updateCollectionPaymentMethod(input: {
  */
 export async function startCollectionCardcomCheckout(input: {
   paymentId: string;
+  /** ברירת המחדל היא היתרה. סכום קטן יותר נשאר כחוב פתוח אחרי התשלום. */
+  amount?: number | string | null;
 }): Promise<CollectionActionResult> {
   const profile = await requireAdminProfile();
   if (!profile) return NOT_ALLOWED;
@@ -1171,6 +1173,21 @@ export async function startCollectionCardcomCheckout(input: {
     return { success: false, error: "החיוב כבר שולם במלואו." };
   }
 
+  let amount = remaining;
+  if (input.amount != null && input.amount !== "") {
+    const parsed = parseAmount(input.amount);
+    if (parsed === null || parsed <= 0) {
+      return { success: false, error: "נא להזין סכום לתשלום." };
+    }
+    if (parsed - remaining > 0.05) {
+      return {
+        success: false,
+        error: `לא ניתן לגבות יותר מהיתרה (${remaining.toFixed(2)} ₪).`,
+      };
+    }
+    amount = parsed;
+  }
+
   if (loaded.charge.checkout_id) {
     const admin = createAdminClient();
     const { data: existing } = await admin
@@ -1181,19 +1198,23 @@ export async function startCollectionCardcomCheckout(input: {
     if (
       existing?.status === "pending" &&
       existing.payment_url &&
-      Math.abs(Number(existing.amount) - remaining) <= 0.05
+      Math.abs(Number(existing.amount) - amount) <= 0.05
     ) {
       return { success: true, checkoutUrl: existing.payment_url };
+    }
+    if (existing?.status === "pending") {
+      await unlinkPendingCheckout(existing.id);
     }
   }
 
   const charge = await getPaymentProvider().createCharge({
-    amount: remaining,
+    amount,
     description: chargeProduct(loaded.charge),
     parentId: loaded.charge.parent_id,
     method: "credit_card",
     paymentIds: [loaded.charge.id],
     metadata: { collections: true },
+    allowPartial: amount + 0.05 < remaining,
   });
 
   if (!charge.success || !charge.redirectUrl) {

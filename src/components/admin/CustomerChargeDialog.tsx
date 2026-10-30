@@ -24,9 +24,18 @@ import {
   purchaseProductForCustomer,
 } from "@/lib/admin/customerPurchase";
 import { createCustomerCharge } from "@/lib/collections/actions";
+import {
+  createClassOfficeCharge,
+  listClassesForPaymentLink,
+  listClassScheduleOptions,
+  type ClassScheduleChoice,
+  type PaymentLinkClass,
+} from "@/lib/admin/paymentLinks";
+import { PaymentLinkResult } from "@/components/admin/PaymentLinkResult";
 import { receiptLabelNote, type ReceiptLabelOption } from "@/lib/receipt-labels";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/utils/cn";
+import { formatCurrency } from "@/utils/format";
 
 function openCheckoutTab() {
   const tab = window.open("about:blank", "cardcom-checkout");
@@ -62,6 +71,7 @@ export function CustomerChargeCard({
     id: string;
     full_name: string;
     email: string | null;
+    phone: string | null;
     receipt_name: string | null;
     children: { id: string; full_name: string }[];
   };
@@ -76,7 +86,13 @@ export function CustomerChargeCard({
   const [labels, setLabels] = useState<ReceiptLabelOption[]>([]);
   const [labelsLoading, setLabelsLoading] = useState(true);
   const [products, setProducts] = useState<PurchaseProductOption[]>([]);
+  const [classes, setClasses] = useState<PaymentLinkClass[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  const [slots, setSlots] = useState<ClassScheduleChoice[]>([]);
+  const [sessions, setSessions] = useState<ClassScheduleChoice[]>([]);
+  const [slotId, setSlotId] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [productKey, setProductKey] = useState("");
   const [participantId, setParticipantId] = useState("");
   const [peopleCount, setPeopleCount] = useState("1");
@@ -84,8 +100,14 @@ export function CustomerChargeCard({
   const [autoDescription, setAutoDescription] = useState("");
   const [purchasedTitle, setPurchasedTitle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pendingMode, setPendingMode] = useState<"checkout" | "link" | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<"card" | "collection" | null>(null);
+  const [done, setDone] = useState<"card" | "collection" | "link" | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [linkAmount, setLinkAmount] = useState(0);
+  const [linkSubject, setLinkSubject] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -95,14 +117,21 @@ export function CustomerChargeCard({
     setLabelId("");
     setCustomText("");
     setProductKey("");
+    setSlotId("");
+    setSessionId("");
+    setSlots([]);
+    setSessions([]);
     setParticipantId("");
     setPeopleCount("1");
     setSuggestedAmount("");
     setAutoDescription("");
     setPurchasedTitle(null);
+    setLinkUrl(null);
+    setLinkSubject(null);
     setError(null);
     setDone(null);
     setSaving(false);
+    setPendingMode(null);
     setOpen(false);
   }, [customer.id]);
 
@@ -114,7 +143,7 @@ export function CustomerChargeCard({
       setLabelsLoading(true);
       setProductsLoading(true);
       const supabase = createClient();
-      const [{ data }, productRows] = await Promise.all([
+      const [{ data }, productRows, classRows] = await Promise.all([
         supabase
           .from("receipt_labels")
           .select("id, label, note")
@@ -122,10 +151,12 @@ export function CustomerChargeCard({
           .order("sort_order", { ascending: true })
           .order("label", { ascending: true }),
         listProductsForCustomerPurchase().catch(() => []),
+        listClassesForPaymentLink().catch(() => []),
       ]);
       if (cancelled) return;
       setLabels(data ?? []);
       setProducts(productRows);
+      setClasses(classRows);
       setLabelsLoading(false);
       setProductsLoading(false);
     }
@@ -142,6 +173,36 @@ export function CustomerChargeCard({
   const fieldId = (name: string) => `customer-charge-${customer.id}-${name}`;
   const selectedProduct =
     products.find((option) => option.key === productKey) ?? null;
+  const selectedClass =
+    classes.find((item) => `class:${item.id}` === productKey) ?? null;
+
+  useEffect(() => {
+    if (!selectedClass || (!selectedClass.pickOneSlot && !selectedClass.appointment)) {
+      setSlots([]);
+      setSessions([]);
+      setScheduleLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setScheduleLoading(true);
+    void listClassScheduleOptions(selectedClass.id)
+      .then((schedule) => {
+        if (cancelled) return;
+        setSlots(schedule.slots);
+        setSessions(schedule.sessions);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setSessions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setScheduleLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClass]);
 
   function applyProduct(option: PurchaseProductOption | null, people = 1) {
     if (!option) {
@@ -162,9 +223,29 @@ export function CustomerChargeCard({
     setAutoDescription(option.title);
   }
 
+  function applySuggested(title: string, price: number) {
+    const nextAmount = amountInputValue(price);
+    setAmount((current) =>
+      !current || current === suggestedAmount ? nextAmount : current
+    );
+    setSuggestedAmount(nextAmount);
+    setDescription((current) => {
+      if (current.trim() && current !== autoDescription) return current;
+      return title;
+    });
+    setAutoDescription(title);
+  }
+
   function chooseProduct(key: string) {
     setProductKey(key);
+    setSlotId("");
+    setSessionId("");
     setError(null);
+    const cls = classes.find((item) => `class:${item.id}` === key);
+    if (cls) {
+      applySuggested(cls.title, cls.price);
+      return;
+    }
     const option = products.find((item) => item.key === key) ?? null;
     if (!option) {
       setAmount((current) => (current === suggestedAmount ? "" : current));
@@ -187,17 +268,20 @@ export function CustomerChargeCard({
     setLabelId("");
     setCustomText("");
     setProductKey("");
+    setSlotId("");
+    setSessionId("");
     setParticipantId("");
     setPeopleCount("1");
     setSuggestedAmount("");
     setAutoDescription("");
     setPurchasedTitle(null);
+    setLinkUrl(null);
+    setLinkSubject(null);
     setError(null);
     setDone(null);
   }
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  async function submit(mode: "checkout" | "link") {
     if (saving || done) return;
 
     const value = Number(amount);
@@ -207,11 +291,16 @@ export function CustomerChargeCard({
     }
     if (
       !selectedProduct &&
+      !selectedClass &&
       !description.trim() &&
       !labelId &&
       !customText.trim()
     ) {
-      setError("נא להזין תיאור לחיוב, לבחור שם לקבלה, או לכתוב טקסט מותאם.");
+      setError("נא לבחור שירות, להזין תיאור, או לבחור שם לקבלה.");
+      return;
+    }
+    if (mode === "link" && !isCard) {
+      setError("לינק לתשלום נפתח רק כשאמצעי התשלום הוא אשראי.");
       return;
     }
     if (selectedProduct?.pricing === "people") {
@@ -221,36 +310,56 @@ export function CustomerChargeCard({
         return;
       }
     }
+    if (selectedClass?.pickOneSlot && !slotId) {
+      setError("נא לבחור מועד לחוג.");
+      return;
+    }
+    if (selectedClass?.appointment && !sessionId) {
+      setError("נא לבחור תור.");
+      return;
+    }
 
-    const tab = isCard ? openCheckoutTab() : null;
+    const tab = isCard && mode === "checkout" ? openCheckoutTab() : null;
     setSaving(true);
+    setPendingMode(mode);
     setError(null);
-    const result = selectedProduct
-      ? await purchaseProductForCustomer({
+    const result = selectedClass
+      ? await createClassOfficeCharge({
           parentId: customer.id,
-          kind: selectedProduct.kind,
-          planId: selectedProduct.planId,
+          classId: selectedClass.id,
           childId: participantId || null,
-          packageQuantity: selectedProduct.packageQuantity,
-          peopleCount:
-            selectedProduct.pricing === "people"
-              ? Math.floor(Number(peopleCount))
-              : null,
           amount: value,
           method,
-          receiptLabelId: labelId || null,
-          description,
-          customText,
+          weeklySlotId: slotId || null,
+          sessionId: sessionId || null,
         })
-      : await createCustomerCharge({
-          parentId: customer.id,
-          amount: value,
-          method,
-          receiptLabelId: labelId || null,
-          description,
-          customText,
-        });
+      : selectedProduct
+        ? await purchaseProductForCustomer({
+            parentId: customer.id,
+            kind: selectedProduct.kind,
+            planId: selectedProduct.planId,
+            childId: participantId || null,
+            packageQuantity: selectedProduct.packageQuantity,
+            peopleCount:
+              selectedProduct.pricing === "people"
+                ? Math.floor(Number(peopleCount))
+                : null,
+            amount: value,
+            method,
+            receiptLabelId: labelId || null,
+            description,
+            customText,
+          })
+        : await createCustomerCharge({
+            parentId: customer.id,
+            amount: value,
+            method,
+            receiptLabelId: labelId || null,
+            description,
+            customText,
+          });
     setSaving(false);
+    setPendingMode(null);
 
     if (!result.success || (isCard && !result.checkoutUrl)) {
       try {
@@ -259,18 +368,29 @@ export function CustomerChargeCard({
         // הכרטיסייה אולי כבר נסגרה.
       }
       setError(
-        result.success ? "לא הצלחנו לפתוח את דף הסליקה." : result.error
+        result.success ? "לא הצלחנו ליצור את דף התשלום." : result.error
       );
       return;
     }
 
-    if (selectedProduct) {
-      setPurchasedTitle(selectedProduct.title);
+    const title = selectedClass?.title ?? selectedProduct?.title ?? null;
+    if (title) {
+      setPurchasedTitle(title);
       onPurchased?.();
     } else {
       setPurchasedTitle(null);
     }
-    if (result.checkoutUrl) {
+    if (mode === "link" && result.checkoutUrl) {
+      try {
+        tab?.close();
+      } catch {
+        // אין כרטיסייה במצב לינק.
+      }
+      setLinkUrl(result.checkoutUrl);
+      setLinkAmount(value);
+      setLinkSubject(title || description.trim() || "חיוב");
+      setDone("link");
+    } else if (result.checkoutUrl) {
       goToCheckout(result.checkoutUrl, tab);
       setDone("card");
     } else {
@@ -296,7 +416,7 @@ export function CustomerChargeCard({
             חיוב לקוח
           </span>
           <span className="mt-0.5 block text-xs text-ink-500">
-            רכישת מנוי, כרטיסייה או כניסה, ואשראי בטלפון
+            לינק תשלום לחוג, כרטיסייה, מנוי או כל שירות באתר
           </span>
         </span>
         <Icon
@@ -312,15 +432,24 @@ export function CustomerChargeCard({
       <CardContent id={panelId} className="space-y-4 border-t border-ink-100 pt-4">
         {done ? (
           <div className="space-y-4">
-            <p className="text-sm leading-relaxed text-ink-700">
-              {purchasedTitle
-                ? done === "card"
-                  ? `«${purchasedTitle}» נרשם על הלקוח. דף הסליקה נפתח — אפשר להזין שם את כרטיס האשראי. אם התשלום לא יושלם, ההרשמה נשארת אצלו כחיוב פתוח.`
-                  : `«${purchasedTitle}» נרשם על הלקוח, והחיוב נפתח בעמוד הגבייה.`
-                : done === "card"
-                  ? "דף הסליקה של קארדקום נפתח. אפשר להזין שם את כרטיס האשראי של הלקוח. אם התשלום לא יושלם, החיוב נשאר פתוח בעמוד הגבייה."
-                  : "החיוב נפתח בעמוד הגבייה. שם רושמים את התקבול או מאשרים את התשלום."}
-            </p>
+            {done === "link" && linkUrl ? (
+              <PaymentLinkResult
+                url={linkUrl}
+                amount={linkAmount}
+                phone={customer.phone}
+                subject={linkSubject}
+              />
+            ) : (
+              <p className="text-sm leading-relaxed text-ink-700">
+                {purchasedTitle
+                  ? done === "card"
+                    ? `«${purchasedTitle}» נרשם על הלקוח. דף הסליקה נפתח — אפשר להזין שם את כרטיס האשראי. אם התשלום לא יושלם, ההרשמה נשארת אצלו כחיוב פתוח.`
+                    : `«${purchasedTitle}» נרשם על הלקוח, והחיוב נפתח בעמוד הגבייה.`
+                  : done === "card"
+                    ? "דף הסליקה של קארדקום נפתח. אפשר להזין שם את כרטיס האשראי של הלקוח. אם התשלום לא יושלם, החיוב נשאר פתוח בעמוד הגבייה."
+                    : "החיוב נפתח בעמוד הגבייה. שם רושמים את התקבול או מאשרים את התשלום."}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <ButtonLink href="/admin/collections" size="sm">
                 לעמוד הגבייה
@@ -331,19 +460,25 @@ export function CustomerChargeCard({
             </div>
           </div>
         ) : (
-          <form onSubmit={(event) => void submit(event)} className="space-y-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit(isCard ? "link" : "checkout");
+            }}
+            className="space-y-4"
+          >
             <p className="text-xs text-ink-500">
-              בחרו מה קונים ללקוח, או השאירו חיוב כללי. אשראי ממשיך לסליקה,
-              ושאר האמצעים נפתחים בגבייה.
+              בחרו חוג, כרטיסייה, מנוי או כל שירות באתר, והסכום מתמלא מהמחיר.
+              באשראי אפשר להוציא לינק ולשלוח ללקוח.
             </p>
 
             <Field
               label="מה קונים"
               htmlFor={fieldId("product")}
               hint={
-                selectedProduct
-                  ? "הרכישה נרשמת על הלקוח. הסכום מתמלא ממחיר המוצר, ואפשר לשנות אותו."
-                  : "בלי מוצר זה חיוב כללי, בלי הרשמה."
+                selectedProduct || selectedClass
+                  ? "הרכישה נרשמת על הלקוח. הסכום מתמלא מהמחיר, ואפשר לשנות אותו."
+                  : "בלי שירות זה חיוב כללי, בלי הרשמה."
               }
             >
               <Select
@@ -355,6 +490,15 @@ export function CustomerChargeCard({
                 <option value="">
                   {productsLoading ? "טוען מוצרים..." : "חיוב כללי"}
                 </option>
+                {classes.length > 0 && (
+                  <optgroup label="חוגים">
+                    {classes.map((item) => (
+                      <option key={item.id} value={`class:${item.id}`}>
+                        {item.title} · {formatCurrency(item.price)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 {PURCHASE_GROUP_ORDER.map((group) => {
                   const groupOptions = products.filter(
                     (option) => option.group === group
@@ -373,7 +517,7 @@ export function CustomerChargeCard({
               </Select>
             </Field>
 
-            {selectedProduct && (
+            {(selectedProduct || selectedClass) && (
               <Field label="למי הרכישה" htmlFor={fieldId("participant")}>
                 <Select
                   id={fieldId("participant")}
@@ -385,6 +529,56 @@ export function CustomerChargeCard({
                   {customer.children.map((child) => (
                     <option key={child.id} value={child.id}>
                       {child.full_name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {selectedClass?.pickOneSlot && (
+              <Field label="מועד" htmlFor={fieldId("slot")} required>
+                <Select
+                  id={fieldId("slot")}
+                  value={slotId}
+                  disabled={saving || scheduleLoading}
+                  required
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setSlotId(next);
+                    const slot = slots.find((item) => item.id === next);
+                    if (slot?.price != null && selectedClass) {
+                      applySuggested(selectedClass.title, slot.price);
+                    }
+                  }}
+                >
+                  <option value="">
+                    {scheduleLoading ? "טוען מועדים..." : "בחירת מועד"}
+                  </option>
+                  {slots.map((slot) => (
+                    <option key={slot.id} value={slot.id}>
+                      {slot.label}
+                      {slot.price != null ? ` · ${formatCurrency(slot.price)}` : ""}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
+            {selectedClass?.appointment && (
+              <Field label="תור" htmlFor={fieldId("session")} required>
+                <Select
+                  id={fieldId("session")}
+                  value={sessionId}
+                  disabled={saving || scheduleLoading}
+                  required
+                  onChange={(event) => setSessionId(event.target.value)}
+                >
+                  <option value="">
+                    {scheduleLoading ? "טוען תורים..." : "בחירת תור"}
+                  </option>
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.label}
                     </option>
                   ))}
                 </Select>
@@ -420,7 +614,7 @@ export function CustomerChargeCard({
               label="סכום לחיוב (₪)"
               htmlFor={fieldId("amount")}
               hint={
-                selectedProduct && suggestedAmount
+                (selectedProduct || selectedClass) && suggestedAmount
                   ? `מחיר המוצר: ${suggestedAmount} ₪`
                   : undefined
               }
@@ -443,8 +637,8 @@ export function CustomerChargeCard({
               htmlFor={fieldId("method")}
               hint={
                 isCard
-                  ? "דף הסליקה ייפתח עכשיו, כדי להזין את כרטיס הלקוח בטלפון."
-                  : selectedProduct
+                  ? "יצירת לינק שולחת את הלקוח לדף התשלום. אפשר גם לפתוח את הסליקה כאן."
+                  : selectedProduct || selectedClass
                     ? "הרכישה נרשמת על הלקוח עכשיו. התשלום מושלם בעמוד הגבייה."
                     : "החיוב ייפתח בעמוד הגבייה, ושם משלימים את הרישום."
               }
@@ -557,16 +751,31 @@ export function CustomerChargeCard({
               </p>
             )}
 
-            <div className="flex justify-end">
-              <Button type="submit" size="sm" disabled={saving}>
-                {saving
-                  ? isCard
-                    ? "פותח סליקה..."
-                    : "פותח גבייה..."
-                  : isCard
-                    ? "המשך לתשלום באשראי"
-                    : "פתיחת גבייה"}
-              </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {isCard ? (
+                <>
+                  <Button type="submit" size="sm" disabled={saving}>
+                    {saving && pendingMode === "link"
+                      ? "יוצר לינק..."
+                      : "יצירת לינק לתשלום"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={saving}
+                    onClick={() => void submit("checkout")}
+                  >
+                    {saving && pendingMode === "checkout"
+                      ? "פותח סליקה..."
+                      : "פתיחת הסליקה אצלי"}
+                  </Button>
+                </>
+              ) : (
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving ? "פותח גבייה..." : "פתיחת גבייה"}
+                </Button>
+              )}
             </div>
           </form>
         )}

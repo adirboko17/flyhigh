@@ -71,6 +71,8 @@ type AssignCore = {
   receiptLabelId?: string | null;
   /** פיצול תשלום למנהל בלבד — כמה חיובים עם אמצעי תשלום שונים. */
   splits?: { method: string; amount: number | string }[] | null;
+  /** אשראי שנשלח כלינק נשאר בגבייה עד התשלום. */
+  officeCollection?: boolean;
 };
 
 function isAllowedMethod(value: string): value is AssignChargeMethod {
@@ -427,7 +429,8 @@ async function runAssignment(input: AssignCore): Promise<AssignResult> {
               paid_at: partPaid ? paidAt : null,
               receipt_label_id: receiptLabel.labelId,
               receipt_description: receiptLabel.description ?? chargeDescription,
-              office_collection: phonePaid ? true : !card,
+              office_collection:
+                input.officeCollection === true ? true : phonePaid ? true : !card,
             };
           })
         )

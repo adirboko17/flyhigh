@@ -76,6 +76,8 @@ export async function startCardcomCheckout(input: {
   couponRedemptionId?: string | null;
   installments?: CardcomInstallments | null;
   source?: "cart" | "collections" | null;
+  /** מותר לגבות פחות מהיתרה הפתוחה. */
+  allowPartial?: boolean;
 }): Promise<CardcomCheckoutResult> {
   const amount = round2(input.amount);
   const paymentIds = [...new Set(input.paymentIds.filter(Boolean))];
@@ -106,7 +108,11 @@ export async function startCardcomCheckout(input: {
   const openAmount = round2(
     open.reduce((sum, payment) => sum + remainingOfPayment(payment), 0)
   );
-  if (Math.abs(openAmount - amount) > 0.05) {
+  if (input.allowPartial) {
+    if (amount - openAmount > 0.05) {
+      return { success: false, error: "סכום הלינק גבוה מהיתרה הפתוחה." };
+    }
+  } else if (Math.abs(openAmount - amount) > 0.05) {
     return { success: false, error: "סכום החיוב אינו תואם את התשלומים הפתוחים." };
   }
 
@@ -180,6 +186,84 @@ export async function startCardcomCheckout(input: {
           : "לא הצלחנו לפתוח את דף התשלום. נסו שוב.",
     };
   }
+}
+
+function allocateCheckoutPortions<T extends { remaining: number }>(
+  payments: T[],
+  checkoutAmount: number
+) {
+  let left = round2(checkoutAmount);
+  const portions: { payment: T; amount: number }[] = [];
+
+  for (const payment of payments) {
+    if (left <= 0.001 || payment.remaining <= 0) continue;
+    let portion = round2(Math.min(payment.remaining, left));
+    const unpaidAfter = round2(payment.remaining - portion);
+    const checkoutLeftAfter = round2(left - portion);
+    if (unpaidAfter <= 0.05 && checkoutLeftAfter <= 0.05) {
+      portion = payment.remaining;
+    }
+    if (portion <= 0) continue;
+    portions.push({ payment, amount: portion });
+    left = round2(left - portion);
+  }
+
+  if (left > 0.05 || portions.length === 0) return null;
+  return portions;
+}
+
+async function matchOpenPaymentForCheckout(
+  admin: ReturnType<typeof createAdminClient>,
+  checkout: { id: string; parent_id: string; amount: number; description: string }
+) {
+  const { data: candidates } = await admin
+    .from("payments")
+    .select(
+      "id, amount, status, parent_id, enrollment_id, checkout_id, receipt_description, receipt_custom_text, payment_receipts(amount)"
+    )
+    .eq("parent_id", checkout.parent_id)
+    .in("status", ["pending", "partial"]);
+
+  const open = (candidates ?? [])
+    .map((payment) => ({
+      ...payment,
+      remaining: remainingOfPayment(payment),
+    }))
+    .filter(
+      (payment) =>
+        payment.remaining > 0 &&
+        payment.remaining + 0.05 >= Number(checkout.amount)
+    );
+
+  const description = checkout.description.trim();
+  const described = description
+    ? open.filter((payment) => {
+        const label = (
+          payment.receipt_custom_text ||
+          payment.receipt_description ||
+          ""
+        ).trim();
+        return (
+          label.length > 0 &&
+          (description === label ||
+            description.includes(label) ||
+            label.includes(description))
+        );
+      })
+    : [];
+
+  const match =
+    described.length === 1 ? described[0] : open.length === 1 ? open[0] : null;
+  if (!match) return null;
+
+  if (!match.checkout_id || match.checkout_id === checkout.id) {
+    await admin
+      .from("payments")
+      .update({ checkout_id: checkout.id })
+      .eq("id", match.id);
+  }
+
+  return match;
 }
 
 /** בודק מול קארדקום סשנים ממתינים — אם הסליקה עברה, מסמן את החיוב כשולם. */
@@ -275,10 +359,21 @@ export async function settleCardcomCheckout(input: {
   const transactionId = cardcomTransactionId(result);
   const documentNumber = cardcomDocumentNumber(result);
   const documentUrl = cardcomDocumentUrl(result);
-  const { data: payments } = await admin
+  let { data: payments } = await admin
     .from("payments")
     .select("id, amount, status, parent_id, enrollment_id, payment_receipts(amount)")
     .eq("checkout_id", checkout.id);
+
+  if (!payments || payments.length === 0) {
+    const matched = await matchOpenPaymentForCheckout(admin, checkout);
+    if (!matched) {
+      return {
+        success: false,
+        error: "התשלום אושר בקארדקום אך לא נמצא חיוב מתאים לעדכון.",
+      };
+    }
+    payments = [matched];
+  }
 
   const toSettle = (payments ?? [])
     .map((payment) => ({
@@ -288,10 +383,21 @@ export async function settleCardcomCheckout(input: {
     .filter((payment) => payment.remaining > 0);
 
   if (toSettle.length > 0) {
+    const portions = allocateCheckoutPortions(
+      toSettle,
+      Number(checkout.amount)
+    );
+    if (!portions) {
+      return {
+        success: false,
+        error: "התשלום אושר אך הסכום אינו תואם את היתרה.",
+      };
+    }
+
     const { error: receiptError } = await admin.from("payment_receipts").insert(
-      toSettle.map((payment) => ({
-        payment_id: payment.id,
-        amount: payment.remaining,
+      portions.map((portion) => ({
+        payment_id: portion.payment.id,
+        amount: portion.amount,
         note: "סליקת קארדקום",
       }))
     );
@@ -308,12 +414,16 @@ export async function settleCardcomCheckout(input: {
       })
       .in(
         "id",
-        toSettle.map((payment) => payment.id)
+        portions.map((portion) => portion.payment.id)
       );
 
-    const receiptRows = toSettle.map((payment) => ({
-      parent_id: payment.parent_id,
-      payment_id: payment.id,
+    const closed = portions.filter(
+      (portion) => round2(portion.payment.remaining - portion.amount) <= 0.05
+    );
+
+    const receiptRows = portions.map((portion) => ({
+      parent_id: portion.payment.parent_id,
+      payment_id: portion.payment.id,
       receipt_number: documentNumber,
       receipt_url: documentUrl,
       sent_to_email: null,
@@ -325,8 +435,8 @@ export async function settleCardcomCheckout(input: {
 
     const enrollmentIds = [
       ...new Set(
-        toSettle
-          .map((payment) => payment.enrollment_id)
+        closed
+          .map((portion) => portion.payment.enrollment_id)
           .filter((id): id is string => Boolean(id))
       ),
     ];

@@ -11,6 +11,7 @@ import { Field, Input, Select } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Icon } from "@/components/icons/Icon";
 import { IncomeClassSelect } from "@/components/admin/IncomeClassSelect";
+import { PaymentLinkResult } from "@/components/admin/PaymentLinkResult";
 import type { IncomeClassOption } from "@/lib/admin/incomeClasses";
 import { assignPaymentIncomeClass } from "@/lib/admin/incomeClassActions";
 import { canAssignIncomeClass } from "@/lib/finance/subject";
@@ -102,29 +103,6 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "paid", label: "שולמו" },
   { id: "all", label: "הכל" },
 ];
-
-function openCheckoutTab() {
-  const tab = window.open("about:blank", "cardcom-checkout");
-  if (!tab) return null;
-  try {
-    tab.document.write(
-      `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"><title>סליקה</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center;color:#334155">פותחים את דף הסליקה...</body></html>`
-    );
-    tab.document.close();
-  } catch {
-    // אם אי אפשר לכתוב לכרטיסייה — עדיין ננווט אליה בהמשך.
-  }
-  return tab;
-}
-
-function goToCheckout(url: string, tab: Window | null) {
-  if (tab && !tab.closed) {
-    tab.location.replace(url);
-    return true;
-  }
-  window.location.assign(url);
-  return false;
-}
 
 function isOpen(charge: CollectionCharge) {
   return charge.remaining > 0;
@@ -455,6 +433,11 @@ export function CollectionsList({
               parent.charges.some((charge) => charge.id === activeCharge.id)
             )?.email ?? null
           }
+          customerPhone={
+            parents.find((parent) =>
+              parent.charges.some((charge) => charge.id === activeCharge.id)
+            )?.phone ?? null
+          }
           busyId={busyId}
           disabled={isPending}
           onClose={() => setActiveCharge(null)}
@@ -784,7 +767,11 @@ function ChargeRow({
           disabled={disabled}
           onClick={onOpen}
         >
-          {open ? "רישום תקבול" : "היסטוריה"}
+          {open
+            ? method === "credit_card"
+              ? "לינק לתשלום"
+              : "רישום תקבול"
+            : "היסטוריה"}
         </Button>
       </div>
     </li>
@@ -795,6 +782,7 @@ function ChargeReceiptDialog({
   charge,
   receiptLabels,
   customerEmail,
+  customerPhone,
   busyId,
   disabled,
   onClose,
@@ -807,6 +795,7 @@ function ChargeReceiptDialog({
   charge: CollectionCharge;
   receiptLabels: ReceiptLabelOption[];
   customerEmail: string | null;
+  customerPhone: string | null;
   busyId: string | null;
   disabled: boolean;
   onClose: () => void;
@@ -823,12 +812,14 @@ function ChargeReceiptDialog({
   const [receivedDate, setReceivedDate] = useState(todayDateInput());
   const [note, setNote] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
 
   useEffect(() => {
     setAmount(open ? String(charge.remaining) : "");
     setReceivedDate(todayDateInput());
     setNote("");
     setLocalError(null);
+    setPaymentLink(null);
   }, [charge.id, charge.remaining, open]);
 
   const busy = disabled || busyId !== null;
@@ -894,31 +885,37 @@ function ChargeReceiptDialog({
 
   function submitCardcom() {
     if (!open) return;
-    const tab = openCheckoutTab();
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      setLocalError("נא להזין סכום לתשלום.");
+      return;
+    }
+    if (value - charge.remaining > 0.05) {
+      setLocalError(
+        `לא ניתן לגבות יותר מהיתרה (${formatCurrency(charge.remaining)}).`
+      );
+      return;
+    }
+
     setLocalError(null);
     onError(null);
     onBusy(`cardcom:${charge.id}`);
     void (async () => {
       const result = await startCollectionCardcomCheckout({
         paymentId: charge.id,
+        amount: value,
       });
       onBusy(null);
       if (!result.success || !result.checkoutUrl) {
-        try {
-          tab?.close();
-        } catch {
-          // הכרטיסייה אולי כבר נסגרה.
-        }
         const message = result.success
-          ? "לא הצלחנו לפתוח את דף הסליקה."
-          : (result.error ?? "לא הצלחנו לפתוח את דף הסליקה.");
+          ? "לא הצלחנו ליצור לינק לתשלום."
+          : (result.error ?? "לא הצלחנו ליצור לינק לתשלום.");
         setLocalError(message);
         onError(message);
         return;
       }
-      goToCheckout(result.checkoutUrl, tab);
+      setPaymentLink(result.checkoutUrl);
       onDone();
-      onClose();
     })();
   }
 
@@ -1012,10 +1009,39 @@ function ChargeReceiptDialog({
                   disabled={busy}
                   onSave={(text) => onChangeCustomText(charge.id, text)}
                 />
+                <Field
+                  label="סכום ללינק (₪)"
+                  hint={
+                    Number(amount) > 0 &&
+                    charge.remaining - Number(amount) > 0.05
+                      ? `אחרי התשלום יישאר חוב של ${formatCurrency(charge.remaining - Number(amount))}.`
+                      : "הסכום מתמלא לפי היתרה. אפשר להקטין אותו לפני השליחה."
+                  }
+                  required
+                >
+                  <Input
+                    type="number"
+                    min={0.01}
+                    step="0.01"
+                    max={charge.remaining}
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    disabled={busy}
+                    required
+                  />
+                </Field>
                 <p className="text-xs leading-relaxed text-ink-500">
-                  רישום התקבול יפתח את דף הסליקה של קארדקום על היתרה
-                  ({formatCurrency(charge.remaining)}) עבור הלקוח הזה.
+                  הלינק נשלח ללקוח. הוא מזין את הכרטיס בעצמו, והחיוב מסומן
+                  כשולם ברגע שהתשלום עובר.
                 </p>
+                {paymentLink && (
+                  <PaymentLinkResult
+                    url={paymentLink}
+                    amount={Number(amount)}
+                    phone={customerPhone}
+                    subject={charge.subject}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -1091,8 +1117,10 @@ function ChargeReceiptDialog({
                   onClick={submitCardcom}
                 >
                   {busyId === `cardcom:${charge.id}`
-                    ? "פותח סליקה..."
-                    : "רישום תקבול"}
+                    ? "יוצר לינק..."
+                    : paymentLink
+                      ? "יצירת לינק חדש"
+                      : "יצירת לינק לתשלום"}
                 </Button>
               ) : (
                 <>

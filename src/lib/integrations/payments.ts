@@ -18,6 +18,8 @@ export interface CreateChargeInput {
   couponRedemptionId?: string | null;
   metadata?: Record<string, unknown>;
   installments?: CardcomInstallments | null;
+  /** סכום קטן מהיתרה — נרשם תקבול חלקי והשאר נשאר פתוח. */
+  allowPartial?: boolean;
 }
 
 export interface ChargeResult {
@@ -55,6 +57,7 @@ class CardcomPaymentProvider implements PaymentProvider {
       description: input.description,
       couponRedemptionId: input.couponRedemptionId,
       installments: input.installments,
+      allowPartial: input.allowPartial,
       source:
         input.metadata?.cart === true
           ? "cart"
