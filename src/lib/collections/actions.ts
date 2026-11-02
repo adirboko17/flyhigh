@@ -15,6 +15,7 @@ import { subjectLabel } from "@/lib/finance/subject";
 import {
   createStandaloneDocument,
   isCardcomConfigured,
+  isLowProfilePageOpen,
 } from "@/lib/integrations/cardcom";
 import { resolveReceiptLabelForCheckout } from "@/lib/enrollment/receiptLabel";
 import {
@@ -1192,13 +1193,20 @@ export async function startCollectionCardcomCheckout(input: {
     const admin = createAdminClient();
     const { data: existing } = await admin
       .from("payment_checkouts")
-      .select("id, status, amount, payment_url")
+      .select("id, status, amount, payment_url, low_profile_id")
       .eq("id", loaded.charge.checkout_id)
       .maybeSingle();
+    const sameAmount =
+      existing?.payment_url &&
+      Math.abs(Number(existing.amount) - amount) <= 0.05;
+    const pageStillOpen =
+      sameAmount && existing?.low_profile_id
+        ? await isLowProfilePageOpen(existing.low_profile_id)
+        : false;
     if (
       existing?.status === "pending" &&
       existing.payment_url &&
-      Math.abs(Number(existing.amount) - amount) <= 0.05
+      pageStillOpen
     ) {
       return { success: true, checkoutUrl: existing.payment_url };
     }

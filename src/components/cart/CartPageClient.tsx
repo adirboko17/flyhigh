@@ -323,9 +323,7 @@ export function CartPageClient({ viewer }: { viewer: Viewer }) {
           ) : (
             <>
               <ReceiptLabelField
-                productTitle={
-                  items.length === 1 ? items[0].title : "רכישה מרוכזת"
-                }
+                productTitle={items.map((item) => item.title).join(" · ")}
                 value={receiptLabel}
                 onChange={setReceiptLabel}
               />

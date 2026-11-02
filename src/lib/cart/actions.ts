@@ -10,6 +10,7 @@ import {
 } from "@/lib/constants";
 import type { CheckoutPaymentMethod } from "@/lib/enrollment/actions";
 import { resolveReceiptLabelForCheckout } from "@/lib/enrollment/receiptLabel";
+import { checkoutReceiptText } from "@/lib/receipt-labels";
 import type { AppliedCoupon } from "@/lib/finance/coupon";
 import { isValidCouponCode, normalizeCouponCode } from "@/lib/finance/coupon";
 import { installmentOptions } from "@/lib/finance/installments";
@@ -351,7 +352,10 @@ export async function checkoutCart(input: {
       parentId: profile.id,
       total: totalAmount,
       useBalance: input.useBalance,
-      note: lines.length === 1 ? lines[0].chargeDescription : "רכישה מרוכזת",
+      note: checkoutReceiptText(
+        lines.map((line) => line.chargeDescription),
+        receiptLabel.description
+      ),
     });
   } catch (error) {
     await releaseCoupon();
@@ -464,11 +468,10 @@ export async function checkoutCart(input: {
         }
       }
 
-      const description =
-        receiptLabel.description ??
-        (lines.length === 1
-          ? line.chargeDescription
-          : `רכישה מרוכזת · ${line.title}`);
+      const description = checkoutReceiptText(
+        [line.chargeDescription],
+        receiptLabel.description
+      );
 
       const { data: payments, error: paymentError } = await supabase
         .from("payments")
@@ -542,11 +545,10 @@ export async function checkoutCart(input: {
     };
   }
 
-  const description =
-    receiptLabel.description ??
-    (lines.length === 1
-      ? lines[0].chargeDescription
-      : `רכישה מרוכזת (${lines.length} פריטים)`);
+  const description = checkoutReceiptText(
+    lines.map((line) => line.chargeDescription),
+    receiptLabel.description
+  );
 
   let checkoutUrl: string | null = null;
   let chargeCheckoutId: string | null = null;

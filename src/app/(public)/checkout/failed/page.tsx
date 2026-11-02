@@ -45,28 +45,22 @@ export default async function CheckoutFailedPage({
           {fromCart
             ? "לא בוצע חיוב. הפריטים נשארו בסל — אפשר לנסות שוב."
             : fromCollections
-              ? "לא בוצע חיוב. אפשר לסגור את החלון ולנסות שוב מעמוד הגבייה."
+              ? "לא בוצע חיוב. הלינק לתשלום כבר לא פעיל — בקשו מהסטודיו לינק חדש."
               : "לא בוצע חיוב, וההרשמה לא נשמרה. אפשר לנסות שוב מההתחלה."}
         </p>
         <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <ButtonLink
-            href={
-              fromCart
-                ? "/cart"
-                : fromCollections
-                  ? "/admin/collections"
-                  : "/parent/dashboard"
-            }
-          >
-            {fromCart
-              ? "חזרה לסל"
-              : fromCollections
-                ? "חזרה לגבייה"
-                : "לניסיון תשלום נוסף"}
-          </ButtonLink>
-          <ButtonLink href="/contact" variant="outline">
-            צור קשר
-          </ButtonLink>
+          {fromCollections ? (
+            <ButtonLink href="/contact">צור קשר</ButtonLink>
+          ) : (
+            <>
+              <ButtonLink href={fromCart ? "/cart" : "/parent/dashboard"}>
+                {fromCart ? "חזרה לסל" : "לניסיון תשלום נוסף"}
+              </ButtonLink>
+              <ButtonLink href="/contact" variant="outline">
+                צור קשר
+              </ButtonLink>
+            </>
+          )}
         </div>
         <p className="mt-6 text-xs text-ink-400">
           <Link href="/classes" className="font-semibold text-brand-700">

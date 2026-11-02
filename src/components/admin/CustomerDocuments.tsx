@@ -5,27 +5,33 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 import {
   loadCustomerDocuments,
-  type CustomerIssuedDocument,
+  type CustomerMoneyOverview,
 } from "@/lib/admin/customerDocuments";
 import { formatCurrency, formatDate } from "@/utils/format";
 
 export function CustomerDocuments({ parentId }: { parentId: string }) {
-  const [documents, setDocuments] = useState<CustomerIssuedDocument[] | null>(
-    null
-  );
+  const [overview, setOverview] = useState<CustomerMoneyOverview | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setDocuments(null);
-    loadCustomerDocuments(parentId).then((rows) => {
-      if (!cancelled) setDocuments(rows);
+    setOverview(null);
+    loadCustomerDocuments(parentId).then((result) => {
+      if (!cancelled) setOverview(result);
     });
     return () => {
       cancelled = true;
     };
   }, [parentId]);
 
+  const documents = overview?.documents ?? null;
+  const balances = overview?.balances ?? null;
+  const balanceTotal = (balances ?? []).reduce(
+    (sum, balance) => sum + balance.remaining,
+    0
+  );
+
   return (
+    <>
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display text-lg font-bold text-ink-900">מסמכים</h3>
@@ -98,5 +104,57 @@ export function CustomerDocuments({ parentId }: { parentId: string }) {
         </Card>
       )}
     </div>
+
+    <div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="font-display text-lg font-bold text-ink-900">
+          יתרה לתשלום
+        </h3>
+        {balances && balances.length > 1 && (
+          <span className="text-sm font-semibold tabular-nums text-amber-800">
+            {formatCurrency(balanceTotal)}
+          </span>
+        )}
+      </div>
+      <p className="mb-3 text-sm text-ink-500">כמה נותר ללקוח לשלם</p>
+
+      {balances === null ? (
+        <Card className="bg-ink-50/60">
+          <CardContent className="py-8 text-center text-sm text-ink-400">
+            טוען יתרה...
+          </CardContent>
+        </Card>
+      ) : balances.length === 0 ? (
+        <Card className="bg-ink-50/60">
+          <CardContent className="py-8 text-center text-sm text-ink-500">
+            אין יתרה לתשלום
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden p-0">
+          <ul className="divide-y divide-ink-100">
+            {balances.map((balance) => (
+              <li
+                key={balance.id}
+                className="flex items-start justify-between gap-3 px-4 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink-900">{balance.label}</p>
+                  {balance.detail && (
+                    <p className="mt-0.5 truncate text-sm text-ink-500">
+                      {balance.detail}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-amber-800">
+                  {formatCurrency(balance.remaining)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+    </>
   );
 }

@@ -260,6 +260,43 @@ export async function createLowProfilePage(input: {
   return { lowProfileId, url };
 }
 
+/**
+ * דף פרופיל נמוך שפג תוקפו מחזיר שגיאת טעינה ומפנה מיד לכתובת הכישלון.
+ * בודקים מול דף הסליקה עצמו, לא מול GetLpResult — עסקה שלא שולמה עדיין נראית שם כממתינה.
+ */
+export async function isLowProfilePageOpen(lowProfileId: string): Promise<boolean> {
+  const id = lowProfileId.trim();
+  if (!id) return false;
+
+  try {
+    const config = getCardcomConfig();
+    const response = await fetch("https://secure.cardcom.solutions/api/LPC6/Load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        TerminalNumber: String(config.terminalNumber),
+        LowProfileCode: id,
+        UserAgent: "flyhigh",
+        Version: "1",
+      }),
+      cache: "no-store",
+    });
+    if (!response.ok) return false;
+
+    const data = (await response.json()) as {
+      IsError?: boolean;
+      IsRedirect?: boolean;
+      Message?: string | null;
+      Store?: unknown;
+    };
+    if (data.IsError || data.IsRedirect) return false;
+    if (data.Message && /timeout/i.test(data.Message)) return false;
+    return data.Store != null;
+  } catch {
+    return false;
+  }
+}
+
 export async function getLowProfileResult(
   lowProfileId: string
 ): Promise<CardcomLpResult> {

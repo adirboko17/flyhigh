@@ -40,6 +40,22 @@ export function buildReceiptDescription(input: {
   return `רכישת ${input.productTitle} (${input.participantCount} משתתפים)`;
 }
 
+/**
+ * טקסט לחשבונית של עגלה: מה שהלקוח ביקש על הקבלה,
+ * ואם לא ביקש — תיאור כל חוג או מוצר.
+ */
+export function checkoutReceiptText(
+  lineDescriptions: readonly string[],
+  customLabel?: string | null
+): string {
+  const custom = customLabel?.trim();
+  if (custom) return custom;
+  return lineDescriptions
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** שם סופי על הקבלה: טקסט מותאם מחליף לגמרי, אחרת תווית/תיאור, אחרת ברירת מחדל. */
 export function composeReceiptLine(input: {
   base: string | null | undefined;
