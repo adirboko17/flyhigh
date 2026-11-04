@@ -35,6 +35,7 @@ import {
   type ReceiptLabelOption,
 } from "@/lib/receipt-labels";
 import { CollectionsExportDialog } from "@/components/admin/CollectionsExportDialog";
+import { InvoiceSplitDialog } from "@/components/admin/InvoiceSplitDialog";
 import {
   PaymentSplitEditor,
   emptySplitDrafts,
@@ -515,6 +516,15 @@ function ParentCard({
     isManualReceiptMethod(charge.method)
   );
   const hasDebt = parent.openAmount > 0;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const selectedCharges = openCharges.filter((charge) => selectedIds.includes(charge.id));
+  const selectedTotal = selectedCharges.reduce((sum, charge) => sum + charge.remaining, 0);
+
+  useEffect(() => {
+    const openIds = new Set(openCharges.map((charge) => charge.id));
+    setSelectedIds((current) => current.filter((id) => openIds.has(id)));
+  }, [parent.charges]);
 
   return (
     <Card className="overflow-hidden">
@@ -591,6 +601,41 @@ function ParentCard({
         </div>
       </div>
 
+      {openCharges.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 px-4 py-3 sm:px-5">
+          {selectedCharges.length === 0 ? (
+            <p className="text-sm text-ink-500">
+              סמנו חיובים כדי לאחד אותם לחשבונית אחת, או לחלק את הסכום לכמה חשבוניות.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-ink-800">
+                נבחרו {selectedCharges.length} · {formatCurrency(selectedTotal)}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => setSplitOpen(true)}
+                >
+                  פיצול לחשבוניות
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={() => setSelectedIds([])}
+                >
+                  ניקוי
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <ul className="divide-y divide-ink-100">
         {parent.charges.map((charge) => (
           <ChargeRow
@@ -599,6 +644,17 @@ function ParentCard({
             receiptLabels={receiptLabels}
             classes={classes}
             disabled={disabled || busyId === `class:${charge.id}`}
+            selected={selectedIds.includes(charge.id)}
+            onToggleSelect={
+              isOpen(charge)
+                ? () =>
+                    setSelectedIds((current) =>
+                      current.includes(charge.id)
+                        ? current.filter((id) => id !== charge.id)
+                        : [...current, charge.id]
+                    )
+                : undefined
+            }
             onOpen={() => onOpenCharge(charge)}
             onChangeLabel={onChangeLabel}
             onChangeCustomText={onChangeCustomText}
@@ -607,6 +663,22 @@ function ParentCard({
           />
         ))}
       </ul>
+      <InvoiceSplitDialog
+        open={splitOpen}
+        parentName={parent.name}
+        charges={selectedCharges.map((charge) => ({
+          id: charge.id,
+          remaining: charge.remaining,
+          method: charge.method,
+          childName: charge.childName,
+          subject: charge.subject,
+        }))}
+        onClose={() => setSplitOpen(false)}
+        onIssued={() => {
+          setSplitOpen(false);
+          setSelectedIds([]);
+        }}
+      />
     </Card>
   );
 }
@@ -616,6 +688,8 @@ function ChargeRow({
   receiptLabels,
   classes,
   disabled,
+  selected,
+  onToggleSelect,
   onOpen,
   onChangeLabel,
   onChangeCustomText,
@@ -626,6 +700,8 @@ function ChargeRow({
   receiptLabels: ReceiptLabelOption[];
   classes: IncomeClassOption[];
   disabled: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onOpen: () => void;
   onChangeLabel: (paymentId: string, receiptLabelId: string | null) => void;
   onChangeCustomText: (paymentId: string, customText: string) => void;
@@ -642,7 +718,22 @@ function ChargeRow({
   }, [charge.method]);
 
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5">
+    <li
+      className={cn(
+        "flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5",
+        selected && "bg-brand-50/60"
+      )}
+    >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-brand-600"
+          checked={Boolean(selected)}
+          disabled={disabled}
+          aria-label={`סימון ${charge.subject}`}
+          onChange={onToggleSelect}
+        />
+      )}
       <div className="w-full min-w-0 sm:flex-1">
         <div className="flex flex-wrap items-center gap-2">
           {open ? (

@@ -27,6 +27,7 @@ import { composeReceiptLine } from "@/lib/receipt-labels";
 import { notifyAdminPayment } from "@/lib/notifications/adminPayment";
 import { loadCustomer } from "@/lib/payments/cardcomCheckout";
 import { issueOfficeCreditInvoice } from "@/lib/payments/refundActions";
+import { allocateInvoices } from "@/lib/collections/invoiceSplit";
 import {
   parseSplitParts,
   splitPartsMatchTotal,
@@ -168,6 +169,7 @@ async function issueCollectionDocument(input: {
   amount: number;
   receivedAt: string;
   note: string | null;
+  description?: string | null;
 }) {
   if (!isCardcomConfigured()) {
     throw new Error("קארדקום אינו מוגדר — לא ניתן להפיק חשבונית.");
@@ -177,10 +179,11 @@ async function issueCollectionDocument(input: {
   const method = input.charge.payment_method;
   const methodLabel = method ? PAYMENT_METHOD[method] : "תשלום";
   const documentDate = input.receivedAt.slice(0, 10);
+  const description = input.description?.trim() || chargeProduct(input.charge);
 
   return createStandaloneDocument({
     amount: input.amount,
-    description: chargeProduct(input.charge),
+    description,
     customer,
     paymentMethodLabel: methodLabel,
     asCash: method === "cash",
@@ -192,6 +195,7 @@ async function issueCollectionDocument(input: {
 async function notifyCollectionPaid(input: {
   charge: ChargeRow;
   amount: number;
+  product?: string;
 }) {
   const customer = await loadCustomer(input.charge.parent_id);
   const childName = input.charge.enrollments?.children?.full_name;
@@ -201,7 +205,7 @@ async function notifyCollectionPaid(input: {
     parentName: customer.name,
     phone: customer.phone,
     email: customer.email,
-    product: chargeProduct(input.charge),
+    product: input.product?.trim() || chargeProduct(input.charge),
     amount: input.amount,
     paymentMethod: input.charge.payment_method,
     participants: childName ? [childName] : undefined,
@@ -594,6 +598,266 @@ export async function settleParentCharges(input: {
     if (!result.success) return result;
   }
 
+  return { success: true };
+}
+
+const INVOICE_SPLIT_METHODS = ["cash", "bank_transfer", "paybox"] as const;
+
+type InvoiceSplitMethod = (typeof INVOICE_SPLIT_METHODS)[number];
+
+function isInvoiceSplitMethod(method: string): method is InvoiceSplitMethod {
+  return (INVOICE_SPLIT_METHODS as readonly string[]).includes(method);
+}
+
+/** משאיר תקבול קיים על החיוב המקורי, ופותח חיוב חדש על היתרה באמצעי התשלום של החשבוניות. */
+async function peelUnpaidRemainder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  charge: ChargeRow,
+  remaining: number,
+  paid: number,
+  method: InvoiceSplitMethod
+): Promise<{ charge: ChargeRow } | { error: string }> {
+  const { error: shrinkError } = await supabase
+    .from("payments")
+    .update({ amount: paid, status: "paid" })
+    .eq("id", charge.id);
+  if (shrinkError) {
+    return { error: "הפרדת היתרה מהתקבול שכבר נרשם נכשלה. נסו שוב." };
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from("payments")
+    .insert({
+      parent_id: charge.parent_id,
+      enrollment_id: charge.enrollment_id,
+      amount: remaining,
+      payment_method: method,
+      office_collection: true,
+      status: "pending",
+      receipt_label_id: charge.receipt_label_id,
+      receipt_description: charge.receipt_description,
+      receipt_custom_text: charge.receipt_custom_text,
+      income_class_id: charge.income_class_id,
+    })
+    .select(CHARGE_SELECT)
+    .single();
+
+  if (insertError || !created) {
+    await supabase
+      .from("payments")
+      .update({ amount: charge.amount, status: charge.status })
+      .eq("id", charge.id);
+    return { error: "פתיחת חיוב ליתרה נכשלה. נסו שוב." };
+  }
+
+  await syncEnrollmentPaymentStatus(supabase, charge.enrollment_id);
+  return { charge: created as ChargeRow };
+}
+
+/**
+ * מוציא כמה חשבוניות מס-קבלה על יתרה של חיוב אחד או יותר.
+ * הסכומים נסגרים על החיובים לפי הסדר, וכל חשבונית יכולה לשאת שם משלה.
+ */
+export async function issueCollectionInvoices(input: {
+  paymentIds: string[];
+  method: string;
+  receivedAt?: string | null;
+  invoices: { amount: number | string; name: string }[];
+}): Promise<CollectionActionResult> {
+  const profile = await requireAdminProfile();
+  if (!profile) return NOT_ALLOWED;
+
+  if (!isCardcomConfigured()) {
+    return { success: false, error: "קארדקום אינו מוגדר — לא ניתן להפיק חשבונית." };
+  }
+
+  if (!isInvoiceSplitMethod(input.method)) {
+    return {
+      success: false,
+      error: "אפשר להוציא חשבוניות מפוצלות על מזומן, העברה או פייבוקס.",
+    };
+  }
+
+  const paymentIds = [...new Set(input.paymentIds)];
+  if (paymentIds.length === 0) {
+    return { success: false, error: "בחרו לפחות חיוב אחד." };
+  }
+  if (paymentIds.length > 20) {
+    return { success: false, error: "אפשר לאחד עד 20 חיובים בבת אחת." };
+  }
+
+  if (input.invoices.length < 1 || input.invoices.length > 8) {
+    return { success: false, error: "אפשר להוציא בין חשבונית אחת לשמונה." };
+  }
+
+  const invoices = input.invoices.map((invoice) => ({
+    amount: parseAmount(invoice.amount),
+    name: invoice.name.trim(),
+  }));
+  if (invoices.some((invoice) => invoice.amount === null || invoice.amount <= 0)) {
+    return { success: false, error: "כל חשבונית חייבת להיות בסכום חיובי." };
+  }
+  if (invoices.some((invoice) => !invoice.name || invoice.name.length > 250)) {
+    return { success: false, error: "לכל חשבונית צריך שם, עד 250 תווים." };
+  }
+
+  const receivedAt = input.receivedAt?.trim()
+    ? new Date(input.receivedAt).toISOString()
+    : new Date().toISOString();
+  if (Number.isNaN(Date.parse(receivedAt))) {
+    return { success: false, error: "תאריך התקבול אינו תקין." };
+  }
+
+  const supabase = await createClient();
+  const loaded: ChargeRow[] = [];
+  for (const paymentId of paymentIds) {
+    const result = await loadCollectionCharge(supabase, paymentId);
+    if ("error" in result) return { success: false, error: result.error };
+    loaded.push(result.charge);
+  }
+
+  const parentId = loaded[0]?.parent_id;
+  if (!parentId || loaded.some((charge) => charge.parent_id !== parentId)) {
+    return { success: false, error: "אפשר לאחד רק חיובים של אותה לקוחה." };
+  }
+
+  const targets: ChargeRow[] = [];
+  for (const charge of loaded) {
+    const remaining = remainingOf(charge);
+    if (remaining <= 0) {
+      return { success: false, error: "אחד החיובים שנבחרו כבר שולם." };
+    }
+    const paid = round2(Number(charge.amount) - remaining);
+    if (paid > 0 && charge.payment_method !== input.method) {
+      const peeled = await peelUnpaidRemainder(supabase, charge, remaining, paid, input.method);
+      if ("error" in peeled) return { success: false, error: peeled.error };
+      targets.push(peeled.charge);
+      continue;
+    }
+    if (charge.payment_method !== input.method) {
+      const switchingAwayFromCard = charge.payment_method === "credit_card";
+      const { error } = await supabase
+        .from("payments")
+        .update({
+          payment_method: input.method,
+          office_collection: true,
+          ...(switchingAwayFromCard ? { checkout_id: null } : {}),
+        })
+        .eq("id", charge.id);
+      if (error) {
+        return { success: false, error: "עדכון אמצעי התשלום נכשל. נסו שוב." };
+      }
+      if (switchingAwayFromCard) {
+        await unlinkPendingCheckout(charge.checkout_id);
+      }
+      charge.payment_method = input.method;
+      charge.office_collection = true;
+      charge.checkout_id = null;
+    }
+    targets.push(charge);
+  }
+
+  const shares = targets.map((charge) => ({
+    id: charge.id,
+    remaining: remainingOf(charge),
+  }));
+  const allocated = allocateInvoices(
+    shares,
+    invoices.map((invoice) => invoice.amount ?? 0)
+  );
+  if (!allocated.ok) return { success: false, error: allocated.error };
+
+  const byId = new Map(targets.map((charge) => [charge.id, charge]));
+  const issued: string[] = [];
+  const admin = createAdminClient();
+
+  for (let index = 0; index < invoices.length; index += 1) {
+    const invoice = invoices[index];
+    const amount = invoice.amount ?? 0;
+    const slices = allocated.slices.filter((slice) => slice.invoiceIndex === index);
+    const anchor = byId.get(slices[0]?.paymentId ?? "");
+    if (!anchor || slices.length === 0) {
+      return { success: false, error: "חלוקת הסכומים על החיובים נכשלה." };
+    }
+
+    let document: Awaited<ReturnType<typeof issueCollectionDocument>>;
+    try {
+      document = await issueCollectionDocument({
+        charge: anchor,
+        amount,
+        receivedAt,
+        note: null,
+        description: invoice.name,
+      });
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "הפקת החשבונית בקארדקום נכשלה.";
+      return {
+        success: false,
+        error: issued.length
+          ? `${reason} החשבוניות שכבר הופקו: ${issued.join(", ")}.`
+          : reason,
+      };
+    }
+
+    const { error: receiptError } = await admin.from("payment_receipts").insert(
+      slices.map((slice) => ({
+        payment_id: slice.paymentId,
+        amount: slice.amount,
+        received_at: receivedAt,
+        note: invoice.name,
+        created_by: profile.id,
+      }))
+    );
+
+    if (receiptError) {
+      return {
+        success: false,
+        error: document.documentNumber
+          ? `החשבונית הופקה בקארדקום (מס׳ ${document.documentNumber}) אך רישום התקבול נכשל.`
+          : "רישום התקבול נכשל. נסו שוב.",
+      };
+    }
+
+    const { error: documentRowError } = await admin.from("receipts").insert({
+      parent_id: parentId,
+      payment_id: anchor.id,
+      receipt_number: document.documentNumber,
+      receipt_url: document.documentUrl,
+      sent_to_email: document.sentToEmail,
+      description: invoice.name,
+      amount,
+    });
+
+    if (documentRowError) {
+      return {
+        success: false,
+        error: document.documentNumber
+          ? `החשבונית הופקה (מס׳ ${document.documentNumber}) והיתרה עודכנה, אבל שמירתה בכרטיס הלקוח נכשלה. אל תפיקו אותה שוב.`
+          : "היתרה עודכנה, אבל שמירת החשבונית בכרטיס הלקוח נכשלה. אל תפיקו אותה שוב.",
+      };
+    }
+
+    issued.push(
+      document.documentNumber
+        ? `${invoice.name} (${document.documentNumber})`
+        : invoice.name
+    );
+
+    try {
+      await notifyCollectionPaid({
+        charge: anchor,
+        amount,
+        product: invoice.name,
+      });
+    } catch (error) {
+      console.error("[admin-payment-email] split invoice notify failed", error);
+    }
+  }
+
+  revalidatePath("/admin/collections");
+  revalidatePath("/admin/customers");
+  revalidatePath("/admin/finance");
   return { success: true };
 }
 

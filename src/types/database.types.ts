@@ -1994,7 +1994,9 @@ export type Database = {
       }
       receipts: {
         Row: {
+          amount: number | null
           created_at: string
+          description: string | null
           id: string
           parent_id: string
           payment_id: string | null
@@ -2003,7 +2005,9 @@ export type Database = {
           sent_to_email: string | null
         }
         Insert: {
+          amount?: number | null
           created_at?: string
+          description?: string | null
           id?: string
           parent_id: string
           payment_id?: string | null
@@ -2012,7 +2016,9 @@ export type Database = {
           sent_to_email?: string | null
         }
         Update: {
+          amount?: number | null
           created_at?: string
+          description?: string | null
           id?: string
           parent_id?: string
           payment_id?: string | null

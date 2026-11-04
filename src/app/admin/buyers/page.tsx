@@ -15,7 +15,7 @@ export default async function AdminBuyersPage() {
     <div className="space-y-6">
       <PageHeader
         title="רוכשות"
-        description="כל מי שרכשה כרטיסייה או מנוי. אפשר לסמן עבור איזה חוג התשלום, והכסף ייספר על החוג בכספים."
+        description="כל מי שרכשה כרטיסייה או מנוי. במנוי אפשר לעדכן תאריך התחלה וסיום, ובכרטיסייה את תאריך הרכישה. אפשר גם לסמן עבור איזה חוג התשלום, והכסף ייספר על החוג בכספים."
       />
       <PlanBuyersList rows={rows} classes={classes} />
     </div>

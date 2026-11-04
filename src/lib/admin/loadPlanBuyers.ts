@@ -1,5 +1,6 @@
 import { createAdminDataClient } from "@/lib/admin/dataClient";
 import { isAbandonedCardcomEnrollment } from "@/lib/enrollment/holdsSeat";
+import { israelDateOf } from "@/lib/scheduling/monthGrid";
 import type { Enums } from "@/types/database.types";
 import { formatDate } from "@/utils/format";
 
@@ -15,6 +16,12 @@ export type PlanBuyerRow = {
   title: string;
   detail: string | null;
   createdAt: string;
+  /** תאריך הרכישה לפי שעון ישראל (YYYY-MM-DD). */
+  purchasedOn: string;
+  /** תחילת תוקף המנוי (YYYY-MM-DD). */
+  startsOn: string | null;
+  /** סיום תוקף המנוי (YYYY-MM-DD). */
+  endsOn: string | null;
   paymentStatus: Enums<"enrollment_payment_status">;
   enrollmentStatus: Enums<"enrollment_status">;
   incomeClassId: string | null;
@@ -32,7 +39,7 @@ export async function loadPlanBuyers(): Promise<PlanBuyerRow[]> {
   const { data } = await supabase
     .from("enrollments")
     .select(
-      "id, type, status, payment_status, created_at, people_count, ends_on, parent_id, profiles(full_name, phone), children(full_name), pool_passes(title, entries_count), programs(title, kind), payments(id, income_class_id, status, payment_method, external_reference, office_collection)"
+      "id, type, status, payment_status, created_at, people_count, starts_on, ends_on, parent_id, profiles(full_name, phone), children(full_name), pool_passes(title, entries_count), programs(title, kind), payments(id, income_class_id, status, payment_method, external_reference, office_collection)"
     )
     .in("type", ["pool_pass", "program"])
     .order("created_at", { ascending: false });
@@ -86,8 +93,13 @@ export async function loadPlanBuyers(): Promise<PlanBuyerRow[]> {
               : `${entries} כניסות`
           : row.ends_on
             ? `בתוקף עד ${formatDate(row.ends_on)}`
-            : null,
+            : row.starts_on
+              ? `מתחיל ${formatDate(row.starts_on)}`
+              : null,
       createdAt: row.created_at,
+      purchasedOn: israelDateOf(row.created_at),
+      startsOn: row.starts_on,
+      endsOn: row.ends_on,
       paymentStatus: row.payment_status,
       enrollmentStatus: row.status,
       incomeClassId: unique.size === 1 ? (classIds[0] ?? null) : null,

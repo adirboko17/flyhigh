@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { IncomeClassSelect } from "@/components/admin/IncomeClassSelect";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import type { IncomeClassOption } from "@/lib/admin/incomeClasses";
 import { assignEnrollmentIncomeClass } from "@/lib/admin/incomeClassActions";
 import type { PlanBuyerKind, PlanBuyerRow } from "@/lib/admin/loadPlanBuyers";
+import { updatePlanBuyerDates } from "@/lib/admin/planBuyerDates";
 import { ENROLLMENT_PAYMENT_STATUS, ENROLLMENT_STATUS } from "@/lib/constants";
 import { cn } from "@/utils/cn";
 import { formatDate } from "@/utils/format";
@@ -22,6 +24,101 @@ const TABS: { id: PlanBuyerKind; label: string }[] = [
 
 function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function DateField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block min-w-[9.5rem] flex-1">
+      <span className="mb-1 block text-xs font-medium text-ink-500">{label}</span>
+      <Input
+        type="date"
+        dir="ltr"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function BuyerDates({
+  row,
+  disabled,
+  onSave,
+}: {
+  row: PlanBuyerRow;
+  disabled: boolean;
+  onSave: (patch: { startsOn?: string; endsOn?: string; purchasedOn?: string }) => void;
+}) {
+  const [startsOn, setStartsOn] = useState(row.startsOn ?? "");
+  const [endsOn, setEndsOn] = useState(row.endsOn ?? "");
+  const [purchasedOn, setPurchasedOn] = useState(row.purchasedOn);
+
+  if (row.kind === "pool_pass") {
+    const dirty = purchasedOn !== row.purchasedOn;
+    return (
+      <form
+        className="mt-3 flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!dirty || disabled) return;
+          onSave({ purchasedOn });
+        }}
+      >
+        <DateField
+          label="תאריך רכישה"
+          value={purchasedOn}
+          disabled={disabled}
+          onChange={setPurchasedOn}
+        />
+        {dirty && (
+          <Button type="submit" size="sm" variant="outline" disabled={disabled}>
+            שמירה
+          </Button>
+        )}
+      </form>
+    );
+  }
+
+  const dirty = startsOn !== (row.startsOn ?? "") || endsOn !== (row.endsOn ?? "");
+  return (
+    <form
+      className="mt-3 flex flex-wrap items-end gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!dirty || disabled) return;
+        onSave({ startsOn, endsOn });
+      }}
+    >
+      <DateField
+        label="תאריך התחלה"
+        value={startsOn}
+        disabled={disabled}
+        onChange={setStartsOn}
+      />
+      <DateField
+        label="תאריך סיום"
+        value={endsOn}
+        disabled={disabled}
+        onChange={setEndsOn}
+      />
+      {dirty && (
+        <Button type="submit" size="sm" variant="outline" disabled={disabled}>
+          שמירה
+        </Button>
+      )}
+    </form>
+  );
 }
 
 export function PlanBuyersList({
@@ -77,6 +174,26 @@ export function PlanBuyersList({
       setBusyId(null);
       if (!result.success) {
         setError(result.error ?? "שמירת השיוך לחוג נכשלה.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function saveDates(
+    row: PlanBuyerRow,
+    patch: { startsOn?: string; endsOn?: string; purchasedOn?: string }
+  ) {
+    setError(null);
+    setBusyId(row.id);
+    startTransition(async () => {
+      const result = await updatePlanBuyerDates({
+        enrollmentId: row.id,
+        ...patch,
+      });
+      setBusyId(null);
+      if (!result.success) {
+        setError(result.error ?? "שמירת התאריכים נכשלה.");
         return;
       }
       router.refresh();
@@ -193,8 +310,18 @@ export function PlanBuyersList({
                           {row.detail && (
                             <span className="text-xs font-medium text-ink-500">{row.detail}</span>
                           )}
-                          <span className="text-xs text-ink-400">{formatDate(row.createdAt)}</span>
+                          {row.kind === "membership" && (
+                            <span className="text-xs text-ink-400">
+                              נרכש {formatDate(row.createdAt)}
+                            </span>
+                          )}
                         </div>
+                        <BuyerDates
+                          key={`${row.id}:${row.purchasedOn}:${row.startsOn ?? ""}:${row.endsOn ?? ""}`}
+                          row={row}
+                          disabled={busy}
+                          onSave={(patch) => saveDates(row, patch)}
+                        />
                       </div>
                     </div>
 

@@ -58,7 +58,7 @@ export async function loadCustomerDocuments(
     supabase
       .from("receipts")
       .select(
-        "id, created_at, receipt_number, receipt_url, sent_to_email, payment_id, payments(amount, receipt_description, receipt_custom_text, payment_receipts(id, amount, created_at), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)))"
+        "id, created_at, receipt_number, receipt_url, sent_to_email, payment_id, description, amount, payments(amount, receipt_description, receipt_custom_text, payment_receipts(id, amount, created_at), enrollments(type, children(full_name), classes(title), programs(title), pool_passes(title), private_lessons(title)))"
       )
       .eq("parent_id", parentId)
       .order("created_at", { ascending: false }),
@@ -115,11 +115,16 @@ export async function loadCustomerDocuments(
 
     const payment = receipt.payments;
     const collected = collectedByReceipt.get(receipt.id);
-    const product = composeReceiptLine({
-      base: payment?.receipt_description,
-      customText: payment?.receipt_custom_text,
-      fallback: subjectLabel(payment?.enrollments ?? null),
-    });
+    const printedName = receipt.description?.trim() || "";
+    const product = printedName
+      ? printedName
+      : composeReceiptLine({
+          base: payment?.receipt_description,
+          customText: payment?.receipt_custom_text,
+          fallback: subjectLabel(payment?.enrollments ?? null),
+        });
+    const storedAmount =
+      receipt.amount == null ? null : round2(Number(receipt.amount));
 
     documents.push({
       id: receipt.id,
@@ -129,11 +134,12 @@ export async function loadCustomerDocuments(
       url: receipt.receipt_url,
       amount: matchedRefund
         ? Number(matchedRefund.amount)
-        : collected != null
-          ? collected
-          : payment && (payment.payment_receipts ?? []).length === 0
-            ? Number(payment.amount)
-            : null,
+        : storedAmount ??
+          (collected != null
+            ? collected
+            : payment && (payment.payment_receipts ?? []).length === 0
+              ? Number(payment.amount)
+              : null),
       product: product === "חיוב כללי" ? null : product,
       sentToEmail: receipt.sent_to_email,
       createdAt: receipt.created_at,
