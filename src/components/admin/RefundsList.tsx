@@ -18,6 +18,11 @@ import {
   issuePaymentRefund,
   refundCardcomPayment,
 } from "@/lib/payments/refundActions";
+import {
+  loadRefundRemovalOptions,
+  removeRefundedEnrollments,
+  type RefundRemovalOption,
+} from "@/lib/payments/refundRemoval";
 import type { Enums } from "@/types/database.types";
 import { formatCurrency, formatDate } from "@/utils/format";
 
@@ -105,6 +110,12 @@ export function RefundsList({
   const [activePending, setActivePending] = useState<PendingRefund | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [removal, setRemoval] = useState<RefundRemovalOption[] | null>(null);
+
+  async function offerRemoval(paymentId: string) {
+    const options = await loadRefundRemovalOptions(paymentId);
+    if (options.length > 0) setRemoval(options);
+  }
 
   const visible = useMemo(() => {
     const q = normalize(query);
@@ -393,6 +404,7 @@ export function RefundsList({
             setActive(null);
             router.refresh();
           }}
+          onRefunded={offerRemoval}
         />
       )}
 
@@ -405,6 +417,21 @@ export function RefundsList({
           onError={setError}
           onDone={() => {
             setActivePending(null);
+            router.refresh();
+          }}
+          onRefunded={offerRemoval}
+        />
+      )}
+
+      {removal && (
+        <RefundRemovalDialog
+          options={removal}
+          busy={busyId !== null}
+          onClose={() => setRemoval(null)}
+          onBusy={setBusyId}
+          onError={setError}
+          onDone={() => {
+            setRemoval(null);
             router.refresh();
           }}
         />
@@ -420,6 +447,7 @@ function PendingRefundDialog({
   onBusy,
   onError,
   onDone,
+  onRefunded,
 }: {
   pending: PendingRefund;
   busy: boolean;
@@ -427,6 +455,7 @@ function PendingRefundDialog({
   onBusy: (id: string | null) => void;
   onError: (message: string | null) => void;
   onDone: () => void;
+  onRefunded: (paymentId: string) => Promise<void>;
 }) {
   const suggested = Math.min(pending.amount, pending.remaining);
   const [amount, setAmount] = useState(String(suggested));
@@ -466,6 +495,7 @@ function PendingRefundDialog({
     if (result.warning) {
       onError(result.warning);
     }
+    await onRefunded(pending.paymentId);
     onDone();
   }
 
@@ -597,6 +627,7 @@ function RefundDialog({
   onBusy,
   onError,
   onDone,
+  onRefunded,
 }: {
   transaction: RefundTransaction;
   busy: boolean;
@@ -604,6 +635,7 @@ function RefundDialog({
   onBusy: (id: string | null) => void;
   onError: (message: string | null) => void;
   onDone: () => void;
+  onRefunded: (paymentId: string) => Promise<void>;
 }) {
   const canRefund = transaction.remaining > 0;
   const [amount, setAmount] = useState(String(transaction.remaining));
@@ -648,6 +680,7 @@ function RefundDialog({
     if (result.warning) {
       onError(result.warning);
     }
+    await onRefunded(transaction.id);
     onDone();
   }
 
@@ -756,8 +789,8 @@ function RefundDialog({
               htmlFor="refund-amount"
               hint={
                 transaction.cardcomReference
-                  ? "ניתן לזכות חלקית או את כל היתרה. זיכוי מלא מבטל את ההרשמה לחוג או למסלול ומפנה את המקום. הכסף חוזר לכרטיס, ותופק חשבונית זיכוי."
-                  : "ניתן לזכות חלקית או את כל היתרה. תופק חשבונית זיכוי כמו במערכת. ההחזר הכספי עצמו יטופל מול הלקוח."
+                ? "ניתן לזכות חלקית או את כל היתרה. הכסף חוזר לכרטיס, ותופק חשבונית זיכוי. אחר כך אפשר לבחור אם להסיר מהחוג או מהרכישה."
+                : "ניתן לזכות חלקית או את כל היתרה. תופק חשבונית זיכוי, וההחזר הכספי יטופל מול הלקוח. אחר כך אפשר לבחור אם להסיר מהחוג או מהרכישה."
               }
             >
               <Input
@@ -863,6 +896,130 @@ function RefundDialog({
               </Button>
             </>
           )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function RefundRemovalDialog({
+  options,
+  busy,
+  onClose,
+  onBusy,
+  onError,
+  onDone,
+}: {
+  options: RefundRemovalOption[];
+  busy: boolean;
+  onClose: () => void;
+  onBusy: (id: string | null) => void;
+  onError: (message: string | null) => void;
+  onDone: () => void;
+}) {
+  const [selected, setSelected] = useState(() =>
+    options.filter((option) => option.onThisCharge).map((option) => option.enrollmentId)
+  );
+  const [localError, setLocalError] = useState<string | null>(null);
+  const allSelected = options.every((option) => selected.includes(option.enrollmentId));
+
+  function toggle(enrollmentId: string) {
+    setSelected((current) =>
+      current.includes(enrollmentId)
+        ? current.filter((id) => id !== enrollmentId)
+        : [...current, enrollmentId]
+    );
+  }
+
+  async function confirm() {
+    if (selected.length === 0) {
+      setLocalError("סמנו לפחות הרשמה אחת, או השאירו הכול.");
+      return;
+    }
+    setLocalError(null);
+    onError(null);
+    onBusy("removal");
+    const result = await removeRefundedEnrollments(selected);
+    onBusy(null);
+    if (!result.success) {
+      const message = result.error ?? "ההסרה נכשלה. נסו שוב.";
+      setLocalError(message);
+      onError(message);
+      return;
+    }
+    if (result.warning) onError(result.warning);
+    onDone();
+  }
+
+  return (
+    <Modal
+      open
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      title="להסיר מהחוג או מהרכישה?"
+      description="הזיכוי כבר הופק. אפשר להסיר רק את מי שמסומן, או להשאיר את ההרשמה כמו שהיא."
+      className="max-w-lg"
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-ink-800">מה להסיר</p>
+          {options.length > 1 && (
+            <button
+              type="button"
+              className="text-sm font-semibold text-brand-700 hover:text-brand-800"
+              disabled={busy}
+              onClick={() =>
+                setSelected(
+                  allSelected ? [] : options.map((option) => option.enrollmentId)
+                )
+              }
+            >
+              {allSelected ? "ניקוי הסימון" : "סימון הכול"}
+            </button>
+          )}
+        </div>
+        <ul className="space-y-2">
+          {options.map((option) => {
+            const checked = selected.includes(option.enrollmentId);
+            return (
+              <li key={option.enrollmentId}>
+                <label className="flex items-start gap-3 rounded-xl border border-ink-100 px-3 py-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-brand-600"
+                    checked={checked}
+                    disabled={busy}
+                    onChange={() => toggle(option.enrollmentId)}
+                  />
+                  <span>
+                    <span className="font-semibold text-ink-900">{option.participant}</span>
+                    <span className="mt-0.5 block text-ink-500">
+                      {option.kindLabel} · {option.title}
+                    </span>
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        {localError && (
+          <p className="text-sm font-medium text-red-600" role="alert">
+            {localError}
+          </p>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+            להשאיר
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={busy || selected.length === 0}
+            onClick={() => void confirm()}
+          >
+            {busy ? "מסיר..." : "הסרת המסומנים"}
+          </Button>
         </div>
       </div>
     </Modal>
